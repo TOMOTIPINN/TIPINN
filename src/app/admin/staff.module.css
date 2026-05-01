@@ -1,0 +1,441 @@
+/* ==========================================
+   Admin Staff Management Styles
+   ========================================== */
+
+/* Navigation Tabs */
+.tabNav {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px;
+  border-radius: var(--radius-md);
+}
+
+.tabBtn {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tabBtn:hover {
+  color: #FFFFFF;
+}
+
+.tabBtnActive {
+  background: var(--gradient-primary) !important;
+  color: #FFFFFF !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* Staff List */
+.staffGrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.staffCard {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  transition: all var(--transition-base);
+}
+
+.staffCard:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.staffCardHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin-bottom: var(--space-md);
+}
+
+.staffAvatar {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  border: 2px solid rgba(255, 107, 107, 0.3);
+  flex-shrink: 0;
+}
+
+.staffInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.staffName {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: 2px;
+}
+
+.staffSlug {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.staffActions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.editBtn {
+  padding: 6px 14px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60A5FA;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.editBtn:hover {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.deleteBtn {
+  padding: 6px 14px;
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.deleteBtn:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.staffMessage {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid rgba(255, 107, 107, 0.3);
+}
+
+.staffStatusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.statusActive {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--color-accent-green);
+}
+
+.statusInactive {
+  background: rgba(156, 163, 175, 0.15);
+  color: #9CA3AF;
+}
+
+/* Add Staff Button */
+.addStaffBtn {
+  width: 100%;
+  padding: var(--space-lg);
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+}
+
+.addStaffBtn:hover {
+  background: rgba(255, 107, 107, 0.08);
+  border-color: rgba(255, 107, 107, 0.3);
+  color: var(--color-primary-light);
+}
+
+/* Modal / Edit Form */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--space-md);
+  animation: fadeIn 0.2s ease;
+}
+
+.modalContent {
+  width: 100%;
+  max-width: 480px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl);
+  padding: var(--space-xl);
+  animation: slideUp 0.3s ease;
+}
+
+.modalTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.formGroup {
+  margin-bottom: var(--space-lg);
+}
+
+.formLabel {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #D1D5DB;
+  margin-bottom: var(--space-xs);
+}
+
+.formInput {
+  width: 100%;
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: #E5E7EB;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color var(--transition-fast);
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: rgba(255, 107, 107, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+}
+
+.formTextarea {
+  width: 100%;
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: #E5E7EB;
+  font-size: 0.9rem;
+  font-family: inherit;
+  min-height: 80px;
+  resize: vertical;
+  transition: border-color var(--transition-fast);
+}
+
+.formTextarea:focus {
+  outline: none;
+  border-color: rgba(255, 107, 107, 0.5);
+  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+}
+
+/* Avatar Upload */
+.avatarUpload {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.avatarPreview {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  border: 3px solid rgba(255, 107, 107, 0.3);
+  flex-shrink: 0;
+}
+
+.avatarPlaceholder {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.06);
+  border: 3px dashed rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.uploadArea {
+  flex: 1;
+}
+
+.uploadBtn {
+  padding: var(--space-sm) var(--space-lg);
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--color-primary-light);
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.uploadBtn:hover {
+  background: rgba(255, 107, 107, 0.25);
+}
+
+.uploadHint {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+/* Form Actions */
+.formActions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-xl);
+}
+
+.saveBtn {
+  flex: 1;
+  padding: var(--space-md);
+  background: var(--gradient-primary);
+  color: #FFFFFF;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.saveBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+}
+
+.saveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cancelBtn {
+  flex: 1;
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.cancelBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #FFFFFF;
+}
+
+/* Delete Confirmation */
+.deleteConfirm {
+  text-align: center;
+}
+
+.deleteConfirmText {
+  font-size: 0.9rem;
+  color: #D1D5DB;
+  margin-bottom: var(--space-lg);
+  line-height: 1.6;
+}
+
+.deleteConfirmName {
+  font-weight: 700;
+  color: #F87171;
+}
+
+.confirmDeleteBtn {
+  padding: var(--space-md) var(--space-xl);
+  background: rgba(239, 68, 68, 0.2);
+  color: #F87171;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.confirmDeleteBtn:hover {
+  background: rgba(239, 68, 68, 0.35);
+}
+
+/* Toast / Notification */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(16, 185, 129, 0.9);
+  color: #FFFFFF;
+  padding: var(--space-sm) var(--space-xl);
+  border-radius: var(--radius-full);
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 1100;
+  animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; transform: translateX(-50%) translateY(0); }
+  to { opacity: 0; transform: translateX(-50%) translateY(20px); }
+}
