@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Image from "next/image";
 import { SALON, STYLISTS as INITIAL_STYLISTS, type Stylist } from "@/lib/mock-data";
+import { DEFAULT_SITE_CONFIG, type SiteConfig } from "@/lib/site-config";
 import styles from "./admin.module.css";
 import staffStyles from "./staff.module.css";
 
@@ -321,7 +322,7 @@ function DeleteModal({ stylist, onConfirm, onClose }: DeleteModalProps) {
 // メインページ
 // ==========================================
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "staff">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "staff" | "settings" | "messages">("dashboard");
   const [stylists, setStylists] = useState<Stylist[]>(INITIAL_STYLISTS);
   const [tips, setTips] = useState<TipRecord[]>([]);
   const [selectedPeriod, setSelectedPeriod] = useState<"today" | "week" | "month">("week");
@@ -333,6 +334,10 @@ export default function AdminPage() {
   const [deletingStylist, setDeletingStylist] = useState<Stylist | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Site config state
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
+  const [configSectionOpen, setConfigSectionOpen] = useState<string>("home");
 
   useEffect(() => {
     setTips(generateMockTips(stylists));
@@ -531,6 +536,24 @@ export default function AdminPage() {
             id="tab-staff"
           >
             👥 スタッフ管理
+          </button>
+          <button
+            className={`${staffStyles.tabBtn} ${
+              activeTab === "settings" ? staffStyles.tabBtnActive : ""
+            }`}
+            onClick={() => setActiveTab("settings")}
+            id="tab-settings"
+          >
+            ⚙️ サイト設定
+          </button>
+          <button
+            className={`${staffStyles.tabBtn} ${
+              activeTab === "messages" ? staffStyles.tabBtnActive : ""
+            }`}
+            onClick={() => setActiveTab("messages")}
+            id="tab-messages"
+          >
+            💬 感謝の声
           </button>
         </div>
 
@@ -760,6 +783,507 @@ export default function AdminPage() {
                   ➕ スタッフを追加
                 </button>
               </div>
+            </section>
+          </>
+        )}
+        {/* ==========================================
+            Settings Tab
+            ========================================== */}
+        {activeTab === "settings" && (
+          <>
+            <section className={styles.section}>
+              <h2 className={styles.sectionTitle}>
+                <span>⚙️</span> お客様向けページの文言設定
+              </h2>
+              <p style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", marginBottom: "var(--space-lg)" }}>
+                お客様が見るページのすべてのテキストを編集できます
+              </p>
+
+              {/* ---- ホームページ設定 ---- */}
+              <div className={staffStyles.staffCard} style={{ marginBottom: "var(--space-md)", cursor: "pointer" }}>
+                <div
+                  className={staffStyles.staffCardHeader}
+                  onClick={() => setConfigSectionOpen(configSectionOpen === "home" ? "" : "home")}
+                  style={{ marginBottom: configSectionOpen === "home" ? "var(--space-md)" : 0 }}
+                >
+                  <div className={staffStyles.staffInfo}>
+                    <div className={staffStyles.staffName}>
+                      🏠 ホームページ
+                    </div>
+                    <div className={staffStyles.staffSlug}>
+                      ヒーロー、スタッフ選択、CTAボタン
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "1.2rem", color: "var(--color-text-muted)" }}>
+                    {configSectionOpen === "home" ? "▲" : "▼"}
+                  </span>
+                </div>
+
+                {configSectionOpen === "home" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>ヒーロー絵文字</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.heroEmoji}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, heroEmoji: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>ヒーロータイトル（1行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.heroTitle1}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, heroTitle1: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>ヒーロータイトル（2行目・グラデーション）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.heroTitle2}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, heroTitle2: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>サブタイトル（1行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.heroSubtitle1}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, heroSubtitle1: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>サブタイトル（2行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.heroSubtitle2}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, heroSubtitle2: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>セクションタイトル</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.sectionTitle}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, sectionTitle: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>箱推し名</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.teamName}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, teamName: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>箱推し説明</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.teamDesc}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, teamDesc: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>CTAボタンテキスト</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.ctaButtonText}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, ctaButtonText: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>CTA下部テキスト</label>
+                      <input className={staffStyles.formInput} value={siteConfig.home.ctaNote}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, home: { ...c.home, ctaNote: e.target.value }}))} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ---- スタイリストページ設定 ---- */}
+              <div className={staffStyles.staffCard} style={{ marginBottom: "var(--space-md)", cursor: "pointer" }}>
+                <div
+                  className={staffStyles.staffCardHeader}
+                  onClick={() => setConfigSectionOpen(configSectionOpen === "stylist" ? "" : "stylist")}
+                  style={{ marginBottom: configSectionOpen === "stylist" ? "var(--space-md)" : 0 }}
+                >
+                  <div className={staffStyles.staffInfo}>
+                    <div className={staffStyles.staffName}>
+                      👤 スタイリストページ
+                    </div>
+                    <div className={staffStyles.staffSlug}>
+                      挨拶、応援ボタン、決済案内
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "1.2rem", color: "var(--color-text-muted)" }}>
+                    {configSectionOpen === "stylist" ? "▲" : "▼"}
+                  </span>
+                </div>
+
+                {configSectionOpen === "stylist" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>挨拶文（1行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.stylistLanding.greeting1}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, stylistLanding: { ...c.stylistLanding, greeting1: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>挨拶文（2行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.stylistLanding.greeting2}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, stylistLanding: { ...c.stylistLanding, greeting2: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>メッセージアイコン</label>
+                      <input className={staffStyles.formInput} value={siteConfig.stylistLanding.messageIcon}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, stylistLanding: { ...c.stylistLanding, messageIcon: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>応援ボタンテキスト</label>
+                      <input className={staffStyles.formInput} value={siteConfig.stylistLanding.ctaButtonText}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, stylistLanding: { ...c.stylistLanding, ctaButtonText: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>ボタン下テキスト</label>
+                      <input className={staffStyles.formInput} value={siteConfig.stylistLanding.ctaSubtext}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, stylistLanding: { ...c.stylistLanding, ctaSubtext: e.target.value }}))} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ---- チップ選択ページ設定 ---- */}
+              <div className={staffStyles.staffCard} style={{ marginBottom: "var(--space-md)", cursor: "pointer" }}>
+                <div
+                  className={staffStyles.staffCardHeader}
+                  onClick={() => setConfigSectionOpen(configSectionOpen === "tip" ? "" : "tip")}
+                  style={{ marginBottom: configSectionOpen === "tip" ? "var(--space-md)" : 0 }}
+                >
+                  <div className={staffStyles.staffInfo}>
+                    <div className={staffStyles.staffName}>
+                      💰 チップ選択ページ
+                    </div>
+                    <div className={staffStyles.staffSlug}>
+                      金額選択、メッセージ入力、決済ボタン
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "1.2rem", color: "var(--color-text-muted)" }}>
+                    {configSectionOpen === "tip" ? "▲" : "▼"}
+                  </span>
+                </div>
+
+                {configSectionOpen === "tip" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>タイトル（1行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.tipSelection.title1}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, tipSelection: { ...c.tipSelection, title1: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>タイトル（2行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.tipSelection.title2}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, tipSelection: { ...c.tipSelection, title2: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>自由金額ラベル</label>
+                      <input className={staffStyles.formInput} value={siteConfig.tipSelection.customAmountLabel}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, tipSelection: { ...c.tipSelection, customAmountLabel: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>メッセージ欄タイトル</label>
+                      <input className={staffStyles.formInput} value={siteConfig.tipSelection.messageSectionTitle}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, tipSelection: { ...c.tipSelection, messageSectionTitle: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>メッセージ欄プレースホルダー</label>
+                      <input className={staffStyles.formInput} value={siteConfig.tipSelection.messagePlaceholder}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, tipSelection: { ...c.tipSelection, messagePlaceholder: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>名前欄タイトル</label>
+                      <input className={staffStyles.formInput} value={siteConfig.tipSelection.nameSectionTitle}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, tipSelection: { ...c.tipSelection, nameSectionTitle: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>決済ボタンテキスト</label>
+                      <input className={staffStyles.formInput} value={siteConfig.tipSelection.payButtonText}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, tipSelection: { ...c.tipSelection, payButtonText: e.target.value }}))} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ---- お礼ページ設定 ---- */}
+              <div className={staffStyles.staffCard} style={{ marginBottom: "var(--space-md)", cursor: "pointer" }}>
+                <div
+                  className={staffStyles.staffCardHeader}
+                  onClick={() => setConfigSectionOpen(configSectionOpen === "thanks" ? "" : "thanks")}
+                  style={{ marginBottom: configSectionOpen === "thanks" ? "var(--space-md)" : 0 }}
+                >
+                  <div className={staffStyles.staffInfo}>
+                    <div className={staffStyles.staffName}>
+                      🎉 お礼ページ
+                    </div>
+                    <div className={staffStyles.staffSlug}>
+                      感謝メッセージ、シェア案内
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "1.2rem", color: "var(--color-text-muted)" }}>
+                    {configSectionOpen === "thanks" ? "▲" : "▼"}
+                  </span>
+                </div>
+
+                {configSectionOpen === "thanks" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>ハート絵文字</label>
+                      <input className={staffStyles.formInput} value={siteConfig.thanksPage.heartEmoji}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, thanksPage: { ...c.thanksPage, heartEmoji: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>タイトル（1行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.thanksPage.title1}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, thanksPage: { ...c.thanksPage, title1: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>タイトル（2行目）</label>
+                      <input className={staffStyles.formInput} value={siteConfig.thanksPage.title2}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, thanksPage: { ...c.thanksPage, title2: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>金額の後のテキスト</label>
+                      <input className={staffStyles.formInput} value={siteConfig.thanksPage.amountSuffix}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, thanksPage: { ...c.thanksPage, amountSuffix: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>シェア案内テキスト</label>
+                      <input className={staffStyles.formInput} value={siteConfig.thanksPage.shareText}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, thanksPage: { ...c.thanksPage, shareText: e.target.value }}))} />
+                    </div>
+                    <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                      <label className={staffStyles.formLabel}>戻るボタンテキスト</label>
+                      <input className={staffStyles.formInput} value={siteConfig.thanksPage.returnButtonText}
+                        onChange={(e) => setSiteConfig(c => ({ ...c, thanksPage: { ...c.thanksPage, returnButtonText: e.target.value }}))} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ---- チップ選択肢設定 ---- */}
+              <div className={staffStyles.staffCard} style={{ marginBottom: "var(--space-md)", cursor: "pointer" }}>
+                <div
+                  className={staffStyles.staffCardHeader}
+                  onClick={() => setConfigSectionOpen(configSectionOpen === "tipOptions" ? "" : "tipOptions")}
+                  style={{ marginBottom: configSectionOpen === "tipOptions" ? "var(--space-md)" : 0 }}
+                >
+                  <div className={staffStyles.staffInfo}>
+                    <div className={staffStyles.staffName}>
+                      🎁 チップ選択肢
+                    </div>
+                    <div className={staffStyles.staffSlug}>
+                      金額・ラベル・絵文字の編集
+                    </div>
+                  </div>
+                  <span style={{ fontSize: "1.2rem", color: "var(--color-text-muted)" }}>
+                    {configSectionOpen === "tipOptions" ? "▲" : "▼"}
+                  </span>
+                </div>
+
+                {configSectionOpen === "tipOptions" && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-lg)" }}>
+                    {siteConfig.tipOptions.map((opt, idx) => (
+                      <div key={idx} style={{
+                        padding: "var(--space-md)",
+                        background: "rgba(255,255,255,0.03)",
+                        borderRadius: "var(--radius-md)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}>
+                        <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "#fff", marginBottom: "var(--space-sm)" }}>
+                          {opt.emoji} {opt.label}（¥{opt.amount}）
+                          {opt.isPopular && <span style={{ marginLeft: 8, fontSize: "0.7rem", color: "var(--color-primary-light)" }}>★ 人気</span>}
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)" }}>
+                          <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                            <label className={staffStyles.formLabel}>金額</label>
+                            <input className={staffStyles.formInput} type="number" value={opt.amount}
+                              onChange={(e) => {
+                                const newOpts = [...siteConfig.tipOptions];
+                                newOpts[idx] = { ...newOpts[idx], amount: parseInt(e.target.value) || 0 };
+                                setSiteConfig(c => ({ ...c, tipOptions: newOpts }));
+                              }} />
+                          </div>
+                          <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                            <label className={staffStyles.formLabel}>絵文字</label>
+                            <input className={staffStyles.formInput} value={opt.emoji}
+                              onChange={(e) => {
+                                const newOpts = [...siteConfig.tipOptions];
+                                newOpts[idx] = { ...newOpts[idx], emoji: e.target.value };
+                                setSiteConfig(c => ({ ...c, tipOptions: newOpts }));
+                              }} />
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "var(--space-sm)", marginTop: "var(--space-sm)" }}>
+                          <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                            <label className={staffStyles.formLabel}>ラベル</label>
+                            <input className={staffStyles.formInput} value={opt.label}
+                              onChange={(e) => {
+                                const newOpts = [...siteConfig.tipOptions];
+                                newOpts[idx] = { ...newOpts[idx], label: e.target.value };
+                                setSiteConfig(c => ({ ...c, tipOptions: newOpts }));
+                              }} />
+                          </div>
+                          <div className={staffStyles.formGroup} style={{ marginBottom: 0 }}>
+                            <label className={staffStyles.formLabel}>説明</label>
+                            <input className={staffStyles.formInput} value={opt.description}
+                              onChange={(e) => {
+                                const newOpts = [...siteConfig.tipOptions];
+                                newOpts[idx] = { ...newOpts[idx], description: e.target.value };
+                                setSiteConfig(c => ({ ...c, tipOptions: newOpts }));
+                              }} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Save Button */}
+              <button
+                className={staffStyles.saveBtn}
+                onClick={() => {
+                  showToast("サイト設定を保存しました ✅");
+                }}
+                style={{ marginTop: "var(--space-lg)" }}
+                id="save-site-config"
+              >
+                💾 設定を保存する
+              </button>
+            </section>
+          </>
+        )}
+        {/* ==========================================
+            Messages Tab (感謝の声)
+            ========================================== */}
+        {activeTab === "messages" && (
+          <>
+            <section className={styles.section}>
+              <h2 className={styles.sectionTitle}>
+                <span>💬</span> お客様からの感謝の声
+              </h2>
+              <p style={{ fontSize: "0.8rem", color: "var(--color-text-muted)", marginBottom: "var(--space-lg)" }}>
+                応援時にいただいたメッセージを新着順で表示
+              </p>
+
+              {/* Stylist Filter for Messages */}
+              <div className={styles.stylistFilter} style={{ marginBottom: "var(--space-lg)" }}>
+                <select
+                  className={styles.stylistSelect}
+                  value={selectedStylist}
+                  onChange={(e) => setSelectedStylist(e.target.value)}
+                  id="message-stylist-filter"
+                >
+                  <option value="all">全スタイリスト</option>
+                  {stylists.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Message Count */}
+              {(() => {
+                const messagesWithContent = tips
+                  .filter((t) => t.message && t.status === "completed")
+                  .filter((t) => selectedStylist === "all" || t.stylistId === selectedStylist)
+                  .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+                const totalMessages = messagesWithContent.length;
+
+                return (
+                  <>
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: "var(--space-md)",
+                      padding: "var(--space-sm) var(--space-md)",
+                      background: "rgba(255, 107, 107, 0.08)",
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid rgba(255, 107, 107, 0.15)",
+                    }}>
+                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--color-primary-light)" }}>
+                        💌 {totalMessages}件のメッセージ
+                      </span>
+                      <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
+                        新着順
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: "var(--space-md)" }}>
+                      {messagesWithContent.map((tip) => (
+                        <div
+                          key={tip.id}
+                          style={{
+                            background: "rgba(255, 255, 255, 0.04)",
+                            border: "1px solid rgba(255, 255, 255, 0.08)",
+                            borderRadius: "var(--radius-lg)",
+                            padding: "var(--space-lg)",
+                            transition: "all 0.2s ease",
+                          }}
+                        >
+                          {/* Message Content */}
+                          <div style={{
+                            fontSize: "0.95rem",
+                            color: "#E5E7EB",
+                            lineHeight: 1.6,
+                            marginBottom: "var(--space-md)",
+                            padding: "var(--space-md)",
+                            background: "rgba(255, 255, 255, 0.03)",
+                            borderRadius: "var(--radius-md)",
+                            borderLeft: "3px solid rgba(255, 107, 107, 0.4)",
+                          }}>
+                            &ldquo;{tip.message}&rdquo;
+                          </div>
+
+                          {/* Meta Info */}
+                          <div style={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
+                            gap: "var(--space-sm)",
+                          }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                              <span style={{
+                                fontSize: "0.75rem",
+                                fontWeight: 600,
+                                color: "var(--color-primary-light)",
+                                background: "rgba(255, 107, 107, 0.12)",
+                                padding: "2px 10px",
+                                borderRadius: "var(--radius-full)",
+                              }}>
+                                → {tip.stylistName}
+                              </span>
+                              <span style={{
+                                fontSize: "0.8rem",
+                                fontWeight: 700,
+                                color: "#FFFFFF",
+                              }}>
+                                ¥{tip.amount.toLocaleString()}
+                              </span>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "var(--space-sm)" }}>
+                              {tip.senderName && (
+                                <span style={{
+                                  fontSize: "0.75rem",
+                                  color: "var(--color-text-muted)",
+                                }}>
+                                  from {tip.senderName}
+                                </span>
+                              )}
+                              <span style={{
+                                fontSize: "0.7rem",
+                                color: "rgba(156, 163, 175, 0.6)",
+                              }}>
+                                {formatDate(tip.createdAt)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {totalMessages === 0 && (
+                        <div style={{
+                          textAlign: "center",
+                          padding: "var(--space-2xl)",
+                          color: "var(--color-text-muted)",
+                        }}>
+                          <div style={{ fontSize: "2rem", marginBottom: "var(--space-sm)" }}>💌</div>
+                          <p style={{ fontSize: "0.9rem" }}>
+                            まだメッセージがありません
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </section>
           </>
         )}

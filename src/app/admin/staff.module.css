@@ -14,17 +14,18 @@
 
 .tabBtn {
   flex: 1;
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-sm) 4px;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   font-weight: 500;
   border-radius: var(--radius-sm);
   transition: all var(--transition-base);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .tabBtn:hover {
