@@ -1,0 +1,337 @@
+/* ==========================================
+   Admin Dashboard Styles
+   ========================================== */
+
+.wrapper {
+  min-height: 100dvh;
+  background: var(--color-bg-dark);
+  color: #E5E7EB;
+}
+
+.container {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0 var(--space-md);
+  padding-bottom: var(--space-2xl);
+}
+
+/* Header */
+.header {
+  padding: var(--space-xl) 0 var(--space-lg);
+}
+
+.headerTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.titleIcon {
+  font-size: 1.4rem;
+}
+
+.salonName {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: var(--space-xs);
+  letter-spacing: 1.5px;
+}
+
+.headerBadge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  color: var(--color-accent-green);
+  background: rgba(16, 185, 129, 0.1);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.liveDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-green);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+/* Period Filter */
+.periodFilter {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-lg);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px;
+  border-radius: var(--radius-md);
+}
+
+.periodBtn {
+  flex: 1;
+  padding: var(--space-sm) var(--space-md);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-base);
+}
+
+.periodBtn:hover {
+  color: #FFFFFF;
+}
+
+.periodBtnActive {
+  background: var(--gradient-primary) !important;
+  color: #FFFFFF !important;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+/* Summary Cards */
+.summaryGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xl);
+}
+
+.summaryCard {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  text-align: center;
+}
+
+.summaryCardPrimary {
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.15), rgba(255, 142, 142, 0.08));
+  border-color: rgba(255, 107, 107, 0.2);
+}
+
+.summaryLabel {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.summaryValue {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #FFFFFF;
+  font-family: var(--font-display);
+}
+
+.summaryCardPrimary .summaryValue {
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Section */
+.section {
+  margin-bottom: var(--space-xl);
+}
+
+.sectionTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #FFFFFF;
+  margin-bottom: var(--space-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+/* Ranking */
+.rankingList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.rankingItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background var(--transition-fast);
+}
+
+.rankingItem:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.rankNumber {
+  font-size: 1.1rem;
+  font-weight: 700;
+  width: 32px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.rankName {
+  flex: 1;
+  font-weight: 600;
+  color: #E5E7EB;
+}
+
+.rankCount {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.rankTotal {
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--color-primary-light);
+}
+
+/* Stylist Filter */
+.stylistFilter {
+  margin-bottom: var(--space-lg);
+}
+
+.stylistSelect {
+  width: 100%;
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: #E5E7EB;
+  font-size: 0.9rem;
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%239CA3AF' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+}
+
+.stylistSelect option {
+  background: var(--color-bg-dark);
+  color: #E5E7EB;
+}
+
+/* Tip List */
+.tipList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.tipItem {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background var(--transition-fast);
+}
+
+.tipItem:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.tipLeft {
+  flex: 1;
+  min-width: 0;
+}
+
+.tipMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 4px;
+}
+
+.tipStylist {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #E5E7EB;
+}
+
+.tipStatus {
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.statusCompleted {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--color-accent-green);
+}
+
+.statusPending {
+  background: rgba(255, 217, 61, 0.15);
+  color: var(--color-accent-gold);
+}
+
+.tipMessage {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tipFooter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.tipDate {
+  font-size: 0.75rem;
+  color: rgba(156, 163, 175, 0.7);
+}
+
+.tipSender {
+  font-size: 0.75rem;
+  color: rgba(156, 163, 175, 0.5);
+}
+
+.tipAmount {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #FFFFFF;
+  font-family: var(--font-display);
+  flex-shrink: 0;
+}
+
+.emptyText {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: var(--space-2xl);
+  font-size: 0.9rem;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: var(--space-2xl) 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
