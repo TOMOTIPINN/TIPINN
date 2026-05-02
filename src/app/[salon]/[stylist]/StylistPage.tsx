@@ -15,6 +15,7 @@ interface StylistPageProps {
 }
 
 export default function StylistPage({ stylist, salon }: StylistPageProps) {
+  const isTeam = stylist.slug === "team";
   const [step, setStep] = useState<Step>("landing");
   const [selectedAmount, setSelectedAmount] = useState<number>(500);
   const [customAmount, setCustomAmount] = useState<string>("");
@@ -90,11 +91,13 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
               <div className={styles.avatarGlow} />
             </div>
 
-            <h1 className={styles.stylistName}>{stylist.name}</h1>
+            <h1 className={styles.stylistName}>{isTeam ? "箱推し！" : stylist.name}</h1>
             <p className={styles.greeting}>
-              今日のスタイリング、
-              <br />
-              ありがとうございました！
+              {isTeam ? (
+                <>ご来店<br />ありがとうございました！</>
+              ) : (
+                <>今日のスタイリング、<br />ありがとうございました！</>
+              )}
             </p>
           </section>
 
@@ -358,7 +361,7 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
                 height={48}
                 className={styles.thanksAvatar}
               />
-              <span className={styles.thanksFrom}>{stylist.name} より</span>
+              <span className={styles.thanksFrom}>{isTeam ? "CARTA スタッフ一同" : stylist.name} より</span>
             </div>
             <p className={styles.thanksMessage}>{stylist.thankYouMessage}</p>
           </div>

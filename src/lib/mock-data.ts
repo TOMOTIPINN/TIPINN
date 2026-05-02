@@ -33,6 +33,19 @@ export const SALON: Salon = {
   logoUrl: "/logo.png",
 };
 
+export const TEAM_STYLIST: Stylist = {
+  id: "team",
+  salonId: "salon-001",
+  name: "CARTA全体",
+  slug: "team",
+  avatarUrl: "/logo.png",
+  message:
+    "CARTAスタッフ一同、心を込めてお客様をお迎えしています。みなさまの応援がチーム全体の力になります 🙌",
+  thankYouMessage:
+    "CARTAスタッフ一同より、温かい応援ありがとうございます！これからもチーム一丸となって素敵なサロンを作っていきます💖",
+  isActive: true,
+};
+
 export const STYLISTS: Stylist[] = [
   {
     id: "stylist-001",
