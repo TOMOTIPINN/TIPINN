@@ -21,7 +21,7 @@ export default function TokushohoPage() {
 
         {/* Title */}
         <h1 className={styles.pageTitle}>特定商取引法に基づく表記</h1>
-        <p className={styles.lastUpdated}>最終更新日: 2026年5月1日</p>
+        <p className={styles.lastUpdated}>最終更新日: 2026年5月2日</p>
 
         {/* Table */}
         <div className={styles.tableWrapper}>
@@ -29,49 +29,50 @@ export default function TokushohoPage() {
             <tbody>
               <tr>
                 <th className={styles.th}>販売事業者名</th>
-                <td className={styles.td}>tipinn運営事務局</td>
+                <td className={styles.td}>合同会社carta</td>
               </tr>
               <tr>
-                <th className={styles.th}>運営統括責任者</th>
-                <td className={styles.td}>
-                  請求があった際に遅滞なく開示いたします
-                </td>
+                <th className={styles.th}>代表者名</th>
+                <td className={styles.td}>原 朋之</td>
               </tr>
               <tr>
                 <th className={styles.th}>所在地</th>
                 <td className={styles.td}>
-                  請求があった際に遅滞なく開示いたします
+                  大阪市福島区福島6-16-9
+                  <br />
+                  エミネンス梅田西103
                 </td>
               </tr>
               <tr>
-                <th className={styles.th}>電話番号</th>
+                <th className={styles.th}>お問い合わせ先</th>
                 <td className={styles.td}>
-                  請求があった際に遅滞なく開示いたします
+                  <a
+                    href="mailto:hara@thankstipinn.biz"
+                    className={styles.link}
+                  >
+                    hara@thankstipinn.biz
+                  </a>
                 </td>
-              </tr>
-              <tr>
-                <th className={styles.th}>メールアドレス</th>
-                <td className={styles.td}>info@tipinn.jp</td>
               </tr>
               <tr>
                 <th className={styles.th}>販売URL</th>
                 <td className={styles.td}>
                   <a
-                    href="https://tipinn.vercel.app"
+                    href="https://tipinn-rho.vercel.app"
                     className={styles.link}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
-                    https://tipinn.vercel.app
+                    https://tipinn-rho.vercel.app
                   </a>
                 </td>
               </tr>
               <tr>
                 <th className={styles.th}>販売価格</th>
                 <td className={styles.td}>
-                  各チップ金額は、選択画面に表示された金額に準じます。
+                  決済画面にて表示される金額（応援金額）とします。
                   <br />
-                  （200円 / 500円 / 1,500円 / 3,000円）
+                  （200円〜3,000円）
                 </td>
               </tr>
               <tr>
@@ -86,26 +87,24 @@ export default function TokushohoPage() {
               </tr>
               <tr>
                 <th className={styles.th}>支払い方法</th>
-                <td className={styles.td}>PayPay（オンライン決済）</td>
+                <td className={styles.td}>PayPay決済</td>
               </tr>
               <tr>
                 <th className={styles.th}>支払い時期</th>
                 <td className={styles.td}>
-                  チップ送信時に即時決済されます。
+                  決済完了時に即時課金されます。
                 </td>
               </tr>
               <tr>
-                <th className={styles.th}>商品の引き渡し時期</th>
+                <th className={styles.th}>サービスの提供時期</th>
                 <td className={styles.td}>
-                  決済完了と同時に、チップが対象スタイリストへ送信されます。
+                  決済完了後、即時システムに反映されます。
                 </td>
               </tr>
               <tr>
                 <th className={styles.th}>返品・キャンセル</th>
                 <td className={styles.td}>
-                  チップの性質上、決済完了後の返品・キャンセル・返金はお受けできません。
-                  <br />
-                  ただし、システム障害等による二重決済等が発生した場合は、お問い合わせいただければ対応いたします。
+                  デジタルチップ・応援というサービスの性質上、決済完了後の返金・キャンセルはいかなる理由でもお受けできません。
                 </td>
               </tr>
               <tr>
