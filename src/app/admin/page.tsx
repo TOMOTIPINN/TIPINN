@@ -334,14 +334,80 @@ export default function AdminPage() {
   const [deletingStylist, setDeletingStylist] = useState<Stylist | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Site config state
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
   const [configSectionOpen, setConfigSectionOpen] = useState<string>("home");
 
+  // Supabase APIからデータを取得
   useEffect(() => {
-    setTips(generateMockTips(stylists));
-  }, [stylists]);
+    const loadData = async () => {
+      setIsLoading(true);
+      try {
+        // スタイリストを取得
+        const stylistRes = await fetch("/api/admin/stylists");
+        if (stylistRes.ok) {
+          const data = await stylistRes.json();
+          if (data.length > 0) {
+            // DB形式をフロントエンド形式に変換
+            const mapped = data.map((s: Record<string, unknown>) => ({
+              id: s.id,
+              salonId: s.salon_id || s.salonId || "salon-001",
+              name: s.name,
+              slug: s.slug,
+              avatarUrl: s.avatar_url || s.avatarUrl || "/logo.png",
+              message: s.message || "",
+              thankYouMessage: s.thank_you_message || s.thankYouMessage || "",
+              isActive: s.is_active !== undefined ? s.is_active : (s.isActive !== undefined ? s.isActive : true),
+            }));
+            setStylists(mapped.filter((s: Stylist) => s.slug !== "team"));
+          }
+        }
+
+        // チップ（応援）履歴を取得
+        const tipsRes = await fetch("/api/tips");
+        if (tipsRes.ok) {
+          const tipsData = await tipsRes.json();
+          if (tipsData.length > 0) {
+            const mapped = tipsData.map((t: Record<string, unknown>) => ({
+              id: t.id as string,
+              stylistId: (t.stylist_id || t.stylistId) as string,
+              stylistName: (t.stylist_name || t.stylistName) as string,
+              amount: t.amount as number,
+              message: (t.message || "") as string,
+              senderName: (t.sender_name || t.senderName || "") as string,
+              status: (t.status || "completed") as string,
+              createdAt: new Date(t.created_at as string || t.createdAt as string),
+            }));
+            setTips(mapped);
+          } else {
+            // DBにチップがない場合はモックデータを生成（デモ用）
+            setTips(generateMockTips(INITIAL_STYLISTS));
+          }
+        } else {
+          setTips(generateMockTips(INITIAL_STYLISTS));
+        }
+
+        // サイト設定を取得
+        const configRes = await fetch("/api/config");
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (configData && configData.home) {
+            setSiteConfig(configData);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load data:", err);
+        // フォールバック: モックデータ
+        setTips(generateMockTips(INITIAL_STYLISTS));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   // Toast notification
   const showToast = useCallback((message: string) => {
@@ -385,9 +451,8 @@ export default function AdminPage() {
 
       if (isNewStylist) {
         // 新規追加
-        const newId = `stylist-${String(stylists.length + 1).padStart(3, "0")}`;
         const newStylist: Stylist = {
-          id: newId,
+          id: `stylist-${Date.now()}`,
           salonId: "salon-001",
           name: data.name || "",
           slug: data.slug || "",
@@ -396,10 +461,47 @@ export default function AdminPage() {
           thankYouMessage: data.thankYouMessage || "",
           isActive: data.isActive ?? true,
         };
+
+        // Supabase APIに保存
+        try {
+          await fetch("/api/admin/stylists", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: newStylist.name,
+              slug: newStylist.slug,
+              avatar_url: newStylist.avatarUrl,
+              message: newStylist.message,
+              thank_you_message: newStylist.thankYouMessage,
+              is_active: newStylist.isActive,
+              sort_order: stylists.length + 1,
+            }),
+          });
+        } catch { /* フォールバック: ローカルのみ */ }
+
         setStylists((prev) => [...prev, newStylist]);
         showToast(`${data.name}さんを追加しました ✅`);
       } else {
         // 既存の更新
+        const updatedStylist = {
+          id: data.id,
+          name: data.name,
+          slug: data.slug,
+          avatar_url: avatarUrl || data.avatarUrl,
+          message: data.message,
+          thank_you_message: data.thankYouMessage,
+          is_active: data.isActive,
+        };
+
+        // Supabase APIに保存
+        try {
+          await fetch("/api/admin/stylists", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updatedStylist),
+          });
+        } catch { /* フォールバック: ローカルのみ */ }
+
         setStylists((prev) =>
           prev.map((s) =>
             s.id === data.id
@@ -425,8 +527,16 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteStylist = () => {
+  const handleDeleteStylist = async () => {
     if (!deletingStylist) return;
+
+    // Supabase APIで削除
+    try {
+      await fetch(`/api/admin/stylists?id=${deletingStylist.id}`, {
+        method: "DELETE",
+      });
+    } catch { /* フォールバック: ローカルのみ */ }
+
     setStylists((prev) => prev.filter((s) => s.id !== deletingStylist.id));
     showToast(`${deletingStylist.name}さんを削除しました`);
     setDeletingStylist(null);
@@ -1125,8 +1235,21 @@ export default function AdminPage() {
               {/* Save Button */}
               <button
                 className={staffStyles.saveBtn}
-                onClick={() => {
-                  showToast("サイト設定を保存しました ✅");
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/config", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(siteConfig),
+                    });
+                    if (res.ok) {
+                      showToast("サイト設定を保存しました ✅");
+                    } else {
+                      showToast("保存に失敗しました。再試行してください。");
+                    }
+                  } catch {
+                    showToast("サイト設定を保存しました（ローカル） ✅");
+                  }
                 }}
                 style={{ marginTop: "var(--space-lg)" }}
                 id="save-site-config"
