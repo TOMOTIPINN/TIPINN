@@ -382,11 +382,11 @@ export default function AdminPage() {
             }));
             setTips(mapped);
           } else {
-            // DBにチップがない場合はモックデータを生成（デモ用）
-            setTips(generateMockTips(INITIAL_STYLISTS));
+            // DBにチップがない場合は空
+            setTips([]);
           }
         } else {
-          setTips(generateMockTips(INITIAL_STYLISTS));
+          setTips([]);
         }
 
         // サイト設定を取得
@@ -399,8 +399,7 @@ export default function AdminPage() {
         }
       } catch (err) {
         console.error("Failed to load data:", err);
-        // フォールバック: モックデータ
-        setTips(generateMockTips(INITIAL_STYLISTS));
+        setTips([]);
       } finally {
         setIsLoading(false);
       }
