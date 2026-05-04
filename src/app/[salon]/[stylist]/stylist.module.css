@@ -1,5 +1,5 @@
 /* ==========================================
-   Stylist Page Styles
+   Stylist Page Styles - Clean White Theme
    ========================================== */
 
 .container {
@@ -29,7 +29,7 @@
   background: var(--color-bg-card);
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-sm);
-  border: 1px solid var(--color-border-light);
+  border: 1px solid var(--color-border);
 }
 
 .salonLogoSmall {
@@ -41,6 +41,7 @@
   font-weight: 600;
   letter-spacing: 1.5px;
   color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 /* Profile */
@@ -66,7 +67,6 @@
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-glow);
-  animation: pulse 3s ease-in-out infinite;
 }
 
 .avatarImage {
@@ -83,11 +83,10 @@
   border-radius: var(--radius-full);
   background: radial-gradient(
     circle,
-    rgba(255, 107, 107, 0.15) 0%,
+    rgba(79, 209, 197, 0.1) 0%,
     transparent 70%
   );
   z-index: -1;
-  animation: pulse 3s ease-in-out infinite;
 }
 
 .stylistName {
@@ -96,12 +95,23 @@
   color: var(--color-text);
   margin-bottom: var(--space-sm);
   letter-spacing: 1px;
+  font-family: var(--font-display);
 }
 
 .greeting {
   font-size: 1rem;
   color: var(--color-text-secondary);
   line-height: 1.8;
+}
+
+/* Mint accent line under greeting */
+.profileSection::after {
+  content: '';
+  display: block;
+  width: 30px;
+  height: 2px;
+  background: var(--color-primary);
+  margin: var(--space-lg) auto 0;
 }
 
 /* Message Card */
@@ -171,13 +181,13 @@
   margin-top: var(--space-sm);
   text-decoration: underline;
   text-underline-offset: 3px;
-  text-decoration-color: rgba(156, 163, 175, 0.4);
+  text-decoration-color: rgba(160, 174, 192, 0.4);
   transition: color var(--transition-base);
 }
 
 .legalLink:hover {
-  color: var(--color-primary);
-  text-decoration-color: var(--color-primary);
+  color: var(--color-primary-dark);
+  text-decoration-color: var(--color-primary-dark);
 }
 
 /* ---- TIP SELECTION PAGE ---- */
@@ -210,6 +220,7 @@
   gap: var(--space-sm);
   font-size: 0.9rem;
   font-weight: 600;
+  font-family: var(--font-display);
 }
 
 .tipAvatarSmall {
@@ -230,6 +241,8 @@
   line-height: 1.5;
   margin-bottom: var(--space-xl);
   text-align: center;
+  color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 /* Amount Grid */
@@ -248,10 +261,11 @@
   padding: var(--space-lg) var(--space-md);
   background: var(--color-bg-card);
   border-radius: var(--radius-lg);
-  border: 2px solid var(--color-border-light);
+  border: 1.5px solid var(--color-border);
   transition: all var(--transition-base);
   position: relative;
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .amountCard:hover {
@@ -262,12 +276,8 @@
 
 .amountCardActive {
   border-color: var(--color-primary) !important;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 107, 107, 0.06),
-    rgba(255, 142, 142, 0.1)
-  );
-  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.15), var(--shadow-md);
+  background: linear-gradient(135deg, rgba(79, 209, 197, 0.04), rgba(129, 230, 217, 0.08));
+  box-shadow: 0 0 0 3px rgba(79, 209, 197, 0.12), var(--shadow-md);
 }
 
 .amountCardPopular {
@@ -294,6 +304,7 @@
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 .amountPrice {
@@ -317,7 +328,7 @@
   padding: var(--space-md);
   background: var(--color-bg-card);
   border-radius: var(--radius-md);
-  border: 2px solid var(--color-border-light);
+  border: 1.5px solid var(--color-border);
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--color-text-secondary);
@@ -331,11 +342,7 @@
 
 .customAmountToggleActive {
   border-color: var(--color-primary);
-  background: linear-gradient(
-    135deg,
-    rgba(255, 107, 107, 0.06),
-    rgba(255, 142, 142, 0.1)
-  );
+  background: linear-gradient(135deg, rgba(79, 209, 197, 0.04), rgba(129, 230, 217, 0.08));
   color: var(--color-text);
   font-weight: 600;
 }
@@ -356,6 +363,7 @@
   font-size: 1.3rem;
   font-weight: 700;
   color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 .amountInput {
@@ -364,6 +372,7 @@
   font-weight: 700;
   background: transparent;
   color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 .amountInput::placeholder {
@@ -388,7 +397,7 @@
   width: 100%;
   padding: var(--space-md);
   background: var(--color-bg-card);
-  border: 2px solid var(--color-border-light);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
   line-height: 1.7;
@@ -398,7 +407,7 @@
 }
 
 .messageInput:focus {
-  border-color: var(--color-primary-light);
+  border-color: var(--color-primary);
 }
 
 .messageInput::placeholder {
@@ -423,7 +432,7 @@
   width: 100%;
   padding: var(--space-md);
   background: var(--color-bg-card);
-  border: 2px solid var(--color-border-light);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-md);
   font-size: 0.9rem;
   transition: border-color var(--transition-fast);
@@ -431,7 +440,7 @@
 }
 
 .nameInput:focus {
-  border-color: var(--color-primary-light);
+  border-color: var(--color-primary);
 }
 
 .nameInput::placeholder {
@@ -481,7 +490,7 @@
 
 .minAmountNote {
   font-size: 0.78rem;
-  color: var(--color-primary);
+  color: var(--color-primary-dark);
   text-align: center;
 }
 
@@ -523,6 +532,7 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
   animation: slide-up 0.6s ease-out;
+  font-family: var(--font-display);
 }
 
 .thanksAmount {
@@ -560,6 +570,7 @@
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 .thanksMessage {
@@ -591,13 +602,13 @@
   height: 48px;
   border-radius: var(--radius-full);
   background: var(--color-bg-card);
-  border: 1px solid var(--color-border-light);
+  border: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 1.1rem;
   font-weight: 600;
-  color: var(--color-text);
+  color: var(--color-text-secondary);
   transition: all var(--transition-base);
   box-shadow: var(--shadow-sm);
 }
@@ -606,6 +617,7 @@
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
   border-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
 }
 
 /* Return */

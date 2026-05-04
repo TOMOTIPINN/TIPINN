@@ -1,5 +1,5 @@
 /* ==========================================
-   Home Page Styles
+   Home Page Styles - Clean White Theme
    ========================================== */
 
 .container {
@@ -34,6 +34,7 @@
   font-weight: 700;
   letter-spacing: 2px;
   color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 .poweredBy {
@@ -50,7 +51,7 @@
 }
 
 .heroEmoji {
-  font-size: 3rem;
+  font-size: 2.5rem;
   margin-bottom: var(--space-md);
   animation: float 3s ease-in-out infinite;
 }
@@ -61,12 +62,25 @@
   line-height: 1.4;
   margin-bottom: var(--space-md);
   letter-spacing: -0.5px;
+  color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 .heroSubtitle {
-  font-size: 0.95rem;
-  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
   line-height: 1.8;
+  margin-bottom: var(--space-md);
+}
+
+/* Mint green accent line under hero */
+.hero::after {
+  content: '';
+  display: block;
+  width: 30px;
+  height: 2px;
+  background: var(--color-primary);
+  margin: 0 auto;
 }
 
 /* Staff Section */
@@ -81,6 +95,8 @@
   display: flex;
   align-items: center;
   gap: var(--space-sm);
+  color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 .sectionIcon {
@@ -96,10 +112,11 @@
   padding: var(--space-md);
   background: var(--color-bg-card);
   border-radius: var(--radius-md);
-  border: 2px solid var(--color-border-light);
+  border: 1.5px solid var(--color-border);
   transition: all var(--transition-base);
   animation: fadeInUp 0.4s ease-out backwards;
   text-align: left;
+  box-shadow: var(--shadow-sm);
 }
 
 .staffCard:hover {
@@ -110,20 +127,21 @@
 
 .staffCardActive {
   border-color: var(--color-primary) !important;
-  background: linear-gradient(135deg, rgba(255, 107, 107, 0.05), rgba(255, 142, 142, 0.08));
-  box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.15), var(--shadow-md);
+  background: linear-gradient(135deg, rgba(79, 209, 197, 0.04), rgba(129, 230, 217, 0.06));
+  box-shadow: 0 0 0 3px rgba(79, 209, 197, 0.12), var(--shadow-md);
 }
 
 .teamCard {
   margin-bottom: var(--space-md);
-  background: linear-gradient(135deg, #FFF5F5, #FFFBEB);
+  background: linear-gradient(135deg, #F0FFF4, #E6FFFA);
+  border-color: rgba(79, 209, 197, 0.2);
 }
 
 .teamAvatar {
   width: 44px;
   height: 44px;
   border-radius: var(--radius-full);
-  background: var(--gradient-warm);
+  background: var(--gradient-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -162,11 +180,12 @@
   font-size: 1rem;
   font-weight: 600;
   color: var(--color-text);
+  font-family: var(--font-display);
 }
 
 .staffDesc {
   font-size: 0.8rem;
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
 }
 
 .checkMark {
@@ -199,7 +218,7 @@
   right: 0;
   padding: var(--space-md);
   padding-bottom: calc(var(--space-lg) + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, var(--color-bg) 60%, transparent);
+  background: linear-gradient(to top, var(--color-bg) 70%, transparent);
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -246,10 +265,10 @@
   transition: color var(--transition-base);
   text-decoration: underline;
   text-underline-offset: 3px;
-  text-decoration-color: rgba(156, 163, 175, 0.4);
+  text-decoration-color: rgba(160, 174, 192, 0.4);
 }
 
 .footerLink:hover {
-  color: var(--color-primary);
-  text-decoration-color: var(--color-primary);
+  color: var(--color-primary-dark);
+  text-decoration-color: var(--color-primary-dark);
 }
