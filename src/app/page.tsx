@@ -1,13 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { SALON, STYLISTS } from "@/lib/mock-data";
+import { SALON, STYLISTS as MOCK_STYLISTS, type Stylist } from "@/lib/mock-data";
 import styles from "./page.module.css";
 
 export default function HomePage() {
   const [selectedStylist, setSelectedStylist] = useState<string | null>(null);
+  const [stylists, setStylists] = useState<Stylist[]>(MOCK_STYLISTS);
+
+  // Supabase APIからスタイリスト一覧を取得
+  useEffect(() => {
+    async function fetchStylists() {
+      try {
+        const res = await fetch("/api/admin/stylists");
+        if (!res.ok) throw new Error("API error");
+        const data = await res.json();
+
+        if (data.stylists && data.stylists.length > 0) {
+          // DBのカラム名をフロント用に変換（teamを除く）
+          const mapped: Stylist[] = data.stylists
+            .filter((s: Record<string, unknown>) => s.slug !== "team")
+            .map((s: Record<string, unknown>) => ({
+              id: s.id as string,
+              salonId: (s.salon_id || s.salonId) as string,
+              name: s.name as string,
+              slug: s.slug as string,
+              avatarUrl: (s.avatar_url || s.avatarUrl) as string,
+              message: s.message as string,
+              thankYouMessage: (s.thank_you_message || s.thankYouMessage) as string,
+              isActive: (s.is_active !== undefined ? s.is_active : s.isActive) as boolean,
+            }))
+            .filter((s: Stylist) => s.isActive);
+
+          if (mapped.length > 0) {
+            setStylists(mapped);
+          }
+        }
+      } catch {
+        // フォールバック: mock-data（初期値のまま）
+        console.log("Using mock data as fallback");
+      }
+    }
+
+    fetchStylists();
+  }, []);
 
   return (
     <div className="page-wrapper">
@@ -75,7 +113,7 @@ export default function HomePage() {
 
           {/* Individual Stylists */}
           <div className={styles.staffGrid}>
-            {STYLISTS.map((stylist, index) => (
+            {stylists.map((stylist, index) => (
               <button
                 key={stylist.id}
                 className={`${styles.staffCard} ${
