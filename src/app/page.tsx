@@ -18,9 +18,12 @@ export default function HomePage() {
         if (!res.ok) throw new Error("API error");
         const data = await res.json();
 
-        if (data.stylists && data.stylists.length > 0) {
+        // APIは配列を直接返す or { stylists: [...] } の両方に対応
+        const rawList = Array.isArray(data) ? data : data.stylists || [];
+
+        if (rawList.length > 0) {
           // DBのカラム名をフロント用に変換（teamを除く）
-          const mapped: Stylist[] = data.stylists
+          const mapped: Stylist[] = rawList
             .filter((s: Record<string, unknown>) => s.slug !== "team")
             .map((s: Record<string, unknown>) => ({
               id: s.id as string,
