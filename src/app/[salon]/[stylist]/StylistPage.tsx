@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Stylist, Salon, TipOption } from "@/lib/mock-data";
-import { TIP_OPTIONS } from "@/lib/mock-data";
+import { TIP_OPTIONS as DEFAULT_TIP_OPTIONS } from "@/lib/mock-data";
+import { DEFAULT_SITE_CONFIG, type SiteConfig } from "@/lib/site-config";
 import styles from "./stylist.module.css";
 
 type Step = "landing" | "tip" | "thanks";
@@ -24,8 +25,32 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
   const [senderName, setSenderName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [config, setConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
+  const [tipOptions, setTipOptions] = useState<TipOption[]>(DEFAULT_TIP_OPTIONS);
 
   const finalAmount = isCustom ? parseInt(customAmount) || 0 : selectedAmount;
+
+  // サイト設定を取得
+  useEffect(() => {
+    async function fetchConfig() {
+      try {
+        const res = await fetch("/api/config");
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.home) {
+            setConfig(data);
+            // チップ選択肢もDB設定から取得
+            if (data.tipOptions && data.tipOptions.length > 0) {
+              setTipOptions(data.tipOptions);
+            }
+          }
+        }
+      } catch {
+        // フォールバック: デフォルト設定
+      }
+    }
+    fetchConfig();
+  }, []);
 
   useEffect(() => {
     if (step === "thanks") {
@@ -56,6 +81,10 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
     setIsProcessing(false);
     setStep("thanks");
   };
+
+  const sl = config.stylistLanding;
+  const ts = config.tipSelection;
+  const tp = config.thanksPage;
 
   // ================ LANDING PAGE ================
   if (step === "landing") {
@@ -91,19 +120,19 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
               <div className={styles.avatarGlow} />
             </div>
 
-            <h1 className={styles.stylistName}>{isTeam ? "箱推し！" : stylist.name}</h1>
+            <h1 className={styles.stylistName}>{isTeam ? config.home.teamName : stylist.name}</h1>
             <p className={styles.greeting}>
               {isTeam ? (
                 <>ご来店<br />ありがとうございました！</>
               ) : (
-                <>今日のスタイリング、<br />ありがとうございました！</>
+                <>{sl.greeting1}<br />{sl.greeting2}</>
               )}
             </p>
           </section>
 
           {/* Message Card */}
           <section className={styles.messageCard}>
-            <div className={styles.messageIcon}>💌</div>
+            <div className={styles.messageIcon}>{sl.messageIcon}</div>
             <p className={styles.messageText}>{stylist.message}</p>
           </section>
 
@@ -114,11 +143,11 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
               onClick={() => setStep("tip")}
               id="btn-start-support"
             >
-              <span>💝</span>
-              <span>応援する</span>
+              <span>{sl.ctaButtonEmoji}</span>
+              <span>{sl.ctaButtonText}</span>
             </button>
             <p className={styles.ctaSubtext}>
-              登録不要 • PayPayでかんたん決済
+              {sl.ctaSubtext}
             </p>
           </div>
 
@@ -169,13 +198,13 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
           {/* Amount Selection */}
           <section className={styles.tipSection}>
             <h2 className={styles.tipTitle}>
-              感謝の気持ちを
+              {ts.title1}
               <br />
-              選んでください
+              {ts.title2}
             </h2>
 
             <div className={styles.amountGrid}>
-              {TIP_OPTIONS.map((option) => (
+              {tipOptions.map((option) => (
                 <button
                   key={option.amount}
                   className={`${styles.amountCard} ${
@@ -208,7 +237,7 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
               id="btn-custom-amount"
             >
               <span>✏️</span>
-              <span>オンリーサンキュー（自由金額）</span>
+              <span>{ts.customAmountLabel}</span>
             </button>
 
             {isCustom && (
@@ -233,11 +262,11 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
           {/* Message Section */}
           <section className={styles.messageSection}>
             <h3 className={styles.messageSectionTitle}>
-              ✉️ 本日の一言メッセージ。（任意）
+              {ts.messageSectionTitle}
             </h3>
             <textarea
               className={styles.messageInput}
-              placeholder="今日もありがとうございました！素敵な仕上がりで嬉しいです✨"
+              placeholder={ts.messagePlaceholder}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               rows={3}
@@ -250,12 +279,12 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
           {/* Sender Name */}
           <section className={styles.nameSection}>
             <h3 className={styles.messageSectionTitle}>
-              📝 お名前（ニックネームでもOK・任意）
+              {ts.nameSectionTitle}
             </h3>
             <input
               type="text"
               className={styles.nameInput}
-              placeholder="例：たろう"
+              placeholder={ts.namePlaceholder}
               value={senderName}
               onChange={(e) => setSenderName(e.target.value)}
               maxLength={20}
@@ -266,7 +295,7 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
           {/* Payment CTA */}
           <div className={styles.paymentCta}>
             <div className={styles.totalAmount}>
-              <span className={styles.totalLabel}>応援金額</span>
+              <span className={styles.totalLabel}>{ts.totalLabel}</span>
               <span className={styles.totalPrice}>
                 ¥{finalAmount.toLocaleString()}
               </span>
@@ -292,14 +321,14 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
                   >
                     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" />
                   </svg>
-                  <span>PayPayで応援する</span>
+                  <span>{ts.payButtonText}</span>
                 </>
               )}
             </button>
 
             {finalAmount < 100 && isCustom && (
               <p className={styles.minAmountNote}>
-                ※ 最低金額は100円です
+                {ts.minAmountNote}
               </p>
             )}
           </div>
@@ -323,12 +352,12 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
                 animationDelay: `${Math.random() * 2}s`,
                 animationDuration: `${2 + Math.random() * 3}s`,
                 backgroundColor: [
-                  "#FF6B6B",
+                  "#4FD1C5",
                   "#FFD93D",
                   "#A855F7",
                   "#3B82F6",
                   "#10B981",
-                  "#FF8E8E",
+                  "#81E6D9",
                 ][Math.floor(Math.random() * 6)],
               }}
             />
@@ -339,16 +368,16 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
       <div className={styles.container}>
         <div className={styles.thanksContent}>
           {/* Heart Animation */}
-          <div className={styles.thanksHeart}>💖</div>
+          <div className={styles.thanksHeart}>{tp.heartEmoji}</div>
 
           <h1 className={styles.thanksTitle}>
-            ありがとう
+            {tp.title1}
             <br />
-            ございます！
+            {tp.title2}
           </h1>
 
           <p className={styles.thanksAmount}>
-            ¥{finalAmount.toLocaleString()} の応援を届けました
+            ¥{finalAmount.toLocaleString()} {tp.amountSuffix}
           </p>
 
           {/* Stylist Thank You Message */}
@@ -361,7 +390,7 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
                 height={48}
                 className={styles.thanksAvatar}
               />
-              <span className={styles.thanksFrom}>{isTeam ? "CARTA スタッフ一同" : stylist.name} より</span>
+              <span className={styles.thanksFrom}>{isTeam ? "CARTA スタッフ一同" : stylist.name} {tp.fromSuffix}</span>
             </div>
             <p className={styles.thanksMessage}>{stylist.thankYouMessage}</p>
           </div>
@@ -369,7 +398,7 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
           {/* Share Section */}
           <div className={styles.shareSection}>
             <p className={styles.shareText}>
-              この体験をシェアしませんか？
+              {tp.shareText}
             </p>
             <div className={styles.shareButtons}>
               <button className={styles.shareBtn} id="btn-share-twitter">
@@ -386,7 +415,7 @@ export default function StylistPage({ stylist, salon }: StylistPageProps) {
 
           {/* Return Button */}
           <a href="/" className={styles.returnBtn} id="btn-return">
-            トップに戻る
+            {tp.returnButtonText}
           </a>
 
           <footer className={styles.footer}>
