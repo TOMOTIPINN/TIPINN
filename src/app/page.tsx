@@ -11,15 +11,20 @@ export default function HomePage() {
   const [selectedStylist, setSelectedStylist] = useState<string | null>(null);
   const [stylists, setStylists] = useState<Stylist[]>(MOCK_STYLISTS);
   const [config, setConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Supabase APIからスタイリスト一覧＋サイト設定を取得
   useEffect(() => {
     async function fetchData() {
       try {
-        // スタイリスト取得
-        const res = await fetch("/api/admin/stylists");
-        if (res.ok) {
-          const data = await res.json();
+        // スタイリスト＋設定を並行取得
+        const [stylistRes, configRes] = await Promise.all([
+          fetch("/api/admin/stylists"),
+          fetch("/api/config"),
+        ]);
+
+        if (stylistRes.ok) {
+          const data = await stylistRes.json();
           const rawList = Array.isArray(data) ? data : data.stylists || [];
           if (rawList.length > 0) {
             const mapped: Stylist[] = rawList
@@ -39,8 +44,6 @@ export default function HomePage() {
           }
         }
 
-        // サイト設定取得
-        const configRes = await fetch("/api/config");
         if (configRes.ok) {
           const configData = await configRes.json();
           if (configData && configData.home) {
@@ -49,6 +52,8 @@ export default function HomePage() {
         }
       } catch {
         console.log("Using default data as fallback");
+      } finally {
+        setIsLoading(false);
       }
     }
 
@@ -56,6 +61,45 @@ export default function HomePage() {
   }, []);
 
   const h = config.home;
+
+  // ローディング画面
+  if (isLoading) {
+    return (
+      <div className="page-wrapper">
+        <div style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: "100dvh",
+          gap: "16px",
+        }}>
+          <Image
+            src={SALON.logoUrl}
+            alt={SALON.name}
+            width={56}
+            height={56}
+            style={{ borderRadius: "12px", opacity: 0.8 }}
+          />
+          <div style={{
+            width: "120px",
+            height: "3px",
+            background: "#E2E8F0",
+            borderRadius: "99px",
+            overflow: "hidden",
+          }}>
+            <div style={{
+              width: "40%",
+              height: "100%",
+              background: "linear-gradient(90deg, #4FD1C5, #81E6D9)",
+              borderRadius: "99px",
+              animation: "shimmer 1.2s ease-in-out infinite alternate",
+            }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-wrapper">
