@@ -4,51 +4,58 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { SALON, STYLISTS as MOCK_STYLISTS, type Stylist } from "@/lib/mock-data";
+import { DEFAULT_SITE_CONFIG, type SiteConfig } from "@/lib/site-config";
 import styles from "./page.module.css";
 
 export default function HomePage() {
   const [selectedStylist, setSelectedStylist] = useState<string | null>(null);
   const [stylists, setStylists] = useState<Stylist[]>(MOCK_STYLISTS);
+  const [config, setConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
 
-  // Supabase APIからスタイリスト一覧を取得
+  // Supabase APIからスタイリスト一覧＋サイト設定を取得
   useEffect(() => {
-    async function fetchStylists() {
+    async function fetchData() {
       try {
+        // スタイリスト取得
         const res = await fetch("/api/admin/stylists");
-        if (!res.ok) throw new Error("API error");
-        const data = await res.json();
+        if (res.ok) {
+          const data = await res.json();
+          const rawList = Array.isArray(data) ? data : data.stylists || [];
+          if (rawList.length > 0) {
+            const mapped: Stylist[] = rawList
+              .filter((s: Record<string, unknown>) => s.slug !== "team")
+              .map((s: Record<string, unknown>) => ({
+                id: s.id as string,
+                salonId: (s.salon_id || s.salonId) as string,
+                name: s.name as string,
+                slug: s.slug as string,
+                avatarUrl: (s.avatar_url || s.avatarUrl) as string,
+                message: s.message as string,
+                thankYouMessage: (s.thank_you_message || s.thankYouMessage) as string,
+                isActive: (s.is_active !== undefined ? s.is_active : s.isActive) as boolean,
+              }))
+              .filter((s: Stylist) => s.isActive);
+            if (mapped.length > 0) setStylists(mapped);
+          }
+        }
 
-        // APIは配列を直接返す or { stylists: [...] } の両方に対応
-        const rawList = Array.isArray(data) ? data : data.stylists || [];
-
-        if (rawList.length > 0) {
-          // DBのカラム名をフロント用に変換（teamを除く）
-          const mapped: Stylist[] = rawList
-            .filter((s: Record<string, unknown>) => s.slug !== "team")
-            .map((s: Record<string, unknown>) => ({
-              id: s.id as string,
-              salonId: (s.salon_id || s.salonId) as string,
-              name: s.name as string,
-              slug: s.slug as string,
-              avatarUrl: (s.avatar_url || s.avatarUrl) as string,
-              message: s.message as string,
-              thankYouMessage: (s.thank_you_message || s.thankYouMessage) as string,
-              isActive: (s.is_active !== undefined ? s.is_active : s.isActive) as boolean,
-            }))
-            .filter((s: Stylist) => s.isActive);
-
-          if (mapped.length > 0) {
-            setStylists(mapped);
+        // サイト設定取得
+        const configRes = await fetch("/api/config");
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          if (configData && configData.home) {
+            setConfig(configData);
           }
         }
       } catch {
-        // フォールバック: mock-data（初期値のまま）
-        console.log("Using mock data as fallback");
+        console.log("Using default data as fallback");
       }
     }
 
-    fetchStylists();
+    fetchData();
   }, []);
+
+  const h = config.home;
 
   return (
     <div className="page-wrapper">
@@ -74,24 +81,24 @@ export default function HomePage() {
 
         {/* Hero Section */}
         <section className={styles.hero}>
-          <div className={styles.heroEmoji}>💝</div>
+          <div className={styles.heroEmoji}>{h.heroEmoji}</div>
           <h2 className={styles.heroTitle}>
-            今日の感謝を
+            {h.heroTitle1}
             <br />
-            <span className="gradient-text">カタチにしよう</span>
+            <span className="gradient-text">{h.heroTitle2}</span>
           </h2>
           <p className={styles.heroSubtitle}>
-            担当スタイリストに、
+            {h.heroSubtitle1}
             <br />
-            ありがとうの気持ちを届けませんか？
+            {h.heroSubtitle2}
           </p>
         </section>
 
         {/* Staff Selection */}
         <section className={styles.staffSection}>
           <h3 className={styles.sectionTitle}>
-            <span className={styles.sectionIcon}>✨</span>
-            今日担当したスタッフ
+            <span className={styles.sectionIcon}>{h.sectionIcon}</span>
+            {h.sectionTitle}
           </h3>
 
           {/* 箱推し（全体応援） */}
@@ -106,8 +113,8 @@ export default function HomePage() {
               <span>🏠</span>
             </div>
             <div className={styles.staffInfo}>
-              <span className={styles.staffName}>箱推し！</span>
-              <span className={styles.staffDesc}>CARTA全体を応援</span>
+              <span className={styles.staffName}>{h.teamName}</span>
+              <span className={styles.staffDesc}>{h.teamDesc}</span>
             </div>
             <div className={styles.checkMark}>
               {selectedStylist === "team" && "✓"}
@@ -164,11 +171,11 @@ export default function HomePage() {
             }}
             id="cta-support"
           >
-            <span>応援する</span>
+            <span>{h.ctaButtonText}</span>
             <span className={styles.ctaArrow}>→</span>
           </a>
           <p className={styles.ctaNote}>
-            登録不要・アプリダウンロード不要
+            {h.ctaNote}
           </p>
         </div>
 
