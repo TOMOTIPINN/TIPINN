@@ -73,7 +73,7 @@
   margin-bottom: var(--space-md);
 }
 
-/* Mint green accent line under hero */
+/* Red accent line under hero */
 .hero::after {
   content: '';
   display: block;
@@ -127,14 +127,14 @@
 
 .staffCardActive {
   border-color: var(--color-primary) !important;
-  background: linear-gradient(135deg, rgba(79, 209, 197, 0.04), rgba(129, 230, 217, 0.06));
-  box-shadow: 0 0 0 3px rgba(79, 209, 197, 0.12), var(--shadow-md);
+  background: linear-gradient(135deg, rgba(229, 62, 62, 0.04), rgba(254, 178, 178, 0.06));
+  box-shadow: 0 0 0 3px rgba(229, 62, 62, 0.12), var(--shadow-md);
 }
 
 .teamCard {
   margin-bottom: var(--space-md);
-  background: linear-gradient(135deg, #F0FFF4, #E6FFFA);
-  border-color: rgba(79, 209, 197, 0.2);
+  background: linear-gradient(135deg, #FFF5F5, #FED7D7);
+  border-color: rgba(229, 62, 62, 0.2);
 }
 
 .teamAvatar {
