@@ -2,18 +2,17 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "tipinn - 感謝を届ける、新しいカタチ",
+  title: "echo - 感謝と評価を、サロンへ",
   description:
-    "美容室でのスタイリングに感謝の気持ちを伝えよう。QRコードをスキャンするだけで、かんたんにチップを送れます。",
-  keywords: ["チップ", "美容室", "感謝", "応援", "PayPay", "tipinn"],
+    "美容サロンのスタッフへ「ありがとう（感想）」と評価スタンプを届けるアプリ。",
+  keywords: ["感謝", "評価", "美容サロン", "スタンプ", "echo"],
   manifest: "/manifest.json",
   icons: {
-    icon: "/logo.png",
-    apple: "/logo.png",
+    icon: "/favicon.ico",
   },
   openGraph: {
-    title: "tipinn - 感謝を届ける、新しいカタチ",
-    description: "美容室でのスタイリングに感謝の気持ちを伝えよう。",
+    title: "echo - 感謝と評価を、サロンへ",
+    description: "美容サロンのスタッフへ感謝と評価を届けるアプリ。",
     type: "website",
     locale: "ja_JP",
   },
