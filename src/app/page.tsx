@@ -1,12 +1,11 @@
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { Eyebrow, Button } from "@/components/ui";
 
 /**
- * echo 最小ホーム（MVPスコープ①の土台）。
+ * echo ホーム（白世界・§5 デザインシステム準拠）。
  * サーバーコンポーネントで getSession() を読み、ログイン状態を出し分ける。
- * ・未ログイン: LINEログインへの導線
- * ・ログイン済み: 表示名とログアウト
- * 個人情報の取得は service role でサーバー側のみ（原則8）。
+ * 個人情報の取得は service role でサーバー側のみ（原則7）。
  */
 export default async function HomePage() {
   const session = await getSession();
@@ -22,64 +21,31 @@ export default async function HomePage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "1.5rem",
-        padding: "2rem",
-        textAlign: "center",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <h1 style={{ fontSize: "2.5rem", fontWeight: 700, letterSpacing: "0.02em" }}>
-        echo
-      </h1>
+    <main className="page">
+      <div className="container stack center-text animate-in">
+        <h1 className="display">echo</h1>
+        <Eyebrow>Your work echoes.</Eyebrow>
 
-      {session ? (
-        <>
-          <p style={{ fontSize: "1.1rem" }}>
-            こんにちは、{displayName || "ゲスト"} さん
-          </p>
-          <form action="/api/auth/line/logout" method="post">
-            <button
-              type="submit"
-              style={{
-                padding: "0.6rem 1.4rem",
-                borderRadius: "9999px",
-                border: "1px solid #ccc",
-                background: "#fff",
-                fontSize: "0.95rem",
-                cursor: "pointer",
-              }}
-            >
-              ログアウト
-            </button>
-          </form>
-        </>
-      ) : (
-        <>
-          <p style={{ color: "#555", maxWidth: "20rem" }}>
-            サロンへの「ありがとう」と評価を届けるアプリ
-          </p>
-          <a
-            href="/api/auth/line/login"
-            style={{
-              padding: "0.75rem 1.6rem",
-              borderRadius: "9999px",
-              background: "#06C755",
-              color: "#fff",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            LINEでログイン
-          </a>
-        </>
-      )}
+        {session ? (
+          <div className="stack stack-md">
+            <p className="body">
+              こんにちは、{displayName || "ゲスト"} さん
+            </p>
+            <form action="/api/auth/line/logout" method="post">
+              <Button type="submit" variant="quiet" block>
+                ログアウト
+              </Button>
+            </form>
+          </div>
+        ) : (
+          <div className="stack stack-md">
+            <p className="muted">サロンへの「ありがとう」と評価を届けるアプリ</p>
+            <a href="/api/auth/line/login" className="btn btn-outline btn-block">
+              LINEではじめる
+            </a>
+          </div>
+        )}
+      </div>
     </main>
   );
 }

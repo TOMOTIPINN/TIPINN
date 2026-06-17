@@ -1,5 +1,24 @@
 import type { Metadata, Viewport } from "next";
+import { Cormorant_Garamond, Shippori_Mincho } from "next/font/google";
 import "./globals.css";
+
+/* §5 デザインシステムのフォント。
+   英字/見出し/アイブロウ = Cormorant Garamond（italicも使う）
+   和文 = 明朝（Shippori Mincho）。CSS変数で globals.css に橋渡しする。 */
+const cormorant = Cormorant_Garamond({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-cormorant",
+  display: "swap",
+});
+
+const mincho = Shippori_Mincho({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-mincho",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "echo - 感謝と評価を、サロンへ",
@@ -23,7 +42,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#FF6B6B",
+  themeColor: "#FFFEFC",
 };
 
 export default function RootLayout({
@@ -32,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
+    <html lang="ja" className={`${cormorant.variable} ${mincho.variable}`}>
       <body>{children}</body>
     </html>
   );
