@@ -14,21 +14,21 @@ import { Eyebrow, StampRing } from "@/components/ui";
 export default async function ReviewCompletePage({
   searchParams,
 }: {
-  searchParams: Promise<{ salon?: string; awarded?: string }>;
+  searchParams: Promise<{ salon?: string; staff?: string; awarded?: string }>;
 }) {
   const session = await getSession();
   if (!session) {
     redirect("/api/auth/line/login");
   }
 
-  const { salon: salonId, awarded } = await searchParams;
+  const { salon: salonId, staff: staffId, awarded } = await searchParams;
   if (!salonId) {
     redirect("/");
   }
   const stampAwarded = awarded === "1";
 
-  const [{ data: salon }, { data: stamp }, { data: reward }] = await Promise.all(
-    [
+  const [{ data: salon }, { data: stamp }, { data: reward }, { data: staff }] =
+    await Promise.all([
       supabaseAdmin.from("salons").select("name, logo_url").eq("id", salonId).single(),
       supabaseAdmin
         .from("earned_stamps")
@@ -43,8 +43,16 @@ export default async function ReviewCompletePage({
         .order("required_count", { ascending: true })
         .limit(1)
         .maybeSingle(),
-    ],
-  );
+      // 評価スタンプ導線のためスタッフ名を温かく出す（対象が指定されている時だけ）。
+      staffId
+        ? supabaseAdmin
+            .from("staff")
+            .select("name")
+            .eq("id", staffId)
+            .eq("salon_id", salonId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
 
   const count = stamp?.count ?? 0;
   const ringSize = reward?.required_count ?? 5;
@@ -67,15 +75,28 @@ export default async function ReviewCompletePage({
         {stampAwarded ? (
           <p className="body">スタンプが1つ貯まりました（合計 {count}個）</p>
         ) : (
-          <p className="body">
-            スタンプは1日1個。今日はもう貯まっています。
-          </p>
+          <p className="muted">スタンプはご来店時にひとつまでです。</p>
         )}
 
         {reward && remainingToReward > 0 && (
           <p className="muted">
             あと {remainingToReward} 個で「{reward.title}」
           </p>
+        )}
+
+        {staffId && staff && (
+          <div className="stack stack-sm">
+            <Eyebrow>Send your thanks</Eyebrow>
+            <p className="muted">
+              今日の体験を{staff.name}さんに評価スタンプで送れます。
+            </p>
+            <a
+              href={`/rating?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}`}
+              className="btn btn-subtle btn-block"
+            >
+              評価スタンプを送る
+            </a>
+          </div>
         )}
 
         <div className="stack stack-sm">

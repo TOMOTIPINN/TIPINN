@@ -246,6 +246,17 @@ a {
 }
 .btn-quiet:not(:disabled):hover { color: var(--g25); }
 
+/* 控えめな補助アクション: 薄いグレー面＋細枠（任意導線の評価スタンプ等） */
+.btn-subtle {
+  border: 1px solid var(--line);
+  background: #FAF9F7;
+  color: var(--ink-soft);
+}
+.btn-subtle:not(:disabled):hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
 /* LINE 等の外部認証導線（緑は使わず、控えめな枠で統一） */
 .btn-block { width: 100%; }
 

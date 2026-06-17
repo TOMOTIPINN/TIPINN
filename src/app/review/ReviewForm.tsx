@@ -99,7 +99,7 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
       // 完了画面へ遷移（フォームには戻さない）。
       const awarded = data.stampAwarded ? "1" : "0";
       router.push(
-        `/review/complete?salon=${encodeURIComponent(salonId)}&awarded=${awarded}`,
+        `/review/complete?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}&awarded=${awarded}`,
       );
     } catch {
       setError("送信に失敗しました。時間をおいて再度お試しください。");
