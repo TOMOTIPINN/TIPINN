@@ -166,5 +166,11 @@
     - tier定義 `@/lib/rating-tiers`（価格の唯一の正・原則8。§6/CHECK制約と一致）/ Stripeクライアント `@/lib/stripe`
     - `POST /api/checkout` … Checkout Session を**連結アカウント上で作成**（`{ stripeAccount }`・Direct Charge）。mode=payment / application_fee無し（=0）/ customer_idはセッション由来 / amountはサーバーtier定義のみ採用 / metadataに customer/salon/staff/tier/amount(+review_id)
     - `/rating?salon=&staff=`（画面04）… tier選択→/api/checkout→Stripe遷移。「感想だけ送る」導線あり（§5準拠・インラインstyle無し）
-  - 4.2 Webhook（冪等記録: checkout完了→rating_purchases insert）… ⬜ 未着手
-  - 4.3 完了画面 `/rating/complete?session_id=...`（success_urlの遷移先）… ⬜ 未着手（**現状この遷移先は未実装＝404。テストはStripe Checkout到達まで**）
+  - 4.2 Webhook（冪等記録: checkout完了→rating_purchases insert）… ✓
+    - `POST /api/stripe/webhook`（runtime=nodejs）。生body=`req.text()`→`stripe.webhooks.constructEvent`で署名検証
+    - ★Direct Chargeのため `checkout.session.completed` は**Connectイベント**（`event.account`=連結acct）。署名は**Connect専用シークレット** `STRIPE_CONNECT_WEBHOOK_SECRET`（.env.localに追加・要 whsec_ 設定）
+    - `payment_status==='paid'` のみ記録 / 価格はサーバーtier定義が正（metadataのamountは不採用・原則8）
+    - 冪等: `stripe_payment_id`(= payment_intent, DBで unique)に `upsert(onConflict, ignoreDuplicates)` ＝ ON CONFLICT DO NOTHING。記録のみ・賞与/残高ロジック無し（原則5・6）
+    - tier CHECK は slug 一致のため migration 不要（0001/0003で確認済）
+    - ⚠️ Stripeダッシュボードで **Connect用** webhookエンドポイント（`{APP_BASE_URL}/api/stripe/webhook`・checkout.session.completed）を作成し whsec_ を `.env.local` に設定すること
+  - 4.3 完了画面 `/rating/complete?session_id=...`（success_urlの遷移先）… ✓ 静的な温かいサンキュー画面（DB書き込みなし＝記録はwebhook / 二重記録防止）。マイページ/ホーム導線。tier/金額表示はDirect Charge都合でMVP省略（§5準拠・インラインstyle無し）
