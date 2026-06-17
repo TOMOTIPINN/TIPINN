@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Eyebrow, Button } from "@/components/ui";
+import { EchoLogo } from "@/components/EchoLogo";
 
 /**
  * echo ホーム（白世界・§5 デザインシステム準拠）。
@@ -23,7 +24,9 @@ export default async function HomePage() {
   return (
     <main className="page">
       <div className="container stack center-text animate-in">
-        <h1 className="display">echo</h1>
+        <h1 className="center-text">
+          <EchoLogo size={64} />
+        </h1>
         <Eyebrow>Your work echoes.</Eyebrow>
 
         {session ? (

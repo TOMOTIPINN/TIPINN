@@ -195,6 +195,17 @@ a {
 }
 
 /* ============================================================
+   Brand mark（echo 波紋ワードマーク・バリアントC）
+   SVG <text> から CSS変数のフォントを使うためのクラス
+   （presentation属性では var() が効かないため class 経由にする）。
+   ============================================================ */
+.echo-logo-text {
+  font-family: var(--font-outfit), system-ui, "Segoe UI", sans-serif;
+  font-weight: 600;
+}
+.echo-logo { display: inline-block; vertical-align: middle; }
+
+/* ============================================================
    Card
    ============================================================ */
 .card {
@@ -545,6 +556,164 @@ textarea.field {
   font-size: 1rem;
   letter-spacing: 0.03em;
   color: var(--ink);
+}
+
+/* ============================================================
+   Dashboard（デモ用モック・画面マップ14系の簡易版）
+   評価の可視化のみ。金額をスタッフに紐づけない（原則5・6）。
+   ============================================================ */
+/* 横並びカードが収まるよう、ダッシュボードだけ少し広い器を許可 */
+.container-wide { max-width: 760px; }
+
+/* ヘッダー: 左にタイトル群、右に期間／サンプル表示 */
+.dash-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+/* 実数値と誤解されないための控えめなバッジ */
+.sample-badge {
+  align-self: flex-start;
+  font-family: var(--font-serif-en);
+  font-style: italic;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: var(--g25);
+  padding: 0.2rem 0.7rem;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-full);
+}
+
+/* メトリクス3枚（横並び・狭幅で1列に） */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+.metric-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: var(--space-lg) var(--space-md);
+  text-align: center;
+}
+.metric-label {
+  font-size: 0.78rem;
+  color: var(--g25);
+  letter-spacing: 0.04em;
+}
+.metric-value {
+  font-family: var(--font-serif-en);
+  font-size: 1.8rem;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  line-height: 1.2;
+  margin-top: var(--space-xs);
+}
+@media (max-width: 520px) {
+  .metric-grid { grid-template-columns: 1fr; }
+}
+
+/* 静的な統計ピル（ティア別内訳）。chip と違い操作対象ではない */
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+.stat-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--card);
+}
+.stat-pill-label {
+  font-family: var(--font-serif-en);
+  font-style: italic;
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+.stat-pill-count {
+  font-family: var(--font-serif-en);
+  font-size: 0.9rem;
+  color: var(--g25);
+}
+
+/* スタッフ別の評価バー（セグメント式・相対長。inline style無しで長さを表現） */
+.bar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+.bar-name {
+  flex-shrink: 0;
+  width: 6rem;
+  font-size: 0.9rem;
+  color: var(--ink-soft);
+}
+.bar {
+  display: flex;
+  flex: 1;
+  gap: 3px;
+}
+.bar-seg {
+  flex: 1;
+  height: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--line);
+}
+.bar-seg.is-filled { background: var(--ink-soft); }
+.bar-value {
+  flex-shrink: 0;
+  width: 2rem;
+  text-align: right;
+  font-family: var(--font-serif-en);
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+/* 最近の評価リスト（顧客名は出さない・原則7） */
+.recent-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+  border-top: 1px solid var(--line);
+}
+.recent-row:first-child { border-top: 0; padding-top: 0; }
+.recent-time {
+  flex-shrink: 0;
+  width: 3.5rem;
+  font-family: var(--font-serif-en);
+  font-size: 0.92rem;
+  color: var(--g25);
+}
+.recent-name {
+  flex: 1;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+.recent-tier {
+  flex-shrink: 0;
+  font-family: var(--font-serif-en);
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+/* 注記（小さめ・muted・italic）— 賞与非連動の明示（原則6） */
+.note-fine {
+  font-size: 0.76rem;
+  font-style: italic;
+  color: var(--g25);
+  letter-spacing: 0.02em;
+  line-height: 1.7;
 }
 
 /* ============================================================

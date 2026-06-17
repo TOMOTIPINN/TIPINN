@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Shippori_Mincho } from "next/font/google";
+import { Cormorant_Garamond, Shippori_Mincho, Outfit } from "next/font/google";
 import "./globals.css";
 
 /* §5 デザインシステムのフォント。
@@ -17,6 +17,14 @@ const mincho = Shippori_Mincho({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-mincho",
+  display: "swap",
+});
+
+/* ブランドロゴ（echo波紋ワードマーク）の "ech" 用。Outfit 600。 */
+const outfit = Outfit({
+  subsets: ["latin"],
+  weight: ["600"],
+  variable: "--font-outfit",
   display: "swap",
 });
 
@@ -51,7 +59,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja" className={`${cormorant.variable} ${mincho.variable}`}>
+    <html
+      lang="ja"
+      className={`${cormorant.variable} ${mincho.variable} ${outfit.variable}`}
+    >
       <body>{children}</body>
     </html>
   );
