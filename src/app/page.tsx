@@ -42,7 +42,11 @@ export default async function HomePage() {
           </div>
         ) : (
           <div className="stack stack-md">
-            <p className="muted">サロンへの「ありがとう」と評価を届けるアプリ</p>
+            <p className="muted">
+              お客様とサロンが
+              <br />
+              今日の体験の感想と評価で繋がるアプリ
+            </p>
             <a href="/api/auth/line/login" className="btn btn-outline btn-block">
               LINEではじめる
             </a>
