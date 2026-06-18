@@ -18,6 +18,9 @@
   --line: #ECEAE6;       /* 罫線・枠 */
   --line-strong: #DAD7D1;
 
+  /* ---- アクセント ---- */
+  --gold: #B08D57;       /* 鈍いゴールド（アンティークゴールド）: VIP系UIの共通アクセント。金ピカは不可 */
+
   /* 管理者ダーク世界（将来のAdmin画面用） */
   --ink-bg: #1B1B1A;
   --ink-bg-card: #232220;
@@ -506,6 +509,22 @@ textarea.field {
   display: flex;
   align-items: center;
   gap: var(--space-md);
+}
+
+/* VIP到達バッジ。淡いゴールド地＋ゴールドの文字/細枠のチップ調（鈍いゴールド・§5 鮮色は不可）。
+   色は --gold に集約（地・枠・文字すべて --gold から派生）。白カード上の可読性のため文字だけ僅かに引き締める。 */
+.vip-badge {
+  align-self: flex-start;
+  white-space: nowrap;
+  font-family: var(--font-serif-en);
+  font-style: italic;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--gold) 65%, var(--ink)); /* 白地で読めるよう僅かに引き締めたゴールド（AA確保） */
+  background: color-mix(in srgb, var(--gold) 12%, var(--card));
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, var(--card));
+  padding: 0.18rem 0.7rem;
+  border-radius: var(--radius-full);
 }
 .salon-count {
   margin-left: auto;
