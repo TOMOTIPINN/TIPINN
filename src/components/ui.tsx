@@ -65,6 +65,17 @@ export function StampRing({
   );
 }
 
+/* VIP到達バッジ。無料感想スタンプが1サイクル（CYCLE_SIZE個）に到達したら点灯。
+   一度点いたら以降ずっと点灯したまま（isVIP は stampCount が減らない限り true）。
+   判定は @/lib/vip の computeVipProgress に集約。§5 準拠（鮮やかな塗りは使わず墨色チップ）。 */
+export function VipBadge({ className }: { className?: string }) {
+  return (
+    <span className={cx("vip-badge", className)} aria-label="VIP">
+      VIP
+    </span>
+  );
+}
+
 type ButtonVariant = "outline" | "quiet";
 
 /* 控えめなボタン。鮮やかな塗りは使わない（§5）。

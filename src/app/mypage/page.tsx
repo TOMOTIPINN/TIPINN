@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { Eyebrow, Card, StampRing } from "@/components/ui";
+import { Eyebrow, Card, StampRing, VipBadge } from "@/components/ui";
+import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 
 /**
  * マイページ（画面マップ10・白世界）。
  * 顧客が自分の貯めたスタンプをサロンごとに確認する画面。
  * サーバーコンポーネント。getSession() で customer_id を取得し、未ログインはログインへ。
- * earned_stamps を salons と結合してサロンごとに1カード。rewards があれば次の特典まで表示。
- * rewards 未設定でも壊れないようフォールバックする。個人情報は service role でサーバー側のみ。
+ * earned_stamps を salons と結合してサロンごとに1カード。
+ * 無料感想スタンプは「循環型」進捗（CYCLE_SIZE個ごとに特典発動）。判定は @/lib/vip に集約。
+ * 個人情報は service role でサーバー側のみ。
  */
 type StampRow = {
   salon_id: string;
@@ -18,8 +20,6 @@ type StampRow = {
     | { name: string; logo_url: string | null }[]
     | null;
 };
-
-type Reward = { salon_id: string; required_count: number; title: string };
 
 export default async function MyPage() {
   const session = await getSession();
@@ -41,22 +41,6 @@ export default async function MyPage() {
   ]);
 
   const stampRows = (stamps ?? []) as StampRow[];
-
-  // サロンごとの rewards をまとめて取得（required_count 昇順 / 未設定でも空で問題なし）
-  const rewardsBySalon = new Map<string, { required_count: number; title: string }[]>();
-  const salonIds = stampRows.map((s) => s.salon_id);
-  if (salonIds.length) {
-    const { data: rewards } = await supabaseAdmin
-      .from("rewards")
-      .select("salon_id, required_count, title")
-      .in("salon_id", salonIds)
-      .order("required_count", { ascending: true });
-    for (const r of (rewards ?? []) as Reward[]) {
-      const arr = rewardsBySalon.get(r.salon_id) ?? [];
-      arr.push({ required_count: r.required_count, title: r.title });
-      rewardsBySalon.set(r.salon_id, arr);
-    }
-  }
 
   const displayName = customer?.display_name || "ゲスト";
 
@@ -87,13 +71,8 @@ export default async function MyPage() {
               if (!salon) return null;
 
               const count = row.count ?? 0;
-              const rewards = rewardsBySalon.get(row.salon_id) ?? [];
-              const nextReward = rewards.find((r) => r.required_count > count);
-              const ringSize =
-                nextReward?.required_count ??
-                (rewards.length
-                  ? rewards[rewards.length - 1].required_count
-                  : Math.max(count, 5));
+              // 無料感想スタンプの循環型進捗（CYCLE_SIZE個ごとに特典発動）。@/lib/vip に集約。
+              const vip = computeVipProgress(count);
               const logo = salon.logo_url ?? null;
               const initials = (salon.name ?? "").slice(0, 3);
 
@@ -110,28 +89,24 @@ export default async function MyPage() {
                         )}
                       </span>
                       <span className="headline-sm">{salon.name}</span>
+                      {vip.isVIP && <VipBadge />}
                       <span className="salon-count">
-                        {count} / {ringSize}
+                        {vip.progressInCycle} / {CYCLE_SIZE}
                       </span>
                     </div>
 
                     <StampRing
-                      count={count}
-                      size={ringSize}
+                      count={vip.progressInCycle}
+                      size={CYCLE_SIZE}
                       logoUrl={logo}
                       fallback={initials}
                     />
 
-                    {nextReward ? (
-                      <p className="muted">
-                        あと {nextReward.required_count - count} 個で「
-                        {nextReward.title}」
-                      </p>
-                    ) : rewards.length ? (
-                      <p className="muted">特典を獲得しました（{count}個）</p>
-                    ) : (
-                      <p className="muted">スタンプ {count}個</p>
-                    )}
+                    <p className="muted">
+                      次の特典まであと {vip.toNextPerk} 個
+                      {vip.cyclesCompleted > 0 &&
+                        `（特典 ${vip.cyclesCompleted} 回獲得・累計 ${count} 個）`}
+                    </p>
                   </div>
                 </Card>
               );
