@@ -34,6 +34,9 @@ export default async function HomePage() {
             <p className="body">
               こんにちは、{displayName || "ゲスト"} さん
             </p>
+            <a href="/mypage" className="btn btn-outline btn-block">
+              マイページへ
+            </a>
             <form action="/api/auth/line/logout" method="post">
               <Button type="submit" variant="quiet" block>
                 ログアウト
