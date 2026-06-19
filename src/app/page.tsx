@@ -45,7 +45,7 @@ export default async function HomePage() {
           </div>
         ) : (
           <div className="stack stack-md">
-            <p className="muted">
+            <p className="muted font-elegant">
               お客様とサロンが
               <br />
               今日の体験の感想と評価で繋がるアプリ

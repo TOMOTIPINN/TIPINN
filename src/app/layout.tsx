@@ -1,10 +1,20 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Shippori_Mincho, Outfit } from "next/font/google";
+import {
+  Cormorant_Garamond,
+  Shippori_Mincho,
+  Noto_Sans_JP,
+  Outfit,
+} from "next/font/google";
 import "./globals.css";
 
-/* §5 デザインシステムのフォント。
-   英字/見出し/アイブロウ = Cormorant Garamond（italicも使う）
-   和文 = 明朝（Shippori Mincho）。CSS変数で globals.css に橋渡しする。 */
+/* フォント方針（CLAUDE.md §5 を読みやすさ優先で更新）。
+   基本＝ゴシック（Noto Sans JP）。本文・ボタン・ラベル・フォーム・数値データ等の
+   機能的テキストはすべてこちら。
+   上品フォント（セリフ/明朝）は「お金」と「感謝・ブランドの言葉」だけに限定適用する
+   （globals.css の .font-elegant ／ 一部の専用クラスで使う）。
+   - 英字の上品フォント = Cormorant Garamond（italicも使う・ブランド/ティア名/金額）
+   - 和文の上品フォント = 明朝（Shippori Mincho・感謝コピー）
+   CSS変数で globals.css に橋渡しする。 */
 const cormorant = Cormorant_Garamond({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
@@ -17,6 +27,14 @@ const mincho = Shippori_Mincho({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-mincho",
+  display: "swap",
+});
+
+/* 基本のゴシック（和文・読みやすさの主役）。Latinグリフも内包するので英字もこれで足りる。 */
+const notoSansJp = Noto_Sans_JP({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-sans-jp",
   display: "swap",
 });
 
@@ -61,7 +79,7 @@ export default function RootLayout({
   return (
     <html
       lang="ja"
-      className={`${cormorant.variable} ${mincho.variable} ${outfit.variable}`}
+      className={`${cormorant.variable} ${mincho.variable} ${notoSansJp.variable} ${outfit.variable}`}
     >
       <body>{children}</body>
     </html>

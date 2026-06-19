@@ -30,14 +30,14 @@ export default async function RatingCompletePage({
       <div className="container stack center-text animate-in">
         <header className="stack-sm center-text">
           <Eyebrow>Thank you</Eyebrow>
-          <h1 className="headline">
+          <h1 className="headline font-elegant">
             評価スタンプを
             <br />
             お届けしました
           </h1>
         </header>
 
-        <p className="body text-balance">
+        <p className="body text-balance font-elegant">
           あなたの評価がサロンへ。
           <br />
           あたたかい感謝と評価として届きました。

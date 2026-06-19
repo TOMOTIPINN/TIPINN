@@ -81,7 +81,7 @@ export default function DashboardPage() {
           </div>
           <div className="metric-card">
             <p className="metric-label">サロン売上（今月）</p>
-            <p className="metric-value">{yen(METRICS.revenueYen)}</p>
+            <p className="metric-value font-elegant">{yen(METRICS.revenueYen)}</p>
           </div>
           <div className="metric-card">
             <p className="metric-label">無料レビュー</p>

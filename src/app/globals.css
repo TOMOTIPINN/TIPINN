@@ -2,9 +2,15 @@
    echo — Design System (CLAUDE.md §5)
    世界観: 白＝お客様の世界 / 黒＝管理者の世界。
    上品・余白たっぷり・カードUI。鮮やかな赤/ピンクは使わない。
-   英字/見出し/アイブロウ = Cormorant Garamond（しばしば italic）
-   和文 = 明朝（Shippori Mincho）
-   フォントは next/font で読み込み、--font-serif-en / --font-serif-jp に束ねる。
+
+   フォント方針（読みやすさ優先で更新）:
+   - 基本＝ゴシック（Noto Sans JP / --font-sans）。本文・ボタン・ラベル・フォーム・
+     数値データ等の機能的テキストはすべてこちら。
+   - 上品フォント（セリフ/明朝）は「お金」と「感謝・ブランドの言葉」だけに限定。
+     英字＝Cormorant Garamond（--font-serif-en・しばしば italic）／
+     和文＝明朝 Shippori Mincho（--font-serif-jp）。
+     限定適用は .font-elegant ユーティリティ、または専用クラス（tier名/金額/eyebrow等）で行う。
+   フォントは next/font で読み込み、--font-sans / --font-serif-en / --font-serif-jp に束ねる。
    ============================================================ */
 
 :root {
@@ -34,8 +40,14 @@
   --shadow-soft: 0 1px 2px rgba(0, 0, 0, .03);
 
   /* ---- フォント（layout.tsx の next/font が変数を注入） ---- */
+  /* 基本＝ゴシック（UIの主役）。和文・英字とも Noto Sans JP で足りる。 */
+  --font-sans: var(--font-sans-jp), -apple-system, BlinkMacSystemFont,
+    "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, system-ui, sans-serif;
+  /* 上品フォント（お金・感謝・ブランド限定）。英字=Cormorant / 和文=明朝。 */
   --font-serif-en: var(--font-cormorant, Georgia, "Times New Roman", serif);
   --font-serif-jp: var(--font-mincho, "Hiragino Mincho ProN", "Yu Mincho", serif);
+  /* .font-elegant 等で使う上品スタック（英字→Cormorant / 和文→明朝にフォールバック）。 */
+  --font-elegant: var(--font-serif-en), var(--font-serif-jp);
 
   /* ---- 余白スケール ---- */
   --space-xs: 4px;
@@ -65,7 +77,7 @@ html {
 }
 
 body {
-  font-family: var(--font-serif-jp);
+  font-family: var(--font-sans);
   color: var(--ink);
   background: var(--bg);
   line-height: 1.85;
@@ -167,18 +179,18 @@ a {
   line-height: 1.1;
 }
 
-/* 和文の見出し（明朝） */
+/* 和文の見出し（ゴシック・機能的見出し。感謝/ブランド見出しは .font-elegant を併用する） */
 .headline {
-  font-family: var(--font-serif-jp);
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 700;
   font-size: 1.45rem;
   letter-spacing: 0.04em;
   color: var(--ink);
   line-height: 1.5;
 }
 .headline-sm {
-  font-family: var(--font-serif-jp);
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 700;
   font-size: 1.15rem;
   letter-spacing: 0.04em;
   color: var(--ink);
@@ -228,7 +240,7 @@ a {
   align-items: center;
   justify-content: center;
   gap: var(--space-sm);
-  font-family: var(--font-serif-jp);
+  font-family: var(--font-sans);
   font-size: 0.98rem;
   letter-spacing: 0.08em;
   line-height: 1;
@@ -294,9 +306,9 @@ fieldset.field-group {
   border-radius: var(--radius);
 }
 
-/* 入力ラベル（明朝・小・G2.5寄り） */
+/* 入力ラベル（ゴシック・小・G2.5寄り） */
 .field-label {
-  font-family: var(--font-serif-jp);
+  font-family: var(--font-sans);
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -390,7 +402,7 @@ textarea.field {
   transition: var(--transition);
 }
 .rating-label {
-  font-family: var(--font-serif-jp);
+  font-family: var(--font-sans);
   font-size: 0.74rem;
   letter-spacing: 0.06em;
   color: var(--g25);
@@ -414,7 +426,7 @@ textarea.field {
   row-gap: var(--space-md);
 }
 .chip {
-  font-family: var(--font-serif-jp);
+  font-family: var(--font-sans);
   font-size: 0.85rem;
   letter-spacing: 0.04em;
   color: var(--ink-soft);
@@ -449,7 +461,7 @@ textarea.field {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  font-family: var(--font-serif-en);
+  font-family: var(--font-sans);
   font-size: 0.6rem;
   letter-spacing: 0.05em;
   border: 1px dashed var(--line-strong);
@@ -493,7 +505,7 @@ textarea.field {
   overflow: hidden;
   border: 1px solid var(--line);
   background: var(--card);
-  font-family: var(--font-serif-en);
+  font-family: var(--font-sans);
   font-size: 0.68rem;
   letter-spacing: 0.04em;
   color: var(--ink);
@@ -529,7 +541,7 @@ textarea.field {
 .salon-count {
   margin-left: auto;
   white-space: nowrap;
-  font-family: var(--font-serif-en);
+  font-family: var(--font-sans);
   font-size: 0.9rem;
   letter-spacing: 0.04em;
   color: var(--g25);
@@ -596,8 +608,7 @@ textarea.field {
 /* 実数値と誤解されないための控えめなバッジ */
 .sample-badge {
   align-self: flex-start;
-  font-family: var(--font-serif-en);
-  font-style: italic;
+  font-family: var(--font-sans);
   font-size: 0.72rem;
   letter-spacing: 0.12em;
   color: var(--g25);
@@ -625,8 +636,10 @@ textarea.field {
   color: var(--g25);
   letter-spacing: 0.04em;
 }
+/* メトリクス数値はゴシック（件数・人数等）。金額だけは .font-elegant を併用して上品に。 */
 .metric-value {
-  font-family: var(--font-serif-en);
+  font-family: var(--font-sans);
+  font-weight: 700;
   font-size: 1.8rem;
   letter-spacing: 0.02em;
   color: var(--ink);
@@ -659,7 +672,7 @@ textarea.field {
   color: var(--ink);
 }
 .stat-pill-count {
-  font-family: var(--font-serif-en);
+  font-family: var(--font-sans);
   font-size: 0.9rem;
   color: var(--g25);
 }
@@ -692,7 +705,7 @@ textarea.field {
   flex-shrink: 0;
   width: 2rem;
   text-align: right;
-  font-family: var(--font-serif-en);
+  font-family: var(--font-sans);
   font-size: 0.95rem;
   color: var(--ink);
 }
@@ -709,7 +722,7 @@ textarea.field {
 .recent-time {
   flex-shrink: 0;
   width: 3.5rem;
-  font-family: var(--font-serif-en);
+  font-family: var(--font-sans);
   font-size: 0.92rem;
   color: var(--g25);
 }
@@ -733,6 +746,16 @@ textarea.field {
   color: var(--g25);
   letter-spacing: 0.02em;
   line-height: 1.7;
+}
+
+/* ============================================================
+   上品フォント・限定ユーティリティ
+   「お金」と「感謝・ブランドの言葉」だけに当てる（それ以外はゴシック）。
+   英字→Cormorant / 和文→明朝 にフォールバックする上品スタック。
+   ファイル末尾近くに置き、.headline / .metric-value 等のゴシック指定を確実に上書きする。
+   ============================================================ */
+.font-elegant {
+  font-family: var(--font-elegant);
 }
 
 /* ============================================================

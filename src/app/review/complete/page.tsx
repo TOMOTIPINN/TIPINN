@@ -60,7 +60,7 @@ export default async function ReviewCompletePage({
       <div className="container stack center-text animate-in">
         <header className="stack-sm center-text">
           <Eyebrow>Thank you</Eyebrow>
-          <h1 className="headline">
+          <h1 className="headline font-elegant">
             {stampAwarded ? "ありがとうございました" : "感想ありがとうございました"}
           </h1>
         </header>
