@@ -27,6 +27,13 @@
   /* ---- アクセント ---- */
   --gold: #B08D57;       /* 鈍いゴールド（アンティークゴールド）: VIP系UIの共通アクセント。金ピカは不可 */
 
+  /* echoミント（§12・サロンUI専用）。好調/上昇・ブランド波紋・アクティブタブだけに差す。
+     カスタマーUIには入れない。赤は使わずネガティブは褪せグレーで表現する。 */
+  --mint: #11A697;       /* サロンUI専用・好調/ブランド */
+  --mint-deep: #0E8E80;  /* 濃いミント（hover・強調） */
+  --mint-tint: #E6F4F1;  /* 極淡ミント地（好調ステータスの背景） */
+  --mint-line: #BFE3DD;  /* ミントの罫線・枠 */
+
   /* 管理者ダーク世界（将来のAdmin画面用） */
   --ink-bg: #1B1B1A;
   --ink-bg-card: #232220;
@@ -646,9 +653,157 @@ textarea.field {
   line-height: 1.2;
   margin-top: var(--space-xs);
 }
+
+/* 前月比（先行指標の小さな添え）。ゴシック・muted。¥値だけ .font-elegant を併用する。 */
+.metric-delta {
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  color: var(--g25);
+  line-height: 1.5;
+  margin-top: var(--space-xs);
+}
 @media (max-width: 520px) {
   .metric-grid { grid-template-columns: 1fr; }
 }
+
+/* 前期間比の方向色（§12・サロンHRステータス配色）。
+   上昇＝ミントのポイント使い／横ばい・下降は既定のグレーのまま（赤は使わない＝褪せグレー）。
+   白地での小さな文字の可読性のため mint-deep を ink 側に締める（.vip-badge と同じ流儀でAA確保）。 */
+.trend-up { color: color-mix(in srgb, var(--mint-deep) 78%, var(--ink)); }
+
+/* ビュー切替タブ（日次 / HR月次）。アクティブ＝ミントの淡い面（§12 アクティブタブ・塗りつぶさない）。 */
+.seg {
+  display: inline-flex;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+}
+.seg-btn {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  color: var(--g25);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius-full);
+  transition: var(--transition);
+}
+.seg-btn:not(.is-active):hover { color: var(--ink); }
+.seg-btn.is-active {
+  background: var(--mint-tint);
+  color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
+}
+
+/* ============================================================
+   echo flow（HR月次ビュー・§12）
+   好調/上昇＝ミント / 安定＝グレー / 要ケア＝褪せグレー（赤は使わない）。
+   ============================================================ */
+/* 要ケアアラート：赤ではなく ink-soft の左ラインで静かに（§12）。 */
+.alert-flow {
+  border-left: 3px solid var(--ink-soft);
+  background: #FBFAF7;
+  border-radius: var(--radius-sm);
+  padding: 0.8rem 1.1rem;
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+.alert-flow + .alert-flow { margin-top: var(--space-sm); }
+
+.flow-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--line);
+}
+.flow-row:first-child { border-top: 0; padding-top: 0; }
+.flow-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.flow-name {
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+/* 役職ラベル（店長/スタイリスト/アシスタント）。控えめなグレーの細枠チップ（日次・HR共通）。 */
+.role-tag {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--g25);
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+/* ステータス（ドット＋ラベル）。右寄せ・ゴシック。色はステータス修飾子で上書き。 */
+.flow-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--g25);
+}
+.flow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--g25);
+}
+/* 好調＝ミント（白地可読のため文字は ink 寄りに締める）。 */
+.flow-row.is-good .flow-dot { background: var(--mint); }
+.flow-row.is-good .flow-status { color: color-mix(in srgb, var(--mint-deep) 78%, var(--ink)); }
+/* 安定＝グレー（既定のまま）。要ケア＝褪せグレー（赤は使わない）。 */
+.flow-row.is-care .flow-dot { background: var(--g25-soft); }
+.flow-row.is-care .flow-status { color: var(--g25-soft); }
+
+.flow-body {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+.flow-counts {
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+}
+.flow-action {
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: var(--g25);
+  line-height: 1.7;
+}
+
+/* スパークライン（直近3ヶ月の評価件数）。高さはレベルクラスで表現（inline style 無し）。
+   各スタッフ自身の最大件数で相対化＝絶対件数で比較しない（§12・若手を不利にしない）。 */
+.spark {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 32px;
+}
+.spark-bar {
+  width: 8px;
+  border-radius: 3px 3px 0 0;
+  background: var(--line); /* 空（lv-0）の既定色 */
+}
+.spark-bar.lv-0 { height: 3px; }
+.spark-bar.lv-1 { height: 25%; }
+.spark-bar.lv-2 { height: 50%; }
+.spark-bar.lv-3 { height: 75%; }
+.spark-bar.lv-4 { height: 100%; }
+/* 件数のあるバーをステータス色で塗る（好調＝ミント / 安定＝グレー / 要ケア＝褪せグレー）。 */
+.flow-row.is-good .spark-bar:not(.lv-0) { background: var(--mint); }
+.flow-row.is-stable .spark-bar:not(.lv-0) { background: var(--g25); }
+.flow-row.is-care .spark-bar:not(.lv-0) { background: var(--g25-soft); }
 
 /* 静的な統計ピル（ティア別内訳）。chip と違い操作対象ではない */
 .pill-row {
@@ -670,6 +825,11 @@ textarea.field {
   font-style: italic;
   font-size: 0.92rem;
   color: var(--ink);
+}
+/* 内部向け内訳チップの絵文字（ティア名の代わり）。意味は親 span の aria-label/title に残す。 */
+.stat-pill-emoji {
+  font-size: 1rem;
+  line-height: 1;
 }
 .stat-pill-count {
   font-family: var(--font-sans);
@@ -737,6 +897,126 @@ textarea.field {
   font-style: italic;
   font-size: 0.95rem;
   color: var(--ink);
+}
+
+/* ============================================================
+   VIP のお客様（画面マップ14系・Phase 5-a / デモmock）
+   店長が「誰がVIPか」を把握＋レジでの判別補助。
+   名前・進捗・一言はゴシック（このタスクの規則: 金額のみ上品）。
+   ============================================================ */
+.vip-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--line);
+}
+.vip-row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.vip-row-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+.vip-name {
+  font-size: 0.98rem;
+  color: var(--ink);
+}
+/* サイクル進捗＋特典付与回数（数値データ＝ゴシック・右寄せ） */
+.vip-progress {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: var(--g25);
+}
+/* 最近の一言（リアルボイス）。顧客の言葉だが本タスク規則によりゴシック。 */
+.vip-voice {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  line-height: 1.7;
+}
+
+/* ============================================================
+   期間フィルタ（スタッフ別評価ビュー・Phase 5-a / デモmock）
+   プリセット（chip）＋カスタム日付範囲。すべてゴシック（機能的UI）。
+   ============================================================ */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.date-range {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+/* 日付ピッカーは横並びに収まるよう幅自動（.field の100%幅を上書き） */
+.date-range .field {
+  width: auto;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.9rem;
+}
+.date-sep {
+  color: var(--g25);
+}
+/* 選択中の期間表示（日付・ラベル＝ゴシック） */
+.period-current {
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: var(--g25);
+}
+
+/* アクティブな期間プリセット＝ミントの淡い面＋細枠（塗りつぶさない・浴びせない・§12）。
+   サロンUI専用の .filter-bar 配下に限定し、カスタマーUIの .chip（ink塗り）には影響させない。 */
+.filter-bar .chip.is-active {
+  border-color: var(--mint);
+  background: var(--mint-tint);
+  color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
+}
+
+/* ============================================================
+   スタッフ別の評価（期間集計・Phase 5-a）
+   ⚠️ スタッフ単位は件数・ポイントのみ。¥金額・賞与額は出さない（原則5・6）。
+   ============================================================ */
+.staff-period {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md) 0;
+  border-top: 1px solid var(--line);
+}
+.staff-period:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.staff-period-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.staff-period-name {
+  font-size: 1rem;
+  color: var(--ink);
+}
+/* 前期間比トレンド（数値＝ゴシック・右寄せ）。方向は矢印、上昇色は .trend-up（§12・ミント）で付す。 */
+.staff-period-trend {
+  margin-left: auto;
+  white-space: nowrap;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  color: var(--g25);
+}
+/* 感想数／評価スタンプ数（件数のみ・¥は出さない） */
+.staff-period-counts {
+  font-size: 0.9rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
 }
 
 /* 注記（小さめ・muted・italic）— 賞与非連動の明示（原則6） */

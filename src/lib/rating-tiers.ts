@@ -5,6 +5,9 @@
  *
  * 税込・JPY はゼロ小数通貨 → Stripe の unit_amount は「円そのまま」。
  */
+// emoji は各ティアの「単一ソース」。顧客向け /rating と内部ダッシュボードの内訳チップが
+// ともにここを参照する（重複定義しない）。評価スタンプの見た目は従来通りが正。
+// ⚠️ このティア絵文字は今後も触らない。ポイントヘッドライン等と被る場合は「ポイント側のアイコン」を変える。
 export const RATING_TIERS = [
   { tier: "thank_you", amount: 100, label: "Thank you", emoji: "👍" },
   { tier: "grateful", amount: 500, label: "Grateful", emoji: "☕" },
