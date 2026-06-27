@@ -33,7 +33,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
 
-  // 本文の文字数ルールはクライアントと共有（min 20 / max 300・trim後）
+  // 本文の文字数ルールはクライアントと共有（min 15 / max 300・trim後）
   const bodyError = validateReviewBody(body);
   if (bodyError) {
     return NextResponse.json({ error: bodyError }, { status: 400 });

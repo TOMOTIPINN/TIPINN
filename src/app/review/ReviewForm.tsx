@@ -17,7 +17,7 @@ type Staff = { id: string; name: string; photo_url: string | null };
 
 /**
  * 感想入力フォーム（画面マップ03・§5 デザインシステム準拠）。
- * 評価(絵文字4段階) / 体験タグ(複数可) / 共有範囲 / コメント(20〜300字)。
+ * 評価(絵文字4段階) / 体験タグ(複数可) / 共有範囲 / コメント(15〜300字)。
  * スタッフ一覧は GET /api/staff、送信は POST /api/reviews（service role 経由）。
  * 送信成功で /review/complete へ遷移（インラインで出し直さない・再送ループを作らない）。
  */
@@ -195,6 +195,7 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
             className="field"
             value={body}
             onChange={(e) => setBody(e.target.value.slice(0, REVIEW_BODY_MAX))}
+            minLength={REVIEW_BODY_MIN}
             maxLength={REVIEW_BODY_MAX}
             disabled={submitting}
             rows={6}

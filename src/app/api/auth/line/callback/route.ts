@@ -6,6 +6,7 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE,
 } from "@/lib/session";
+import { sanitizeReturnTo } from "@/lib/return-to";
 
 /**
  * GET /api/auth/line/callback
@@ -20,6 +21,7 @@ const HANDSHAKE_COOKIES = [
   "line_oauth_state",
   "line_oauth_nonce",
   "line_oauth_verifier",
+  "line_oauth_returnto",
 ];
 
 function fail(baseUrl: string, reason: string, detail?: unknown) {
@@ -54,6 +56,8 @@ export async function GET(request: Request) {
   const savedState = store.get("line_oauth_state")?.value;
   const savedNonce = store.get("line_oauth_nonce")?.value;
   const verifier = store.get("line_oauth_verifier")?.value;
+  // ログイン後の戻り先（login で保存・ローカルパスのみ。再検証して使う）。
+  const returnTo = sanitizeReturnTo(store.get("line_oauth_returnto")?.value);
 
   // state(CSRF) と PKCE verifier の存在・一致を検証
   if (
@@ -160,7 +164,7 @@ export async function GET(request: Request) {
     line_user_id: customer.line_user_id,
   });
 
-  const res = NextResponse.redirect(new URL("/", baseUrl));
+  const res = NextResponse.redirect(new URL(returnTo, baseUrl));
   res.cookies.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

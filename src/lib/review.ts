@@ -5,7 +5,7 @@
  */
 
 /* ---- コメント本文（trim後の文字数で判定） ---- */
-export const REVIEW_BODY_MIN = 20;
+export const REVIEW_BODY_MIN = 15;
 export const REVIEW_BODY_MAX = 300;
 
 export function validateReviewBody(

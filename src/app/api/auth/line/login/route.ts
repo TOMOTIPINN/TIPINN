@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { sanitizeReturnTo } from "@/lib/return-to";
 
 /**
  * GET /api/auth/line/login
  * LINEログインの開始点。CSRF対策の state、リプレイ対策の nonce、PKCE の
  * code_verifier を生成して短命Cookieに保存し、LINE認可エンドポイントへリダイレクト。
+ * `?returnTo=<ローカルパス>` を受け取り、ログイン後の戻り先として短命Cookieに保持する
+ * （CLAUDE.md §8・QR/招待導線。オープンリダイレクト検証は @/lib/return-to）。
  */
 const AUTHORIZE_URL = "https://access.line.me/oauth2/v2.1/authorize";
 const HANDSHAKE_MAX_AGE = 600; // 10分
@@ -13,10 +16,13 @@ function b64url(buf: Buffer): string {
   return buf.toString("base64url");
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const channelId = process.env.LINE_CHANNEL_ID!;
   const baseUrl = process.env.APP_BASE_URL!;
   const redirectUri = `${baseUrl}/api/auth/line/callback`;
+  const returnTo = sanitizeReturnTo(
+    new URL(request.url).searchParams.get("returnTo"),
+  );
 
   const state = b64url(crypto.randomBytes(32));
   const nonce = b64url(crypto.randomBytes(32));
@@ -46,5 +52,6 @@ export async function GET() {
   res.cookies.set("line_oauth_state", state, opts);
   res.cookies.set("line_oauth_nonce", nonce, opts);
   res.cookies.set("line_oauth_verifier", codeVerifier, opts);
+  res.cookies.set("line_oauth_returnto", returnTo, opts);
   return res;
 }
