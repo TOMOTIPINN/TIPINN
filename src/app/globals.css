@@ -1399,7 +1399,97 @@ textarea.field {
   gap: var(--space-sm);
   flex-wrap: wrap;
 }
+.staff-admin-id {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-right: auto; /* tag/ステータスを右へ寄せる */
+}
 .staff-admin-name { font-size: 1.05rem; color: var(--ink); }
+.staff-admin-jobtitle {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--g25);
+}
+.staff-admin-bio {
+  font-family: var(--font-mincho);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+
+/* スタッフ写真の円（管理一覧/編集/顧客ピッカー共通）。LogoCircle がこの中を満たす。 */
+.staff-photo {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.staff-photo-lg {
+  width: 96px;
+  height: 96px;
+  font-size: 1.1rem;
+}
+.staff-edit-photo {
+  display: flex;
+  justify-content: center;
+}
+
+/* 顧客側スタッフ選択（写真カードのラジオ群・画面02）。鮮やか色は使わない（§5）。 */
+.staff-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-sm);
+}
+.staff-pick-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.8rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  cursor: pointer;
+  text-align: center;
+}
+.staff-pick-card:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+.staff-pick-card.is-active {
+  border-color: var(--ink);
+}
+.staff-pick-card:disabled {
+  cursor: not-allowed;
+}
+.staff-pick-name {
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+.staff-pick-jobtitle {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--g25);
+}
+
+/* インラインのテキストリンク（一覧へ戻る等） */
+.text-link {
+  color: var(--ink-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 /* 状態ピル: 参加済み＝ミント / 招待中＝中立グレー / 期限切れ＝褪せグレー（赤は使わない）。 */
 .status-pill {

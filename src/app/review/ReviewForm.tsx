@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, Button } from "@/components/ui";
+import { LogoCircle } from "@/components/LogoCircle";
 import {
   REVIEW_BODY_MIN,
   REVIEW_BODY_MAX,
@@ -13,7 +14,15 @@ import {
   type ShareScope,
 } from "@/lib/review";
 
-type Staff = { id: string; name: string; photo_url: string | null };
+type Staff = {
+  id: string;
+  name: string;
+  photo_url: string | null;
+  job_title: string | null;
+  photo_pos_x: number;
+  photo_pos_y: number;
+  photo_zoom: number;
+};
 
 /**
  * 感想入力フォーム（画面マップ03・§5 デザインシステム準拠）。
@@ -116,29 +125,44 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
           </p>
         )}
 
-        {/* スタッフ */}
-        <div className="field-group">
-          <label className="field-label" htmlFor="staff">
-            どなたに
-          </label>
-          <select
-            id="staff"
-            className="field"
-            value={staffId}
-            onChange={(e) => setStaffId(e.target.value)}
-            disabled={staffLoading || submitting}
-            required
-          >
-            <option value="" disabled>
-              {staffLoading ? "読み込み中…" : "スタッフを選択"}
-            </option>
-            {staff.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* スタッフ（写真カードから選択。選択値・送信ロジックは従来どおり staffId） */}
+        <fieldset className="field-group">
+          <legend className="field-label">どなたに</legend>
+          {staffLoading ? (
+            <p className="muted">読み込み中…</p>
+          ) : (
+            <div className="staff-pick" role="radiogroup" aria-label="スタッフ">
+              {staff.map((s) => {
+                const active = staffId === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    className={`staff-pick-card${active ? " is-active" : ""}`}
+                    onClick={() => setStaffId(s.id)}
+                    disabled={submitting}
+                  >
+                    <span className="staff-photo" aria-hidden="true">
+                      <LogoCircle
+                        logoUrl={s.photo_url}
+                        x={s.photo_pos_x}
+                        y={s.photo_pos_y}
+                        zoom={s.photo_zoom}
+                        fallback={s.name.slice(0, 3)}
+                      />
+                    </span>
+                    <span className="staff-pick-name">{s.name}</span>
+                    {s.job_title && (
+                      <span className="staff-pick-jobtitle">{s.job_title}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </fieldset>
 
         {/* 評価（絵文字4段階） */}
         <fieldset className="field-group">

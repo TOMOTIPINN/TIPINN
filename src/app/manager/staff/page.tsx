@@ -10,6 +10,7 @@ import {
   inviteRemainingHours,
 } from "@/lib/staff-invite";
 import { Eyebrow, Card } from "@/components/ui";
+import { LogoCircle } from "@/components/LogoCircle";
 import CopyButton from "./CopyButton";
 
 /**
@@ -24,6 +25,12 @@ type StaffRow = {
   id: string;
   name: string;
   role: string;
+  job_title: string | null;
+  bio: string | null;
+  photo_url: string | null;
+  photo_pos_x: number;
+  photo_pos_y: number;
+  photo_zoom: number;
   line_user_id: string | null;
   invite_token: string | null;
   invite_expires_at: string | null;
@@ -71,7 +78,7 @@ export default async function ManagerStaffPage({
     supabaseAdmin
       .from("staff")
       .select(
-        "id, name, role, line_user_id, invite_token, invite_expires_at, bound_at, created_at",
+        "id, name, role, job_title, bio, photo_url, photo_pos_x, photo_pos_y, photo_zoom, line_user_id, invite_token, invite_expires_at, bound_at, created_at",
       )
       .eq("salon_id", ctx.salon_id)
       .order("created_at", { ascending: true }),
@@ -159,7 +166,23 @@ export default async function ManagerStaffPage({
               <Card key={v.row.id}>
                 <div className="stack-md">
                   <div className="staff-admin-head">
-                    <span className="staff-admin-name">{v.row.name}</span>
+                    <span className="staff-photo" aria-hidden="true">
+                      <LogoCircle
+                        logoUrl={v.row.photo_url}
+                        x={v.row.photo_pos_x}
+                        y={v.row.photo_pos_y}
+                        zoom={v.row.photo_zoom}
+                        fallback={v.row.name.slice(0, 3)}
+                      />
+                    </span>
+                    <div className="staff-admin-id">
+                      <span className="staff-admin-name">{v.row.name}</span>
+                      {v.row.job_title && (
+                        <span className="staff-admin-jobtitle">
+                          {v.row.job_title}
+                        </span>
+                      )}
+                    </div>
                     <span className="role-tag">
                       {ROLE_LABEL[v.row.role] ?? "スタッフ"}
                     </span>
@@ -173,6 +196,15 @@ export default async function ManagerStaffPage({
                       <span className="status-pill is-expired">未参加</span>
                     )}
                   </div>
+
+                  {v.row.bio && <p className="staff-admin-bio">{v.row.bio}</p>}
+
+                  <Link
+                    href={`/manager/staff/${v.row.id}`}
+                    className="btn btn-subtle btn-block"
+                  >
+                    プロフィールを編集
+                  </Link>
 
                   {v.state === "invited" && (
                     <div className="qr-block">
@@ -211,6 +243,10 @@ export default async function ManagerStaffPage({
             ))
           )}
         </section>
+
+        <Link href="/manager/profile" className="btn btn-quiet btn-block">
+          店舗プロフィール（ロゴ）へ
+        </Link>
 
         <Link href="/manager/inbox" className="btn btn-quiet btn-block">
           店長 Inbox へ
