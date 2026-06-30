@@ -113,7 +113,7 @@ export default async function ReviewCompletePage({
             </p>
             <a
               href={`/rating?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}`}
-              className="btn btn-subtle btn-block"
+              className="btn btn-mint btn-block"
             >
               評価スタンプを送る
             </a>

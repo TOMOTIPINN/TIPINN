@@ -35,7 +35,7 @@
   --mint-tint2: #F2FAF8; /* さらに淡いミント地（声カード等の最小フィル・スタッフ画面） */
   --mint-line: #BFE3DD;  /* ミントの罫線・枠 */
 
-  /* 来店ゲージ専用ミント（§12・カスタマーUIで唯一許可されるミント）。サロンUIの --mint(#11A697) とは別物。 */
+  /* カスタマーUIで許可のミント（§12・来店ゲージ＋ポジティブ主CTA=.btn-mint のみ）。サロンUIの --mint(#11A697) とは別物。 */
   --mint-visit: #1FB89E;      /* 来店ゲージ 点灯ドット */
   --mint-visit-soft: #EAF3F0; /* 来店ゲージ 未点灯ドット地 */
 
@@ -293,6 +293,18 @@ a {
 .btn-subtle:not(:disabled):hover {
   border-color: var(--line-strong);
   color: var(--ink);
+}
+
+/* ミント塗りの主CTA。カスタマーUIで唯一許可のミント＝来店ゲージ用 --mint-visit(#1FB89E) を
+   ポジティブアクセントとして流用（§12）。新しい色値はハードコードしない（hoverは color-mix で生成）。 */
+.btn-mint {
+  border: 1px solid var(--mint-visit);
+  background: var(--mint-visit);
+  color: var(--card);
+}
+.btn-mint:not(:disabled):hover {
+  background: color-mix(in srgb, var(--mint-visit) 88%, var(--ink));
+  border-color: color-mix(in srgb, var(--mint-visit) 88%, var(--ink));
 }
 
 /* LINE 等の外部認証導線（緑は使わず、控えめな枠で統一） */
