@@ -537,6 +537,69 @@ textarea.field {
   object-fit: cover;
 }
 
+/* ロゴ円の共通レイヤ（@/components/LogoCircle）。親円のサイズを満たし、
+   img に位置(x/y)・ズーム(zoom)の transform を適用する。CSS変数は LogoCircle が
+   style で渡す（§8の唯一の例外）。既定 (0%,0%,1) は従来の cover と同一。 */
+.logo-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.logo-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: translate(var(--logo-x, 0%), var(--logo-y, 0%))
+    scale(var(--logo-zoom, 1));
+}
+
+/* 画像調整UI（ドラッグ移動＋ズーム）。ロゴ(A6)・スタッフ写真(A2)共通。 */
+.image-adjust-circle {
+  width: 220px;
+  height: 220px;
+  max-width: 100%;
+  margin: 0 auto;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--g25);
+  text-align: center;
+}
+.image-adjust-circle.is-draggable {
+  cursor: grab;
+  touch-action: none; /* スマホでドラッグ中にページがスクロール/ズームしないように */
+  user-select: none;
+}
+.image-adjust-circle.is-draggable:active {
+  cursor: grabbing;
+}
+.image-adjust-circle img {
+  pointer-events: none; /* ドラッグは円が受ける（画像のネイティブドラッグを無効化） */
+}
+.image-adjust-empty {
+  line-height: 1.5;
+}
+.image-zoom-range {
+  width: 100%;
+  accent-color: var(--mint); /* サロンUI＝ミント可（§12） */
+  cursor: pointer;
+}
+.image-zoom-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 /* カード見出し行: ロゴ ＋ サロン名 ＋ 右端に count/required */
 .salon-head {
   display: flex;

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Eyebrow, Card, StampRing, VipBadge } from "@/components/ui";
+import { LogoCircle } from "@/components/LogoCircle";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { computeVisitProgress } from "@/lib/visit";
 import { getSalonRewardsMap } from "@/lib/rewards";
@@ -25,6 +26,9 @@ type SalonMeta = {
   id: string;
   name: string;
   logo_url: string | null;
+  logo_pos_x: number;
+  logo_pos_y: number;
+  logo_zoom: number;
   visit_axis_enabled: boolean;
   visit_cycle_size: number;
 };
@@ -85,7 +89,9 @@ export default async function MyPage() {
     orderedIds.length
       ? supabaseAdmin
           .from("salons")
-          .select("id, name, logo_url, visit_axis_enabled, visit_cycle_size")
+          .select(
+            "id, name, logo_url, logo_pos_x, logo_pos_y, logo_zoom, visit_axis_enabled, visit_cycle_size",
+          )
           .in("id", orderedIds)
       : Promise.resolve({ data: [] as SalonMeta[] }),
     getSalonRewardsMap(orderedIds),
@@ -152,12 +158,13 @@ export default async function MyPage() {
                   <div className="stack stack-md">
                     <div className="salon-head">
                       <span className="salon-logo" aria-hidden="true">
-                        {logo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={logo} alt="" />
-                        ) : (
-                          initials
-                        )}
+                        <LogoCircle
+                          logoUrl={logo}
+                          x={meta.logo_pos_x}
+                          y={meta.logo_pos_y}
+                          zoom={meta.logo_zoom}
+                          fallback={initials}
+                        />
                       </span>
                       <span className="headline-sm">{meta.name}</span>
                       {vip?.isVIP && <VipBadge />}
@@ -176,6 +183,9 @@ export default async function MyPage() {
                           size={CYCLE_SIZE}
                           logoUrl={logo}
                           fallback={initials}
+                          logoX={meta.logo_pos_x}
+                          logoY={meta.logo_pos_y}
+                          logoZoom={meta.logo_zoom}
                         />
                         <p className="muted">
                           次の特典まであと {vip.toNextPerk} 個

@@ -4,6 +4,7 @@
  * 視覚デザインの単一の入口。新画面はここの Card / Button / Eyebrow を使う。
  */
 import type { ButtonHTMLAttributes, ReactNode } from "react";
+import { LogoCircle } from "@/components/LogoCircle";
 
 /* 英字 italic serif の小さなアイブロウラベル（G2.5）。
    例: <Eyebrow>Share your feedback</Eyebrow> */
@@ -29,17 +30,24 @@ export function Card({
 }
 
 /* 貯まるスタンプの円リング（画面06/07/10 共通）。
-   count個ぶん点灯し、残りは破線。点灯部はサロンの円形ロゴ、無ければ頭文字フォールバック。 */
+   count個ぶん点灯し、残りは破線。点灯部はサロンの円形ロゴ（位置/ズーム調整を反映）、
+   無ければ頭文字フォールバック。ロゴ描画は LogoCircle に委譲（§8の例外はそこに一本化）。 */
 export function StampRing({
   count,
   size,
   logoUrl,
   fallback,
+  logoX = 0,
+  logoY = 0,
+  logoZoom = 1,
 }: {
   count: number;
   size: number;
   logoUrl?: string | null;
   fallback?: string;
+  logoX?: number;
+  logoY?: number;
+  logoZoom?: number;
 }) {
   const filled = Math.min(count, size);
   return (
@@ -54,8 +62,12 @@ export function StampRing({
           >
             {isFilled
               ? logoUrl
-                ? // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoUrl} alt="" />
+                ? <LogoCircle
+                    logoUrl={logoUrl}
+                    x={logoX}
+                    y={logoY}
+                    zoom={logoZoom}
+                  />
                 : (fallback ?? null)
               : null}
           </span>
