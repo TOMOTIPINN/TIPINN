@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 例外: キー名のみのテンプレは追跡する（値は絶対に書かない）
+!.env.example
 
 # vercel
 .vercel
