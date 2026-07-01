@@ -52,23 +52,33 @@ export const DEMO_LINE_PREFIX = "demo:";
  * 本番Prod env にこれらを置かなければ常に false ＝ /demo も /api/demo/login も 404。
  */
 export function isDemoLoginEnabled(): boolean {
+  // ★保険: Vercel Production では env 設定に関わらず必ず無効（人為的な誤設定でも開かない）。
+  //   Preview は VERCEL_ENV==="preview"、ローカルは未定義なので従来どおり env で判定する。
+  //   （NODE_ENV は Preview も "production" になるため使わない＝Preview まで無効化しない）
+  if (process.env.VERCEL_ENV === "production") return false;
   return (
     process.env.DEMO_LOGIN_ENABLED === "true" &&
     typeof process.env.DEMO_LOGIN_SECRET === "string" &&
-    process.env.DEMO_LOGIN_SECRET.length > 0
+    // .trim() 済みで判定（改行/空白のみの値は「未設定」とみなす）
+    process.env.DEMO_LOGIN_SECRET.trim().length > 0
   );
 }
 
 /**
  * シークレット照合（定数時間）。両者を SHA-256 に通してから timingSafeEqual で比較し、
  * 長さの差もリークさせない。secret 未設定や不一致は false。
+ * env 側・入力側とも .trim() してから比較する（末尾の改行/空白による誤不一致を防ぐ）。
  */
 export function verifyDemoKey(provided: unknown): boolean {
-  const secret = process.env.DEMO_LOGIN_SECRET;
-  if (!secret || typeof provided !== "string" || provided.length === 0) {
+  const secret = process.env.DEMO_LOGIN_SECRET?.trim();
+  if (!secret || typeof provided !== "string") {
     return false;
   }
-  const a = createHash("sha256").update(provided).digest();
+  const input = provided.trim();
+  if (input.length === 0) {
+    return false;
+  }
+  const a = createHash("sha256").update(input).digest();
   const b = createHash("sha256").update(secret).digest();
   return timingSafeEqual(a, b);
 }

@@ -33,12 +33,23 @@ export default async function DemoLoginPage() {
               <label className="field-label" htmlFor="demo-key">
                 デモシークレット
               </label>
+              {/* ★type="password" はパスワードマネージャー（iCloudキーチェーン/1Password等）が
+                  autoComplete="off" を無視して割り込み、貼り付け値を切り詰める（64→33等）ため、
+                  貼り付け前提のこの秘密入力では type="text" にする。あわせて各マネージャー/自動補完/
+                  変換を明示的に無効化する。maxLength は付けない（切り詰め防止）。
+                  ※デモ運用者が自端末で入力する用途のため画面表示は許容。 */}
               <input
                 id="demo-key"
                 className="field"
-                type="password"
+                type="text"
                 name="key"
                 autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                data-1p-ignore="true"
+                data-lpignore="true"
+                data-form-type="other"
                 required
               />
             </div>
