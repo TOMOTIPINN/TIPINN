@@ -1486,16 +1486,6 @@ textarea.field {
   letter-spacing: 0.04em;
   color: var(--ink);
 }
-.staff-photo-lg {
-  width: 96px;
-  height: 96px;
-  font-size: 1.1rem;
-}
-.staff-edit-photo {
-  display: flex;
-  justify-content: center;
-}
-
 /* 顧客側スタッフ選択（写真カードのラジオ群・画面02）。鮮やか色は使わない（§5）。 */
 .staff-pick {
   display: grid;
