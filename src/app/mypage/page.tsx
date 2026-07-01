@@ -7,6 +7,7 @@ import { LogoCircle } from "@/components/LogoCircle";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { computeVisitProgress } from "@/lib/visit";
 import { getSalonRewardsMap } from "@/lib/rewards";
+import { getTier } from "@/lib/rating-tiers";
 
 /**
  * マイページ（画面マップ10・白世界）。
@@ -22,6 +23,22 @@ import { getSalonRewardsMap } from "@/lib/rewards";
  */
 type ReviewRow = { salon_id: string; count: number | null; updated_at: string };
 type VisitRow = { salon_id: string };
+// 送った評価の履歴（Your echoes sent）。FK埋め込みでスタッフ名・サロン名も同時取得。
+// amount は案B（金額ゼロ）のため取得も表示もしない。staff は退職時 null になり得る。
+type SentEchoRow = {
+  created_at: string;
+  tier: string;
+  staff: { name: string } | null;
+  salon: { name: string; logo_url: string | null } | null;
+};
+
+// 履歴の日付表示（JST・既存の staff/page と同じ Intl パターンを流用。履歴なので年も添える）。
+const jstDate = new Intl.DateTimeFormat("ja-JP", {
+  timeZone: "Asia/Tokyo",
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+});
 type SalonMeta = {
   id: string;
   name: string;
@@ -39,8 +56,9 @@ export default async function MyPage() {
     redirect("/api/auth/line/login");
   }
 
-  // 第1波: 顧客 / 感想軸カウント / 来店行（来店行は1日1行なのでJSでsalonごとにCOUNT集計）。
-  const [{ data: customer }, { data: reviews }, { data: visits }] =
+  // 第1波: 顧客 / 感想軸カウント / 来店行（来店行は1日1行なのでJSでsalonごとにCOUNT集計）
+  //        / 送った評価の履歴（既存3クエリとは独立・時系列 desc・FK埋め込みで名前も同時取得）。
+  const [{ data: customer }, { data: reviews }, { data: visits }, { data: sent }] =
     await Promise.all([
       supabaseAdmin
         .from("customers")
@@ -56,10 +74,16 @@ export default async function MyPage() {
         .from("visits")
         .select("salon_id")
         .eq("customer_id", session.customer_id),
+      supabaseAdmin
+        .from("rating_purchases")
+        .select("created_at, tier, staff:staff(name), salon:salons(name, logo_url)")
+        .eq("customer_id", session.customer_id)
+        .order("created_at", { ascending: false }),
     ]);
 
   const reviewRows = (reviews ?? []) as ReviewRow[];
   const visitRows = (visits ?? []) as VisitRow[];
+  const sentEchoes = (sent ?? []) as unknown as SentEchoRow[];
 
   const reviewMap = new Map<string, ReviewRow>();
   for (const r of reviewRows) reviewMap.set(r.salon_id, r);
@@ -237,6 +261,51 @@ export default async function MyPage() {
                 </Card>
               );
             })
+          )}
+        </section>
+
+        {/* 送った評価の履歴（案B：金額ゼロ）。件数0でもセクションは残し、機能の存在を伝える。
+            ティア絵文字/ラベル＋スタッフ名＋日付のみ。金額・合計は一切出さない（原則5）。 */}
+        <section className="stack">
+          <Eyebrow>Your echoes sent</Eyebrow>
+
+          {sentEchoes.length === 0 ? (
+            <Card>
+              <p className="muted center-text">
+                まだ送った評価はありません。
+                <br />
+                気持ちが動いたとき、評価スタンプで感謝を届けられます。
+              </p>
+            </Card>
+          ) : (
+            <Card>
+              <ul className="echo-sent-list">
+                {sentEchoes.map((row, i) => {
+                  const tier = getTier(row.tier);
+                  // staff_id が null（退職＝on delete set null）でも壊れないようフォールバック。
+                  const staffName = row.staff?.name ?? "(退職スタッフ)";
+                  return (
+                    <li key={i} className="echo-sent-item">
+                      <span className="tier-emoji" aria-hidden="true">
+                        {tier?.emoji ?? "✎"}
+                      </span>
+                      <span className="echo-sent-main">
+                        <span className="tier-label">
+                          {tier?.label ?? row.tier}
+                        </span>
+                        <span className="echo-sent-sub">
+                          {staffName}さん
+                          {row.salon?.name ? `・${row.salon.name}` : ""}
+                        </span>
+                      </span>
+                      <span className="echo-sent-date">
+                        {jstDate.format(new Date(row.created_at))}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
           )}
         </section>
 

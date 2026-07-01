@@ -758,6 +758,44 @@ textarea.field {
   color: var(--ink);
 }
 
+/* 送った評価の履歴（mypage・Your echoes sent）。非インタラクティブなリスト。
+   金額は出さない（案B・原則5）。ミントは使わない（§12・カスタマー例外の対象外）。
+   ティア絵文字/ラベルは tier-emoji / tier-label を流用（見た目の単一ソース維持）。 */
+.echo-sent-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.echo-sent-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) 0;
+}
+.echo-sent-item + .echo-sent-item {
+  border-top: 1px solid var(--line);
+}
+.echo-sent-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.echo-sent-sub {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--g25);
+}
+.echo-sent-date {
+  margin-left: auto;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  color: var(--g25);
+}
+
 /* ============================================================
    Dashboard（デモ用モック・画面マップ14系の簡易版）
    評価の可視化のみ。金額をスタッフに紐づけない（原則5・6）。
