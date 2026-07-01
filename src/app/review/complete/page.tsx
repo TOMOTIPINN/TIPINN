@@ -112,7 +112,8 @@ export default async function ReviewCompletePage({
               今日の体験を{staff.name}さんに評価スタンプで送れます。
             </p>
             <a
-              href={`/rating?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}`}
+              // reviewed=1：感想は送信済みなので rating 側で「感想だけ送る」を出さない目印。
+              href={`/rating?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}&reviewed=1`}
               className="btn btn-mint btn-block"
             >
               評価スタンプを送る

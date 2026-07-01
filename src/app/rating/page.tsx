@@ -13,14 +13,17 @@ import RatingPicker from "./RatingPicker";
 export default async function RatingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ salon?: string; staff?: string }>;
+  searchParams: Promise<{ salon?: string; staff?: string; reviewed?: string }>;
 }) {
   const session = await getSession();
   if (!session) {
     redirect("/api/auth/line/login");
   }
 
-  const { salon: salonId, staff: staffId } = await searchParams;
+  const { salon: salonId, staff: staffId, reviewed } = await searchParams;
+  // reviewed が付いていれば感想は送信済み → 「感想だけ送る」は不要。
+  // フェイルセーフ：値が無ければ falsy として現状どおり表示する（緩い存在判定）。
+  const alreadyReviewed = Boolean(reviewed);
   if (!salonId || !staffId) {
     return (
       <main className="page">
@@ -58,14 +61,16 @@ export default async function RatingPage({
           </p>
         </header>
 
-        <RatingPicker salonId={salonId} staffId={staffId} />
+        <RatingPicker salonId={salonId} staffId={staffId} reviewed={alreadyReviewed} />
 
-        <a
-          href={`/review?salon=${encodeURIComponent(salonId)}`}
-          className="btn btn-quiet btn-block"
-        >
-          感想だけ送る
-        </a>
+        {!alreadyReviewed && (
+          <a
+            href={`/review?salon=${encodeURIComponent(salonId)}`}
+            className="btn btn-quiet btn-block"
+          >
+            感想だけ送る
+          </a>
+        )}
       </div>
     </main>
   );

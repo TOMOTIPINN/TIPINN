@@ -11,9 +11,13 @@ import { RATING_TIERS } from "@/lib/rating-tiers";
 export default function RatingPicker({
   salonId,
   staffId,
+  reviewed,
 }: {
   salonId: string;
   staffId: string;
+  // 感想送信済みか。決済キャンセルで rating に戻った際も「感想だけ送る」を出さないため
+  // checkout に引き継ぎ、cancel_url に reviewed を維持させる（課金ロジックには不使用）。
+  reviewed: boolean;
 }) {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -26,7 +30,7 @@ export default function RatingPicker({
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ salonId, staffId, tier }),
+        body: JSON.stringify({ salonId, staffId, tier, reviewed }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data?.error ?? "failed");

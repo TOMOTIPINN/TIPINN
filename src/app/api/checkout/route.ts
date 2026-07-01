@@ -24,6 +24,7 @@ export async function POST(req: Request) {
     staffId?: string;
     tier?: string;
     reviewId?: string;
+    reviewed?: boolean;
   };
   try {
     payload = await req.json();
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const { salonId, staffId, tier, reviewId } = payload;
+  const { salonId, staffId, tier, reviewId, reviewed } = payload;
   // 価格はサーバー定義のみ信用（原則8）。クライアントが amount を送ってきても見ない。
   const tierDef = getTier(tier);
   if (!salonId || !staffId || !tierDef) {
@@ -60,6 +61,9 @@ export async function POST(req: Request) {
   }
 
   const baseUrl = process.env.APP_BASE_URL!;
+  // 感想送信済みなら決済キャンセルで rating に戻っても「感想だけ送る」を再表示しない。
+  // 値があるときだけ付ける（無ければ現状どおり＝表示側でフェイルセーフ）。
+  const reviewedParam = reviewed ? "&reviewed=1" : "";
 
   // Webhook(4.2) が rating_purchases に記録するための手がかり。すべて文字列。
   const metadata: Record<string, string> = {
@@ -92,7 +96,7 @@ export async function POST(req: Request) {
         metadata,
         client_reference_id: session.customer_id,
         success_url: `${baseUrl}/rating/complete?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/rating?salon=${salonId}&staff=${staffId}`,
+        cancel_url: `${baseUrl}/rating?salon=${salonId}&staff=${staffId}${reviewedParam}`,
       },
       // Direct Charge：連結アカウント上で Session を作成（手数料は連結アカウント負担）
       { stripeAccount: salon.stripe_account_id },
