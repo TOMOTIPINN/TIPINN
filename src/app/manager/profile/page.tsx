@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
+import SalonNav from "@/components/SalonNav";
 import { ImageAdjuster } from "@/components/ImageAdjuster";
 
 /**
@@ -66,6 +67,7 @@ export default async function ManagerProfilePage({
   return (
     <main className="page page-top">
       <div className="container stack animate-in">
+        <SalonNav />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Salon profile</Eyebrow>
           <h1 className="headline">{name} ・ 店舗プロフィール</h1>

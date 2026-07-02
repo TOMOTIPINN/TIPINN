@@ -10,6 +10,7 @@ import {
   MAX_REWARDS,
 } from "@/lib/rewards";
 import { Eyebrow, Card } from "@/components/ui";
+import SalonNav from "@/components/SalonNav";
 
 /**
  * A3 特典設定（/manager/rewards・サロンUI世界 / [[auth-method-line-b]]）。
@@ -67,6 +68,7 @@ export default async function ManagerRewardsPage({
   return (
     <main className="page page-top">
       <div className="container stack animate-in">
+        <SalonNav />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">VIP perks</Eyebrow>
           <h1 className="headline">{salon?.name ?? "サロン"} ・ 特典設定</h1>

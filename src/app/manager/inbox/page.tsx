@@ -5,6 +5,7 @@ import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import { REVIEW_RATINGS } from "@/lib/review";
 import InboxList, { type InboxRow } from "./InboxList";
+import SalonNav from "@/components/SalonNav";
 
 /**
  * 11 店長 Inbox（画面マップ11・サロンUI世界）。ルート: /manager/inbox
@@ -128,6 +129,7 @@ export default async function ManagerInboxPage() {
   return (
     <main className="page page-top">
       <div className="container stack animate-in">
+        <SalonNav />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Manager inbox</Eyebrow>
           <h1 className="headline">{salon.name} ・ 声の一覧</h1>

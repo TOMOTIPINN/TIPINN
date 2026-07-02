@@ -67,9 +67,17 @@ export default async function DemoLoginPage() {
               type="submit"
               name="as"
               value="staff"
-              className="btn btn-quiet btn-block"
+              className="btn btn-outline btn-block"
             >
-              スタッフとして入る（スタッフ画面）
+              スタッフ個人として入る（スタッフ画面）
+            </button>
+            <button
+              type="submit"
+              name="as"
+              value="manager"
+              className="btn btn-outline btn-block"
+            >
+              店長として入る（店長 Inbox）
             </button>
           </form>
         </Card>

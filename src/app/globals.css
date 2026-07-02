@@ -895,6 +895,78 @@ textarea.field {
   color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
 }
 
+/* サロン共通ナビ（SalonNav・§12 サロンUI／アクティブ＝ミント） */
+.salon-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* 主ナビ（3タブのピルグループ）と 設定歯車 を横1段に並べる */
+.salon-nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+}
+.salon-nav-row {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+}
+.salon-nav-link {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  letter-spacing: 0.06em;
+  color: var(--g25);
+  padding: 0.5rem 1.1rem;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  transition: var(--transition);
+}
+.salon-nav-link:not(.is-active):hover { color: var(--ink); }
+.salon-nav-link.is-active {
+  background: var(--mint-tint);
+  color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
+}
+/* 設定＝歯車の独立ボタン（主ナビの括りの外・右端）。アクティブは3タブと同じ mint-tint */
+.salon-nav-gear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.4rem;
+  height: 2.4rem;
+  color: var(--g25);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  font-size: 1rem;
+  line-height: 1;
+  transition: var(--transition);
+}
+.salon-nav-gear:not(.is-active):hover { color: var(--ink); }
+.salon-nav-gear.is-active {
+  background: var(--mint-tint);
+  color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
+}
+.salon-nav-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.1rem;
+  padding: 0 0.4rem 0.2rem;
+}
+.salon-nav-sublink {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  color: var(--g25);
+  transition: var(--transition);
+}
+.salon-nav-sublink:hover { color: var(--ink); }
+.salon-nav-sublink.is-active {
+  color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
+}
+
 /* ============================================================
    echo flow（HR月次ビュー・§12）
    好調/上昇＝ミント / 安定＝グレー / 要ケア＝褪せグレー（赤は使わない）。

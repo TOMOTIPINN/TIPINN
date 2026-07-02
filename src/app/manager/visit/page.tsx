@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
+import SalonNav from "@/components/SalonNav";
 
 /**
  * 来店スタンプ設定（/manager/visit・サロンUI世界 / Phase 7・ブロック4 / [[auth-method-line-b]]）。
@@ -65,6 +66,7 @@ export default async function ManagerVisitPage({
   return (
     <main className="page page-top">
       <div className="container stack animate-in">
+        <SalonNav />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Visit stamps</Eyebrow>
           <h1 className="headline">{salon?.name ?? "サロン"} ・ 来店スタンプ設定</h1>

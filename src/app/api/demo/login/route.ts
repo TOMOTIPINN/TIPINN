@@ -53,12 +53,15 @@ export async function POST(req: Request): Promise<NextResponse> {
     if (!verifyDemoKey(key)) return notFound();
 
     // ゲート3: as は enum のみ。persona はサーバー定数から引く（入力IDは受けない）。
-    if (as !== "customer" && as !== "staff") return notFound();
+    if (as !== "customer" && as !== "staff" && as !== "manager") {
+      return notFound();
+    }
     const persona = DEMO_PERSONAS[as as DemoPersonaKey];
 
     // ゲート4（多層防御・実DB照合）: デモsalon 以外へ絶対に到達させない。
-    if (as === "staff") {
-      // 店長 persona: line_user_id に一致する staff が「デモsalon所属」であることを確認。
+    if (as === "staff" || as === "manager") {
+      // staff/manager persona: line_user_id に一致する staff が「デモsalon所属」であることを確認。
+      // role の区別はここでは不要（店長ガードは /manager/* 側の ctx.role で担う）。
       const { data: staff } = await supabaseAdmin
         .from("staff")
         .select("id, salon_id")
@@ -82,13 +85,15 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
 
     // セッション発行（LINE成功時と同一の作法を再利用）。
-    const baseUrl = process.env.APP_BASE_URL!;
     const token = await createSessionToken({
       customer_id: persona.customer_id,
       line_user_id: persona.line_user_id,
     });
 
-    const res = NextResponse.redirect(new URL(persona.redirectTo, baseUrl), {
+    // リダイレクト先は persona.redirectTo（/mypage・/staff の相対パス）を
+    // リクエスト元(req.url)基準で解決する＝実際に開いているホスト（Preview/携帯）に追従。
+    // APP_BASE_URL（localhost等になり得る）には依存しない。
+    const res = NextResponse.redirect(new URL(persona.redirectTo, req.url), {
       status: 303, // POST → GET リダイレクト
     });
     res.cookies.set(SESSION_COOKIE_NAME, token, {

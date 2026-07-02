@@ -5,8 +5,9 @@
 -- ★冪等: 固定UUID + ON CONFLICT で何度でも再実行できる（開くたび綺麗な状態に戻せる）。
 -- ★固定UUIDは src/lib/demo.ts と同一（単一ソース）:
 --     DEMO_SALON_ID          = deded000-0000-0000-0000-000000000000
---     persona customer(顧客) = deded001-0000-0000-0000-000000000000  (line: demo:customer:echo)
---     persona staff(店長)    = deded002-0000-0000-0000-000000000000  (line: demo:manager:echo)
+--     persona customer(顧客)     = deded001-0000-0000-0000-000000000000  (line: demo:customer:echo)
+--     persona staff(一般スタッフ) = deded005-0000-0000-0000-000000000000  (line: demo:staff:echo → staff dededa02)
+--     persona manager(店長)       = deded002-0000-0000-0000-000000000000  (line: demo:manager:echo → staff dededa01)
 -- ★命名規約（集計から除外できるように）:
 --     salons.name        … 【DEMO】接頭辞  → name ILIKE '%DEMO%' で除外可
 --     customers.display_name … （デモ）接頭辞
@@ -41,7 +42,8 @@ on conflict (id) do update set
 -- ---------------------------------------------------------------------------
 -- 2) staff（4名：店長persona + スタイリスト2 + アシスタント1）
 --    role: 'manager' は店長persona（ダッシュボード/店長Inbox）／他は 'staff'。
---    line_user_id: 店長のみ 'demo:manager:echo'（デモログインの as=staff が一致する）。
+--    line_user_id: 店長=田中 'demo:manager:echo'（as=manager が一致）／
+--                  一般スタッフ=佐藤 'demo:staff:echo'（as=staff が一致）。他2名は NULL。
 --    photo_url は NULL（頭文字フォールバック）。投入後に管理UIで写真アップ＋位置調整。
 -- ---------------------------------------------------------------------------
 insert into public.staff (id, salon_id, name, role, line_user_id, job_title, bio, photo_url)
@@ -50,7 +52,7 @@ values
    '田中 みなと', 'manager', 'demo:manager:echo', '店長 / スタイリスト',
    'お客様の“なりたい”を一緒に描くのが好きです。何でもご相談ください。', null),
   ('dededa02-0000-0000-0000-000000000000', 'deded000-0000-0000-0000-000000000000',
-   '佐藤 ゆい', 'staff', null, 'スタイリスト',
+   '佐藤 ゆい', 'staff', 'demo:staff:echo', 'スタイリスト',
    'ショート・ボブが得意。骨格に合わせたカットを大切にしています。', null),
   ('dededa03-0000-0000-0000-000000000000', 'deded000-0000-0000-0000-000000000000',
    '鈴木 かな', 'staff', null, 'スタイリスト',
@@ -84,12 +86,14 @@ on conflict (id) do update set
 -- 4) customers（デモ顧客 4名）
 --    deded001 = マイページを映えさせる主役persona。
 --    deded002 = 店長personaの顧客行（店長がmypageを開いても壊れないように）。
+--    deded005 = 一般スタッフpersonaの顧客保険行（スタッフがmypageを開いても壊れないように）。
 --    deded003 / deded004 = レビューの声を賑やかにする脇役。
 -- ---------------------------------------------------------------------------
 insert into public.customers (id, line_user_id, display_name)
 values
   ('deded001-0000-0000-0000-000000000000', 'demo:customer:echo', '（デモ）花山 あかり'),
   ('deded002-0000-0000-0000-000000000000', 'demo:manager:echo',  '（デモ）田中 みなと'),
+  ('deded005-0000-0000-0000-000000000000', 'demo:staff:echo',    '（デモ）佐藤 ゆい'),
   ('deded003-0000-0000-0000-000000000000', 'demo:cust:a',        '（デモ）お客さま A'),
   ('deded004-0000-0000-0000-000000000000', 'demo:cust:b',        '（デモ）お客さま B')
 on conflict (id) do update set

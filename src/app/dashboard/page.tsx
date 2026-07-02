@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Card, Eyebrow, VipBadge } from "@/components/ui";
+import SalonNav from "@/components/SalonNav";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import StaffPeriodView from "./StaffPeriodView";
 import HrFlowView from "./HrFlowView";
@@ -41,7 +42,7 @@ import {
  */
 
 // ---- ダミーデータ（本実装時にここだけ差し替える） --------------------
-const SALON_NAME = "テストサロン";
+const SALON_NAME = "【DEMO】echo デモサロン";
 
 const TIER_BREAKDOWN = [
   { label: "Thank you", count: 8 },
@@ -129,6 +130,7 @@ export default function DashboardPage() {
   return (
     <main className="page page-top">
       <div className="container container-wide stack animate-in">
+        <SalonNav />
         {/* 1. ヘッダー */}
         <header className="dash-head">
           <div className="stack-sm">

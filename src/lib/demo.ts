@@ -8,7 +8,7 @@ import type { SessionPayload } from "@/lib/session";
  *  - このバイパスは **リクエストから ID を一切受け取らない**。呼び出し側が選べるのは
  *    `as = customer | staff` の enum だけで、実際の customer_id / line_user_id は
  *    ここ（サーバー定数）に固定。よって実在の顧客/スタッフを狙う入力経路が存在しない。
- *  - 発行対象は下記2 persona のみ。いずれも固定UUIDのデモサロン(DEMO_SALON_ID)に紐づく。
+ *  - 発行対象は下記3 persona のみ。いずれも固定UUIDのデモサロン(DEMO_SALON_ID)に紐づく。
  *  - UUID はデモseed SQL と **同じ値**を使う（この定数が唯一の正）。
  *
  * 有効化は二重ゲート（isDemoLoginEnabled）: DEMO_LOGIN_ENABLED==="true" かつ
@@ -18,7 +18,7 @@ import type { SessionPayload } from "@/lib/session";
 // デモseed と共有する固定UUID（実データと衝突しない専用値）。
 export const DEMO_SALON_ID = "deded000-0000-0000-0000-000000000000";
 
-export type DemoPersonaKey = "customer" | "staff";
+export type DemoPersonaKey = "customer" | "staff" | "manager";
 
 type DemoPersona = SessionPayload & {
   /** 発行後の着地先。 */
@@ -26,10 +26,12 @@ type DemoPersona = SessionPayload & {
 };
 
 /**
- * 発行できる persona は以下の2件のみ（サーバー定数・リクエストからは選べない）。
+ * 発行できる persona は以下の3件のみ（サーバー定数・リクエストからは選べない）。
  *  - customer: staff 行に無い line_user_id ＝ getStaffContext が null → 純・顧客視点。
- *  - staff   : デモサロンの店長 staff 行の line_user_id と一致 → 店長/スタッフ視点。
+ *  - staff   : デモサロンの一般スタッフ(role='staff', 佐藤) の line_user_id と一致 → スタッフ個人視点。
+ *  - manager : デモサロンの店長(role='manager', 田中) の line_user_id と一致 → 店長視点（店長Inbox）。
  * line_user_id は "demo:" 接頭辞で実 LINE の sub と決して衝突させない。
+ * staff/manager の customer_id はいずれも mypage を開いても壊れないための顧客保険行。
  */
 export const DEMO_PERSONAS: Record<DemoPersonaKey, DemoPersona> = {
   customer: {
@@ -38,9 +40,14 @@ export const DEMO_PERSONAS: Record<DemoPersonaKey, DemoPersona> = {
     redirectTo: "/mypage",
   },
   staff: {
+    customer_id: "deded005-0000-0000-0000-000000000000",
+    line_user_id: "demo:staff:echo",
+    redirectTo: "/staff",
+  },
+  manager: {
     customer_id: "deded002-0000-0000-0000-000000000000",
     line_user_id: "demo:manager:echo",
-    redirectTo: "/staff",
+    redirectTo: "/dashboard", // 数字管理トップに着地（SalonNav で店長系を回遊）
   },
 };
 
