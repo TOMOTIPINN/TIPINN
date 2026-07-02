@@ -949,6 +949,33 @@ textarea.field {
   background: var(--mint-tint);
   color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
 }
+
+/* チェックイン（マイページ・白世界・§12 装飾ミント無し）。QRは提示専用アコーディオン。 */
+.checkin {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.checkin-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.checkin-qr {
+  width: 200px;
+  height: auto;
+  border-radius: 8px;
+}
+.checkin-hint {
+  text-align: center;
+  font-size: 0.85rem;
+}
 .salon-nav-settings {
   display: flex;
   flex-wrap: wrap;

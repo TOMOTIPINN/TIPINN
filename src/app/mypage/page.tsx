@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import QRCode from "qrcode";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Eyebrow, Card, StampRing, VipBadge } from "@/components/ui";
 import { LogoCircle } from "@/components/LogoCircle";
+import CheckInCard from "@/components/CheckInCard";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { computeVisitProgress } from "@/lib/visit";
 import { getSalonRewardsMap } from "@/lib/rewards";
@@ -133,6 +135,14 @@ export default async function MyPage() {
 
   const displayName = customer?.display_name || "ゲスト";
 
+  // チェックイン用QR（提示専用）。中身は今は customer_id 素のまま。
+  // ★本番: なりすまし防止のため署名付き短命トークンに差し替える（TODO）。
+  // 生成はサーバー側ローカルのみ（外部送信なし・原則7。招待QRと同じ作法）。
+  const checkInQr = await QRCode.toDataURL(session.customer_id, {
+    margin: 1,
+    width: 240,
+  });
+
   return (
     <main className="page page-top">
       <div className="container stack animate-in">
@@ -142,6 +152,8 @@ export default async function MyPage() {
         </header>
 
         <hr className="rule" />
+
+        <CheckInCard qrDataUrl={checkInQr} />
 
         <section className="stack">
           <Eyebrow>Your stamps</Eyebrow>
