@@ -28,6 +28,12 @@ const PRIMARY: NavItem[] = [
     label: "スタッフ",
     match: (p) => p.startsWith("/manager/staff"),
   },
+  {
+    // 来店受付＝店頭の日次オペ。staff/manager どちらでも開ける（/staff/visit 側でガード）。
+    href: "/staff/visit",
+    label: "来店受付",
+    match: (p) => p.startsWith("/staff/visit"),
+  },
 ];
 
 const SETTINGS: NavItem[] = [

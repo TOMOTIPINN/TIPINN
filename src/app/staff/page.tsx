@@ -122,6 +122,11 @@ export default async function StaffHomePage() {
 
         <hr className="rule" />
 
+        {/* 店頭の来店受付（お客様QRを読み取って来店記録）。日々の主動線なので上部に置く。 */}
+        <Link href="/staff/visit" className="btn btn-outline btn-block">
+          来店受付（QRを読み取る）
+        </Link>
+
         {/* Your appreciation（件数のみ・¥なし） */}
         <section className="stack-md">
           <div className="dash-head">
