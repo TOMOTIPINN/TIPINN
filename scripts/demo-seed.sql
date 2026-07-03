@@ -116,51 +116,58 @@ on conflict (customer_id, salon_id) do update set
 
 -- ---------------------------------------------------------------------------
 -- 6) visits（来店軸・主persona deded001 を 19回＝19/20＝「あと1回でVIP」）
---    unique(customer_id,salon_id,visited_on) で1日1行。
---    2026-02-15 から7日刻みの先頭19日を採用（固定日＝冪等・20日目に達しないので 19/20）。
+--    unique(customer_id,salon_id,visited_on) で1日1行。件数(=19)だけが来店ゲージに効く。
+--    seed 実行時の「今日(JST)から遡る直近19日」を採用＝毎回 recent な当月寄りの日付になる。
+--    ★visited_on は相対日で安定キーが無いため、再seed 時に増殖しないよう先に当該デモ行を削除する
+--      （salon=DEMO かつ customer=主persona に限定＝実データには当たらない）。
 -- ---------------------------------------------------------------------------
+delete from public.visits
+where salon_id = 'deded000-0000-0000-0000-000000000000'
+  and customer_id = 'deded001-0000-0000-0000-000000000000';
+
 insert into public.visits (customer_id, salon_id, visited_on)
 select
   'deded001-0000-0000-0000-000000000000',
   'deded000-0000-0000-0000-000000000000',
-  d::date
-from generate_series(date '2026-02-15', date '2026-06-28', interval '7 days') as g(d)
-order by d
-limit 19
+  (now() at time zone 'Asia/Tokyo')::date - g
+from generate_series(0, 18) as s(g)
 on conflict (customer_id, salon_id, visited_on) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- 7) reviews（無償の感想 12件）
 --    スタッフ別に散らし、rating(1..4=改善..最高)・tags・share_scope を混在。
 --    → スタッフホームの Team voices / 店長Inbox（everyone・manager_only）が埋まる。
---    固定UUID + ON CONFLICT(id) DO UPDATE で冪等。created_at は固定日で時系列を作る。
+--    固定UUID + ON CONFLICT(id) DO UPDATE で冪等。created_at は seed 実行時の当月基準の
+--    相対日で生成する（下記 rel_ts の D=何日前・H:M=JST時刻）。当月＋直近2ヶ月に散らばり、
+--    ダッシュボードの「今月」ビューと echo flow（直近3ヶ月）が毎月 seed し直さなくても埋まる。
+--    ★rel_ts(D,H,M) = 「JSTの D日前 の H:M」を timestamptz に変換（未来日にならないよう D>=1）。
 -- ---------------------------------------------------------------------------
 insert into public.reviews (id, customer_id, salon_id, staff_id, body, rating, tags, share_scope, created_at)
 values
   ('dededb01-0000-0000-0000-000000000000','deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000',
-   'カウンセリングがとても丁寧で、なりたいイメージをしっかり汲み取ってくれました。仕上がりも大満足です。', 4, array['カウンセリング','仕上がり'], 'everyone',    timestamptz '2026-05-01 11:20+09'),
+   'カウンセリングがとても丁寧で、なりたいイメージをしっかり汲み取ってくれました。仕上がりも大満足です。', 4, array['カウンセリング','仕上がり'], 'everyone',    (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>59) + make_interval(hours=>11,mins=>20)) at time zone 'Asia/Tokyo'),
   ('dededb02-0000-0000-0000-000000000000','deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa02-0000-0000-0000-000000000000',
-   '初めてで緊張していましたが、会話が心地よくてリラックスできました。またお願いします。', 4, array['接客','居心地'], 'everyone',                          timestamptz '2026-05-08 15:05+09'),
+   '初めてで緊張していましたが、会話が心地よくてリラックスできました。またお願いします。', 4, array['接客','居心地'], 'everyone',                          (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>52) + make_interval(hours=>15,mins=>5)) at time zone 'Asia/Tokyo'),
   ('dededb03-0000-0000-0000-000000000000','deded003-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa03-0000-0000-0000-000000000000',
-   'カラーの色持ちがよく、艶のある仕上がりで気に入っています。', 4, array['技術','仕上がり'], 'everyone',                                                   timestamptz '2026-05-12 13:40+09'),
+   'カラーの色持ちがよく、艶のある仕上がりで気に入っています。', 4, array['技術','仕上がり'], 'everyone',                                                   (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>48) + make_interval(hours=>13,mins=>40)) at time zone 'Asia/Tokyo'),
   ('dededb04-0000-0000-0000-000000000000','deded004-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa04-0000-0000-0000-000000000000',
-   'シャンプーが気持ちよくて、つい眠ってしまいました。気配りが素晴らしいです。', 4, array['居心地','挨拶'], 'everyone',                                     timestamptz '2026-05-18 17:10+09'),
+   'シャンプーが気持ちよくて、つい眠ってしまいました。気配りが素晴らしいです。', 4, array['居心地','挨拶'], 'everyone',                                     (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>42) + make_interval(hours=>17,mins=>10)) at time zone 'Asia/Tokyo'),
   ('dededb05-0000-0000-0000-000000000000','deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa02-0000-0000-0000-000000000000',
-   '仕上がりはよかったのですが、少し待ち時間が長く感じました。次回に期待しています。', 2, array['受付'], 'manager_only',                                    timestamptz '2026-05-22 12:00+09'),
+   '仕上がりはよかったのですが、少し待ち時間が長く感じました。次回に期待しています。', 2, array['受付'], 'manager_only',                                    (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>38) + make_interval(hours=>12,mins=>0)) at time zone 'Asia/Tokyo'),
   ('dededb06-0000-0000-0000-000000000000','deded003-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000',
-   '毎回安定して素敵に仕上げてくれるので信頼しています。', 4, array['技術','仕上がり'], 'everyone',                                                         timestamptz '2026-05-28 10:30+09'),
+   '毎回安定して素敵に仕上げてくれるので信頼しています。', 4, array['技術','仕上がり'], 'everyone',                                                         (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>32) + make_interval(hours=>10,mins=>30)) at time zone 'Asia/Tokyo'),
   ('dededb07-0000-0000-0000-000000000000','deded004-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa03-0000-0000-0000-000000000000',
-   '希望を伝えると具体的な提案をしてくれて、とても参考になりました。', 3, array['カウンセリング'], 'either',                                                 timestamptz '2026-06-02 14:25+09'),
+   '希望を伝えると具体的な提案をしてくれて、とても参考になりました。', 3, array['カウンセリング'], 'either',                                                 (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>27) + make_interval(hours=>14,mins=>25)) at time zone 'Asia/Tokyo'),
   ('dededb08-0000-0000-0000-000000000000','deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000',
-   '店内の雰囲気が落ち着いていて、居心地がとても良かったです。', 4, array['居心地'], 'everyone',                                                            timestamptz '2026-06-08 16:00+09'),
+   '店内の雰囲気が落ち着いていて、居心地がとても良かったです。', 4, array['居心地'], 'everyone',                                                            (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>21) + make_interval(hours=>16,mins=>0)) at time zone 'Asia/Tokyo'),
   ('dededb09-0000-0000-0000-000000000000','deded003-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa04-0000-0000-0000-000000000000',
-   '受付から丁寧で、初めてでも安心して過ごせました。', 3, array['受付','挨拶'], 'everyone',                                                                 timestamptz '2026-06-14 11:45+09'),
+   '受付から丁寧で、初めてでも安心して過ごせました。', 3, array['受付','挨拶'], 'everyone',                                                                 (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>15) + make_interval(hours=>11,mins=>45)) at time zone 'Asia/Tokyo'),
   ('dededb10-0000-0000-0000-000000000000','deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa03-0000-0000-0000-000000000000',
-   'トリートメント後の手触りが全然違いました。おすすめです。', 4, array['技術','仕上がり'], 'everyone',                                                     timestamptz '2026-06-20 13:15+09'),
+   'トリートメント後の手触りが全然違いました。おすすめです。', 4, array['技術','仕上がり'], 'everyone',                                                     (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>9) + make_interval(hours=>13,mins=>15)) at time zone 'Asia/Tokyo'),
   ('dededb11-0000-0000-0000-000000000000','deded004-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa02-0000-0000-0000-000000000000',
-   '普通に良かったです。次はカラーもお願いしてみたいです。', 3, array['技術'], 'either',                                                                    timestamptz '2026-06-25 15:30+09'),
+   '普通に良かったです。次はカラーもお願いしてみたいです。', 3, array['技術'], 'either',                                                                    (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>4) + make_interval(hours=>15,mins=>30)) at time zone 'Asia/Tokyo'),
   ('dededb12-0000-0000-0000-000000000000','deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000',
-   '今日もありがとうございました。仕上がりが好きで通い続けています。', 4, array['仕上がり','挨拶'], 'everyone',                                              timestamptz '2026-06-28 12:50+09')
+   '今日もありがとうございました。仕上がりが好きで通い続けています。', 4, array['仕上がり','挨拶'], 'everyone',                                              (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>1) + make_interval(hours=>12,mins=>50)) at time zone 'Asia/Tokyo')
 on conflict (id) do update set
   customer_id = excluded.customer_id,
   staff_id    = excluded.staff_id,
@@ -176,23 +183,30 @@ on conflict (id) do update set
 --    脇役 deded003/004 の 4件 → 店舗合計/スタッフ別件数に厚み。
 --    tier↔amount は CHECK 準拠: thank_you=100 / grateful=500 / wonderful=1000 /
 --                               amazing=3000 / unforgettable=10000。
---    stripe_payment_id（unique）= 'demo_pi_*' で冪等（ON CONFLICT DO NOTHING）。
+--    stripe_payment_id（unique）= 'demo_pi_*' で冪等。created_at は reviews 同様「seed 実行時の
+--    当月基準の相対日」で生成（rel_ts の D=何日前・H:M=JST時刻）。
+--    ★ON CONFLICT DO UPDATE で created_at/staff/tier/amount を再seed時に当月へ更新する
+--      （demo_pi_* のデモ行のみ対象＝実データには当たらない）。
 -- ---------------------------------------------------------------------------
 insert into public.rating_purchases (customer_id, salon_id, staff_id, tier, amount, stripe_payment_id, created_at)
 values
   -- 主persona（マイページ履歴用・6件）
-  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000','amazing',      3000,  'demo_pi_0001', timestamptz '2026-05-01 11:25+09'),
-  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa02-0000-0000-0000-000000000000','grateful',      500,  'demo_pi_0002', timestamptz '2026-05-08 15:10+09'),
-  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa03-0000-0000-0000-000000000000','wonderful',    1000,  'demo_pi_0003', timestamptz '2026-06-08 16:05+09'),
-  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000','thank_you',     100,  'demo_pi_0004', timestamptz '2026-06-20 13:20+09'),
-  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa04-0000-0000-0000-000000000000','grateful',      500,  'demo_pi_0005', timestamptz '2026-06-22 18:00+09'),
-  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000','wonderful',    1000,  'demo_pi_0006', timestamptz '2026-06-28 12:55+09'),
+  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000','amazing',      3000,  'demo_pi_0001', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>59) + make_interval(hours=>11,mins=>25)) at time zone 'Asia/Tokyo'),
+  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa02-0000-0000-0000-000000000000','grateful',      500,  'demo_pi_0002', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>52) + make_interval(hours=>15,mins=>10)) at time zone 'Asia/Tokyo'),
+  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa03-0000-0000-0000-000000000000','wonderful',    1000,  'demo_pi_0003', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>21) + make_interval(hours=>16,mins=>5)) at time zone 'Asia/Tokyo'),
+  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000','thank_you',     100,  'demo_pi_0004', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>9) + make_interval(hours=>13,mins=>20)) at time zone 'Asia/Tokyo'),
+  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa04-0000-0000-0000-000000000000','grateful',      500,  'demo_pi_0005', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>7) + make_interval(hours=>18,mins=>0)) at time zone 'Asia/Tokyo'),
+  ('deded001-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000','wonderful',    1000,  'demo_pi_0006', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>1) + make_interval(hours=>12,mins=>55)) at time zone 'Asia/Tokyo'),
   -- 脇役（件数の厚み・4件）
-  ('deded003-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa03-0000-0000-0000-000000000000','wonderful',    1000,  'demo_pi_0007', timestamptz '2026-05-12 13:45+09'),
-  ('deded003-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000','amazing',      3000,  'demo_pi_0008', timestamptz '2026-05-28 10:35+09'),
-  ('deded004-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa04-0000-0000-0000-000000000000','thank_you',     100,  'demo_pi_0009', timestamptz '2026-05-18 17:15+09'),
-  ('deded004-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa02-0000-0000-0000-000000000000','unforgettable',10000, 'demo_pi_0010', timestamptz '2026-06-25 15:35+09')
-on conflict (stripe_payment_id) do nothing;
+  ('deded003-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa03-0000-0000-0000-000000000000','wonderful',    1000,  'demo_pi_0007', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>48) + make_interval(hours=>13,mins=>45)) at time zone 'Asia/Tokyo'),
+  ('deded003-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa01-0000-0000-0000-000000000000','amazing',      3000,  'demo_pi_0008', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>32) + make_interval(hours=>10,mins=>35)) at time zone 'Asia/Tokyo'),
+  ('deded004-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa04-0000-0000-0000-000000000000','thank_you',     100,  'demo_pi_0009', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>42) + make_interval(hours=>17,mins=>15)) at time zone 'Asia/Tokyo'),
+  ('deded004-0000-0000-0000-000000000000','deded000-0000-0000-0000-000000000000','dededa02-0000-0000-0000-000000000000','unforgettable',10000, 'demo_pi_0010', (date_trunc('day', now() at time zone 'Asia/Tokyo') - make_interval(days=>4) + make_interval(hours=>15,mins=>35)) at time zone 'Asia/Tokyo')
+on conflict (stripe_payment_id) do update set
+  staff_id   = excluded.staff_id,
+  tier       = excluded.tier,
+  amount     = excluded.amount,
+  created_at = excluded.created_at;
 
 commit;
 

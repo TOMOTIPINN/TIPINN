@@ -1,118 +1,106 @@
 "use client";
 
-import { useMemo } from "react";
+import { useState } from "react";
 import {
-  STAFF,
-  STAFF_ROLE,
   TIER_ORDER,
   TIER_EMOJI,
-  PRESETS,
-  aggregate,
   trendText,
   trendDir,
-  resolveRange,
-  type Range,
-  type PresetKey,
+  type StaffAgg,
 } from "./eval-data";
 
 /**
- * スタッフ別の評価ビュー（デモmock・画面マップ14系）。期間フィルタは親（page.tsx）が所有し、
- * 同じ state を「店舗合計¥（上部先行指標）」と共有する（controlled component）。
+ * スタッフ別の評価ビュー（画面マップ14系）。集計は server（dashboard-data.ts）が行い、
+ * cur / prev（期間・前期間の StaffAgg マップ）を props で受け取る。
  *
  * 表示内容（§12）: 評価件数 / ティア内訳（絵文字＋件数） / リアルボイス / 前期間比 のみ。
  *
  * 法的ガード（厳守・原則5・6 / 金融庁回答の前提）:
- *  - スタッフ個人に ¥売上・賞与額・順位ポイント・加重スコアは出さない（§12 / §2・§11 のガード維持）。
+ *  - スタッフ個人に ¥売上・賞与額・順位ポイント・加重スコアは出さない（StaffAgg.revenue は集計層で 0）。
  *  - ¥は「店舗合計」としてのみ上部の先行指標に表示する（このビューには出さない）。
  *  - 前期間比は §12 のステータス配色：上昇＝ミント／横ばい・下降＝グレー（赤は使わない）。
- *  - 賞与の自動算出は行わない。判断材料の可視化であって賞与計算ツールではない。
+ *
+ * ※ 期間セレクタは今回「今月」固定のため非表示。対象スタッフ選択（下記）は props 上の純client フィルタ。
  */
 export default function StaffPeriodView({
-  mode,
-  custom,
-  onSelectPreset,
-  onChangeStart,
-  onChangeEnd,
+  staffNames,
+  staffRole,
+  cur,
+  prev,
+  label,
 }: {
-  mode: PresetKey | "custom";
-  custom: Range;
-  onSelectPreset: (key: PresetKey) => void;
-  onChangeStart: (value: string) => void;
-  onChangeEnd: (value: string) => void;
+  staffNames: string[];
+  staffRole: Record<string, string>;
+  cur: Record<string, StaffAgg>;
+  prev: Record<string, StaffAgg>;
+  label: string;
 }) {
-  const { range, prevRange, label } = resolveRange(mode, custom);
+  // 対象スタッフ選択（親と共有不要なのでローカル state）。"all"＝全員。
+  const [selectedStaff, setSelectedStaff] = useState<string>("all");
+  const isAll = selectedStaff === "all";
+  const staffToShow = isAll ? staffNames : staffNames.filter((n) => n === selectedStaff);
 
-  const cur = useMemo(() => aggregate(range), [range]);
-  const prev = useMemo(() => aggregate(prevRange), [prevRange]);
-
-  const hasAny = STAFF.some((n) => cur[n].reviews + cur[n].ratings > 0);
+  const hasAny = staffNames.some(
+    (n) => (cur[n]?.reviews ?? 0) + (cur[n]?.ratings ?? 0) > 0,
+  );
 
   return (
     <div className="stack-md">
       <h2 className="headline-sm">スタッフ別の評価</h2>
 
-      {/* 期間フィルタ：プリセット chip ＋ カスタム日付範囲（state は親が所有・店舗合計¥と共有） */}
-      <div className="stack-sm">
-        <div className="filter-bar" role="group" aria-label="期間プリセット">
-          {(Object.keys(PRESETS) as PresetKey[]).map((key) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={mode === key}
-              className={`chip${mode === key ? " is-active" : ""}`}
-              onClick={() => onSelectPreset(key)}
-            >
-              {PRESETS[key].label}
-            </button>
-          ))}
-          <span
-            className={`chip${mode === "custom" ? " is-active" : ""}`}
-            aria-hidden="true"
+      <p className="period-current">対象期間：{label}</p>
+
+      {/* 対象スタッフ選択（chip/is-active/filter-bar を流用）。
+          「全員」＝現行表示 / 個人＝そのスタッフのみ・0件でも表示。 */}
+      <div className="filter-bar" role="group" aria-label="対象スタッフ">
+        <button
+          type="button"
+          aria-pressed={isAll}
+          className={`chip${isAll ? " is-active" : ""}`}
+          onClick={() => setSelectedStaff("all")}
+        >
+          全員
+        </button>
+        {staffNames.map((name) => (
+          <button
+            key={name}
+            type="button"
+            aria-pressed={selectedStaff === name}
+            className={`chip${selectedStaff === name ? " is-active" : ""}`}
+            onClick={() => setSelectedStaff(name)}
           >
-            カスタム
-          </span>
-        </div>
-
-        <div className="date-range">
-          <input
-            type="date"
-            className="field"
-            aria-label="開始日"
-            value={range.start}
-            onChange={(e) => onChangeStart(e.target.value)}
-          />
-          <span className="date-sep" aria-hidden="true">
-            〜
-          </span>
-          <input
-            type="date"
-            className="field"
-            aria-label="終了日"
-            value={range.end}
-            onChange={(e) => onChangeEnd(e.target.value)}
-          />
-        </div>
-
-        <p className="period-current">対象期間：{label}</p>
+            {name}
+          </button>
+        ))}
       </div>
 
       {/* スタッフ別の集計（§12）：評価件数 / ティア内訳 / リアルボイス / 前期間比 のみ。
           個人別の¥・順位ポイント・加重スコアは出さない（店舗合計¥のみ上部）。 */}
-      {hasAny ? (
+      {isAll && !hasAny ? (
+        <p className="muted">この期間の評価データはありません。</p>
+      ) : (
         <div>
-          {STAFF.map((name) => {
+          {staffToShow.map((name) => {
             const a = cur[name];
             const p = prev[name];
+            if (!a) return null;
             const curTotal = a.reviews + a.ratings;
-            if (curTotal === 0) return null; // この期間に活動が無いスタッフは省略
-            const prevTotal = p.reviews + p.ratings;
+            // 「活動が無いスタッフは省略」は全員表示のときのみ。個人選択時は0件でも表示。
+            if (isAll && curTotal === 0) return null;
+            const prevTotal = (p?.reviews ?? 0) + (p?.ratings ?? 0);
             // 前期間比の方向で色を分ける（§12: 上昇＝ミント / 横ばい・下降＝グレー）。
             const up = trendDir(prevTotal, curTotal) === "up";
+            // 個人選択時はティア全種を0件込みで表示（0件は is-zero で減光＝「無い」ことも査定情報）。
+            // 全員表示時は現行どおり件数>0のティアのみ。
+            const tierList = isAll
+              ? TIER_ORDER.filter((t) => a.tiers[t] > 0)
+              : TIER_ORDER;
+            const showPillRow = isAll ? a.ratings > 0 : true;
             return (
               <div key={name} className="staff-period">
                 <div className="staff-period-head">
                   <span className="staff-period-name">{name}</span>
-                  <span className="role-tag">{STAFF_ROLE[name]}</span>
+                  <span className="role-tag">{staffRole[name]}</span>
                   <span className={`staff-period-trend${up ? " trend-up" : ""}`}>
                     {trendText(prevTotal, curTotal)}
                   </span>
@@ -122,13 +110,13 @@ export default function StaffPeriodView({
                   感想 {a.reviews}件 ・ 評価スタンプ {a.ratings}件
                 </p>
 
-                {a.ratings > 0 && (
+                {showPillRow && (
                   <div className="pill-row">
-                    {TIER_ORDER.filter((t) => a.tiers[t] > 0).map((t) => (
+                    {tierList.map((t) => (
                       // 内部向け：絵文字＋件数（例「🎉 1」）。ティア名は aria-label/title に残す。
                       <span
                         key={t}
-                        className="stat-pill"
+                        className={`stat-pill${a.tiers[t] === 0 ? " is-zero" : ""}`}
                         title={`${t}：${a.tiers[t]}件`}
                         aria-label={`${t} ${a.tiers[t]}件`}
                       >
@@ -146,8 +134,6 @@ export default function StaffPeriodView({
             );
           })}
         </div>
-      ) : (
-        <p className="muted">この期間の評価データはありません。</p>
       )}
 
       <p className="note-fine">

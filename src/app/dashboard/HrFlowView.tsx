@@ -1,18 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
 import { Card } from "@/components/ui";
-import {
-  echoFlow,
-  RECENT_MONTHS,
-  STAFF_ROLE,
-  yen,
-  type FlowStatus,
-  type StaffFlow,
-} from "./eval-data";
+import { yen, type FlowStatus, type StaffFlow } from "./eval-data";
 
 /**
- * HR月次ビュー（echo flow・画面マップ14系の簡易版・デモmock）。
+ * HR月次ビュー（echo flow・画面マップ14系）。集計は server（dashboard-data.ts）が行い、
+ * flows / monthLabels を props で受け取る。
  *
  * 趣旨（CLAUDE.md §12）:
  *  - echo flow＝そのスタッフに月次で「届いた評価の流れ」（感想＋評価スタンプの件数）。
@@ -21,10 +14,7 @@ import {
  *  - おすすめアクションは定型（ルールベース。AI分析ではない）。お客様の声は生のまま表示。
  *
  * 配色（§12）: 好調/上昇＝ミント / 安定＝グレー / 要ケア＝褪せグレー（赤は使わない）。
- *   アラートは赤ではなく ink-soft の左ラインで静かに。¥は色を付けず中立の明朝。
- *
  * 規制ガード: ¥は「店舗合計」のみ（個人に割り付けない・原則5）。賞与は機械的連動なし（原則6）。
- *   data は全てダミー（eval-data.ts）。本実装時は echoFlow を service role の実クエリへ差し替える。
  */
 
 const STATUS_LABEL: Record<FlowStatus, string> = {
@@ -48,20 +38,25 @@ function sparkLevel(count: number, max: number): number {
 }
 
 export default function HrFlowView({
+  flows,
+  monthLabels,
+  staffRole,
   salonRev,
   label,
 }: {
+  flows: StaffFlow[];
+  monthLabels: string[];
+  staffRole: Record<string, string>;
   salonRev: number;
   label: string;
 }) {
-  const flows = useMemo(() => echoFlow(), []);
-
   // サマリー: 承認が届いている人数（要ケアでなく活動あり）／要ケア人数／チーム評価件数（直近月）。
   const reaching = flows.filter(
     (f) => f.status !== "care" && f.counts.some((c) => c > 0),
   ).length;
   const careFlows = flows.filter((f) => f.status === "care");
   const teamLatest = flows.reduce((s, f) => s + (f.counts[f.counts.length - 1] ?? 0), 0);
+  const latestLabel = monthLabels[monthLabels.length - 1] ?? "今月";
 
   return (
     <div className="stack">
@@ -78,9 +73,9 @@ export default function HrFlowView({
           <p className="metric-delta">echo flow が2ヶ月連続で減少</p>
         </div>
         <div className="metric-card">
-          <p className="metric-label">チーム評価件数（今月）</p>
+          <p className="metric-label">チーム評価件数（{latestLabel}）</p>
           <p className="metric-value">{teamLatest}件</p>
-          <p className="metric-delta">感想＋評価スタンプ・{RECENT_MONTHS[RECENT_MONTHS.length - 1].label}</p>
+          <p className="metric-delta">感想＋評価スタンプ・{latestLabel}</p>
         </div>
       </div>
 
@@ -116,7 +111,12 @@ export default function HrFlowView({
           </p>
           <div>
             {flows.map((f) => (
-              <FlowRow key={f.staff} flow={f} />
+              <FlowRow
+                key={f.staff}
+                flow={f}
+                monthLabels={monthLabels}
+                role={staffRole[f.staff]}
+              />
             ))}
           </div>
           <p className="note-fine">
@@ -132,14 +132,22 @@ export default function HrFlowView({
 }
 
 // スタッフ1人分の echo flow 行（スパークライン＋3ヶ月推移＋ステータス＋ボイス＋定型アクション）。
-function FlowRow({ flow }: { flow: StaffFlow }) {
+function FlowRow({
+  flow,
+  monthLabels,
+  role,
+}: {
+  flow: StaffFlow;
+  monthLabels: string[];
+  role: string;
+}) {
   const max = Math.max(...flow.counts, 0);
-  const trail = RECENT_MONTHS.map((m, i) => `${m.label} ${flow.counts[i]}`).join(" → ");
+  const trail = monthLabels.map((m, i) => `${m} ${flow.counts[i] ?? 0}`).join(" → ");
   return (
     <div className={`flow-row is-${flow.status}`}>
       <div className="flow-head">
         <span className="flow-name">{flow.staff}</span>
-        <span className="role-tag">{STAFF_ROLE[flow.staff]}</span>
+        <span className="role-tag">{role}</span>
         <span className="flow-status">
           <span className="flow-dot" aria-hidden="true" />
           {STATUS_LABEL[flow.status]}
@@ -152,7 +160,7 @@ function FlowRow({ flow }: { flow: StaffFlow }) {
             <span
               key={i}
               className={`spark-bar lv-${sparkLevel(c, max)}`}
-              title={`${RECENT_MONTHS[i].label} ${c}件`}
+              title={`${monthLabels[i] ?? ""} ${c}件`}
             />
           ))}
         </div>

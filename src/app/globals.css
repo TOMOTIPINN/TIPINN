@@ -1119,6 +1119,8 @@ textarea.field {
   border-radius: var(--radius-full);
   background: var(--card);
 }
+/* 0件ティア（個人選択時のみ表示）＝「無い」ことも査定情報。減光して控えめに。 */
+.stat-pill.is-zero { opacity: 0.35; }
 .stat-pill-label {
   font-family: var(--font-serif-en);
   font-style: italic;
