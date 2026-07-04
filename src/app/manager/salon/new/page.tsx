@@ -92,6 +92,9 @@ export default async function ManagerSalonNewPage({
               <Link href="/manager/staff" className="btn btn-outline btn-block">
                 スタッフを招待する
               </Link>
+              <Link href="/manager/kiosk" className="btn btn-quiet btn-block">
+                受付端末を登録する
+              </Link>
               <Link href="/dashboard" className="btn btn-quiet btn-block">
                 ダッシュボードへ
               </Link>

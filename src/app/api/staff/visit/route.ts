@@ -1,18 +1,19 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { getSession } from "@/lib/session";
-import { getStaffContext } from "@/lib/staff-session";
+import { getVisitContext } from "@/lib/visit-context";
 import { computeVipProgress } from "@/lib/vip";
 
 /**
- * POST /api/staff/visit — 店頭の来店受付（QR読み取り／来店スライス1・LINE無し / [[auth-method-line-b]]）。
+ * POST /api/staff/visit — 店頭の来店受付（QR読み取り／来店スライス1 / [[auth-method-line-b]]）。
  *
- * スタッフ（staff/manager どちらでも）が、お客様提示のQR（中身＝customer_id 生UUID）を読み、
+ * お客様提示のQR（中身＝customer_id 生UUID）を読み、
  * ①lookup: 確認カード用にお客様名・累計来店回数・VIP状態を返す
  * ②record: submit_visit_and_earn_stamp を呼び本日の来店を記録（1日1回はRPC側で冪等担保）
- * を行う。salon スコープは常に ctx.salon_id（自店のみ）。書き込みは supabaseAdmin・サーバー側のみ。
+ * を行う。salon スコープは常に vctx.salon_id（自店のみ）。書き込みは supabaseAdmin・サーバー側のみ。
  *
- * 認可: 未ログイン→401／スタッフ未紐付け→403（requireManager と違い role は問わない＝一般スタッフも受付可）。
+ * 認可: getVisitContext() で解決（2経路）。未認証→401。
+ *   ・スタッフ経路: LINEログイン中で staff に紐付く人（role 問わず＝一般スタッフも受付可）。
+ *   ・端末経路: LINE無しでも有効な device_token cookie を持つ据え置き端末（記録は匿名）。
  * ¥は一切扱わない（来店軸は無料・無決済・原則5/6）。QRの中身は今回 customer_id 素のまま（動的トークンは別タスク）。
  */
 export const runtime = "nodejs";
@@ -23,14 +24,10 @@ const UUID_RE =
 type Body = { action?: unknown; customer_id?: unknown };
 
 export async function POST(req: Request): Promise<NextResponse> {
-  // ガード: ログイン必須 → スタッフ紐付け必須（role は問わない）。
-  const session = await getSession();
-  if (!session) {
+  // ガード: スタッフ経路 or 端末経路のいずれかで salon スコープを解決（どちらも無ければ未認証）。
+  const vctx = await getVisitContext();
+  if (!vctx) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-  const ctx = await getStaffContext();
-  if (!ctx) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const body = (await req.json().catch(() => null)) as Body | null;
@@ -56,12 +53,12 @@ export async function POST(req: Request): Promise<NextResponse> {
           .from("visits")
           .select("id", { count: "exact", head: true })
           .eq("customer_id", customerId)
-          .eq("salon_id", ctx.salon_id),
+          .eq("salon_id", vctx.salon_id),
         supabaseAdmin
           .from("earned_stamps")
           .select("count")
           .eq("customer_id", customerId)
-          .eq("salon_id", ctx.salon_id)
+          .eq("salon_id", vctx.salon_id)
           .maybeSingle(),
       ]);
 
@@ -92,7 +89,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     // 1日1回・JST基準・累計はRPC側(0009)で担保。2回目以降も awarded=false で正常返却（エラーにしない）。
     const { data, error } = await supabaseAdmin.rpc(
       "submit_visit_and_earn_stamp",
-      { p_customer_id: customerId, p_salon_id: ctx.salon_id },
+      { p_customer_id: customerId, p_salon_id: vctx.salon_id },
     );
     if (error) {
       console.error("submit_visit_and_earn_stamp failed:", error);

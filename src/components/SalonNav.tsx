@@ -52,6 +52,11 @@ const SETTINGS: NavItem[] = [
     label: "来店設定",
     match: (p) => p.startsWith("/manager/visit"),
   },
+  {
+    href: "/manager/kiosk",
+    label: "受付端末",
+    match: (p) => p.startsWith("/manager/kiosk"),
+  },
 ];
 
 export default function SalonNav() {
