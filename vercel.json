@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/line-push",
+      "schedule": "*/10 * * * *"
+    }
+  ]
+}
