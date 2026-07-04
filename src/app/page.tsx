@@ -46,9 +46,9 @@ export default async function HomePage() {
         ) : (
           <div className="stack stack-md">
             <p className="muted font-elegant">
-              お客様とサロンが
+              お客様とサロンをつなぐ、
               <br />
-              今日の体験の感想と評価で繋がるアプリ
+              言いそびれた、その「気持ち」を。
             </p>
             <a href="/api/auth/line/login" className="btn btn-outline btn-block">
               LINEではじめる
