@@ -1,7 +1,8 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { requireManager } from "@/lib/manager-guard";
+import { getSession } from "@/lib/session";
+import { getStaffContext } from "@/lib/staff-session";
 import {
   SALON_ASSETS_BUCKET,
   validateImage,
@@ -14,8 +15,11 @@ import {
  *   処理: salon_id と visit_token をサーバー側で採番（crypto.randomUUID）→ ロゴがあれば
  *         salon-assets/salons/<salon_id>/logo に upsert → salons へ単一 INSERT。
  *         stripe_account_id は空のまま（Phase 2 で埋める）。
+ *   自動登録: salons INSERT 成功後、作成者を新サロンの店長(role=manager)として staff に1行 INSERT。
  *
- * 認可: requireManager（未ログイン401 / 非manager403）。書き込みは service_role・サーバー側のみ（§3・§8）。
+ * 認可（入口ゆるめ・page と同型）: 未ログイン→ログイン。staff行ゼロ(新規オーナー)は許可。
+ *   既存staffは manager のみ許可（従業員は弾く）。他の /manager/* は従来どおり staff必須。
+ *   書き込みは service_role・サーバー側のみ（§3・§8）。
  * 検証: 店名 trim＋長さ／通知遅延は DB CHECK と同値域(30〜360)にクランプ／画像は MIME(png/jpeg/webp)＋2MB。
  * 応答: フォーム送信 → /manager/salon/new?created=<salon_id>（成功・完了画面へ）/ ?error=<reason>（失敗）へ303。
  *
@@ -30,14 +34,28 @@ const NOTIFY_MAX = 360;
 const NOTIFY_DEFAULT = 180;
 
 export async function POST(req: Request) {
-  const gate = await requireManager();
-  if (!gate.ok) return gate.res;
-
   const baseUrl = process.env.APP_BASE_URL!;
   const back = (qs: string) =>
     NextResponse.redirect(new URL(`/manager/salon/new?${qs}`, baseUrl), {
       status: 303,
     });
+
+  // 認可（入口ゆるめ・page と同型）: 未ログイン→ログイン（returnTo保持）。
+  // staff行ゼロ(ctx=null)の新規オーナーは許可。既存staffは manager のみ許可（従業員は弾く）。
+  const session = await getSession();
+  if (!session?.line_user_id) {
+    return NextResponse.redirect(
+      new URL(
+        `/api/auth/line/login?returnTo=${encodeURIComponent("/manager/salon/new")}`,
+        baseUrl,
+      ),
+      { status: 303 },
+    );
+  }
+  const ctx = await getStaffContext();
+  if (ctx && ctx.role !== "manager") {
+    return back("error=forbidden");
+  }
 
   const form = await req.formData().catch(() => null);
   if (!form) return back("error=form");
@@ -94,6 +112,34 @@ export async function POST(req: Request) {
   if (error) {
     console.error("salon onboarding insert failed:", error);
     return back("error=save");
+  }
+
+  // 作成者を新サロンの店長(role=manager)として自動登録（[[auth-method-line-b]]）。
+  // 名前: 既存staffなら staff.name、staff行ゼロの新規オーナーは customers.display_name（LINEログインで必須設定）。
+  let ownerName = ctx?.name ?? null;
+  if (!ownerName) {
+    const { data: cust } = await supabaseAdmin
+      .from("customers")
+      .select("display_name")
+      .eq("line_user_id", session.line_user_id)
+      .maybeSingle();
+    ownerName = cust?.display_name ?? "オーナー";
+  }
+
+  // ⚠️ 今回スコープ外の既知衝突: staff.line_user_id は unique（1 LINE = 最大1 staff /
+  //    getStaffContext の maybeSingle 前提・staff-invite.ts の line_taken ガードと同根）。
+  //    既に別店の staff 行を持つ人が作ると、この INSERT は unique 違反で失敗する（＝兼任は未対応）。
+  //    その場合は直前に作った salon を消してロールバックし、孤児サロンを残さない。
+  const { error: ownerErr } = await supabaseAdmin.from("staff").insert({
+    salon_id: salonId,
+    name: ownerName,
+    role: "manager",
+    line_user_id: session.line_user_id,
+  });
+  if (ownerErr) {
+    console.error("owner auto-register failed:", ownerErr);
+    await supabaseAdmin.from("salons").delete().eq("id", salonId);
+    return back("error=owner");
   }
 
   return back(`created=${salonId}`);

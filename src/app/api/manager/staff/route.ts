@@ -5,8 +5,8 @@ import { createInviteToken, inviteExpiryISO, inviteUrl } from "@/lib/staff-invit
 
 /**
  * POST /api/manager/staff  — スタッフ新規作成＋招待発行（A1 管理画面 / [[auth-method-line-b]]）
- *   入力: name（form-data か JSON）。salon_id/role はクライアントから受け取らない。
- *   作成: staff{ salon_id=ctx.salon_id, name, role='staff', invite_token, invite_expires_at=now+24h }
+ *   入力: name, role（form-data か JSON）。role は staff|manager をホワイトリスト検証（既定 staff）。salon_id はクライアントから受け取らない。
+ *   作成: staff{ salon_id=ctx.salon_id, name, role, invite_token, invite_expires_at=now+24h }
  *
  * 認可: requireManager（未ログイン401／非manager403）。salon は必ずセッション由来（越境不可）。
  * 応答: JSONリクエスト→JSON（curl用）/ それ以外（フォーム送信）→ /manager/staff?created=<id> へ303。
@@ -23,12 +23,15 @@ export async function POST(req: Request) {
   );
 
   let nameRaw: unknown;
+  let roleRaw: unknown;
   if (isJson) {
     const body = await req.json().catch(() => null);
     nameRaw = body?.name;
+    roleRaw = body?.role;
   } else {
     const form = await req.formData().catch(() => null);
     nameRaw = form?.get("name");
+    roleRaw = form?.get("role");
   }
 
   const name = typeof nameRaw === "string" ? nameRaw.trim() : "";
@@ -36,13 +39,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_name" }, { status: 400 });
   }
 
+  // 役割はホワイトリスト検証（未指定・不正値は staff にフォールバック）
+  const role = roleRaw === "manager" ? "manager" : "staff";
+
   const token = createInviteToken();
   const { data, error } = await supabaseAdmin
     .from("staff")
     .insert({
       salon_id: ctx.salon_id,
       name,
-      role: "staff",
+      role,
       invite_token: token,
       invite_expires_at: inviteExpiryISO(),
     })

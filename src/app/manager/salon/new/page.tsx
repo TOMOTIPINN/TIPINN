@@ -13,11 +13,13 @@ import SalonQr from "./SalonQr";
  * 店長が新しいサロンを登録する。店名（必須）／ロゴ（任意）／通知遅延（任意・既定180）を入力し、
  * 送信すると /api/manager/salon/new が salon_id・visit_token を採番して salons へ INSERT する。
  *
- * 認可: /dashboard と同型。未ログイン→LINEログイン（returnTo）／非manager→/staff へ redirect。
+ * 認可（入口ゆるめ・新規オーナー導線）: 未ログイン→LINEログイン（returnTo）。
+ *   staff行ゼロ(ctx=null)の人も salon/new だけは通す（最初の店を作る入口）。
+ *   staff行はあるが manager でない従業員は従来どおり /staff へ redirect。他の /manager/* は staff必須のまま。
  * 完了（?created=<id>）: 登録サロンの visit_token から /visit?salon=&t= のURLを作り、QR表示＋PNG保存を出す。
  * 書き込みは API（service_role・サーバー側）。トーン: サロンUI＝ミント・¥なし・赤なし・インラインstyle禁止。
  *
- * ※ Phase 1 では作成者を新サロンの staff/manager に紐付けない（スタッフ招待導線は現サロン文脈）。
+ * ※ 作成時に API 側で作成者を新サロンの店長(role=manager)として自動登録する（route.ts 参照）。
  */
 const ERROR_MESSAGE: Record<string, string> = {
   form: "送信データを読み取れませんでした。もう一度お試しください。",
@@ -27,6 +29,9 @@ const ERROR_MESSAGE: Record<string, string> = {
   size: "ロゴ画像が大きすぎます（上限2MB）。",
   upload: "ロゴのアップロードに失敗しました。時間をおいて再度お試しください。",
   save: "登録に失敗しました。時間をおいて再度お試しください。",
+  forbidden: "この操作は許可されていません。",
+  owner:
+    "オーナーの店長登録に失敗したため、サロン作成を取り消しました。すでに別店舗のスタッフとして登録済みの可能性があります。",
 };
 
 const NOTIFY_DEFAULT = 180;
@@ -40,7 +45,9 @@ export default async function ManagerSalonNewPage({
 }) {
   const { created, error } = await searchParams;
 
-  // 認可（/dashboard と同型）: 未ログイン→ログイン（returnTo保持）／非manager→/staff。
+  // 認可（入口ゆるめ）: 未ログイン→ログイン（returnTo保持）。
+  // staff行ゼロ(ctx=null)の新規オーナーは許可し、この画面だけ通す。
+  // staff行はあるが manager でない従業員のみ /staff へ弾く（他の /manager/* は staff必須のまま）。
   const session = await getSession();
   if (!session) {
     redirect(
@@ -48,7 +55,7 @@ export default async function ManagerSalonNewPage({
     );
   }
   const ctx = await getStaffContext();
-  if (!ctx || ctx.role !== "manager") {
+  if (ctx && ctx.role !== "manager") {
     redirect("/staff");
   }
 

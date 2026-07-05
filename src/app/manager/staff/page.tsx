@@ -148,6 +148,15 @@ export default async function ManagerStaffPage({
                 placeholder="例：山田 はな"
               />
             </div>
+            <div className="field-group">
+              <label className="field-label" htmlFor="role">
+                役割
+              </label>
+              <select id="role" name="role" className="field" defaultValue="staff">
+                <option value="staff">スタッフ</option>
+                <option value="manager">店長</option>
+              </select>
+            </div>
             <button type="submit" className="btn btn-outline btn-block">
               追加してQRを表示
             </button>
