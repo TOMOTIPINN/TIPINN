@@ -1,16 +1,24 @@
 import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { sanitizeReturnTo } from "@/lib/return-to";
+import { createOAuthState } from "@/lib/oauth-state";
 
 /**
  * GET /api/auth/line/login
- * LINEログインの開始点。CSRF対策の state、リプレイ対策の nonce、PKCE の
- * code_verifier を生成して短命Cookieに保存し、LINE認可エンドポイントへリダイレクト。
- * `?returnTo=<ローカルパス>` を受け取り、ログイン後の戻り先として短命Cookieに保持する
- * （CLAUDE.md §8・QR/招待導線。オープンリダイレクト検証は @/lib/return-to）。
+ * LINEログインの開始点。`?returnTo=<ローカルパス>` を受け取り、CSRF対策の state と
+ * リプレイ対策の nonce を生成する。
+ *
+ * ★ state は returnTo(招待token) と nonce を封入した署名付きJWT（@/lib/oauth-state）。
+ *   これにより往復の連結情報が URL 側に載り、標準カメラ→別ブラウザ復帰で cookie が
+ *   消えても token が生き残る（cookie 非依存・[[auth-method-line-b]]）。
+ *   state の cookie コピーは「同一ブラウザでのブラウザ束縛（CSRF）」の多層防御としてのみ使う。
+ *
+ * ※ PKCE は廃止。本クライアントは機密クライアント（LINE_CHANNEL_SECRET をサーバー保持し
+ *   token 交換で提示）で、code は単回・登録済 redirect_uri 限定配送のため主防御は client_secret。
+ *   PKCE の code_verifier は秘匿値ゆえ state に載せられず、cookie 依存の唯一の残存要因だったため外す。
  */
 const AUTHORIZE_URL = "https://access.line.me/oauth2/v2.1/authorize";
-const HANDSHAKE_MAX_AGE = 600; // 10分
+const STATE_COOKIE_MAX_AGE = 600; // 10分（state 本体の exp と一致）
 
 function b64url(buf: Buffer): string {
   return buf.toString("base64url");
@@ -24,12 +32,10 @@ export async function GET(request: Request) {
     new URL(request.url).searchParams.get("returnTo"),
   );
 
-  const state = b64url(crypto.randomBytes(32));
+  // nonce: id_token リプレイ対策。state に封入して cookie 非依存にし、callback で LINE verify に渡す。
   const nonce = b64url(crypto.randomBytes(32));
-  const codeVerifier = b64url(crypto.randomBytes(32));
-  const codeChallenge = b64url(
-    crypto.createHash("sha256").update(codeVerifier).digest(),
-  );
+  // state: returnTo(token) + nonce を封入した署名付きJWT（改ざん=署名／リプレイ=exp）。
+  const state = await createOAuthState(returnTo, nonce);
 
   const authorizeUrl = new URL(AUTHORIZE_URL);
   authorizeUrl.searchParams.set("response_type", "code");
@@ -38,20 +44,16 @@ export async function GET(request: Request) {
   authorizeUrl.searchParams.set("state", state);
   authorizeUrl.searchParams.set("scope", "openid profile");
   authorizeUrl.searchParams.set("nonce", nonce);
-  authorizeUrl.searchParams.set("code_challenge", codeChallenge);
-  authorizeUrl.searchParams.set("code_challenge_method", "S256");
 
   const res = NextResponse.redirect(authorizeUrl);
-  const opts = {
+  // defense-in-depth: 同一ブラウザで cookie が生き残る通常フローでは、callback が state と
+  //   突き合わせてブラウザ束縛（CSRF）を効かせる。cookie が消える経路では署名+exp で担保する。
+  res.cookies.set("line_oauth_state", state, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
+    sameSite: "lax",
     path: "/",
-    maxAge: HANDSHAKE_MAX_AGE,
-  };
-  res.cookies.set("line_oauth_state", state, opts);
-  res.cookies.set("line_oauth_nonce", nonce, opts);
-  res.cookies.set("line_oauth_verifier", codeVerifier, opts);
-  res.cookies.set("line_oauth_returnto", returnTo, opts);
+    maxAge: STATE_COOKIE_MAX_AGE,
+  });
   return res;
 }

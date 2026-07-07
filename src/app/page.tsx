@@ -1,5 +1,6 @@
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { sanitizeReturnTo } from "@/lib/return-to";
 import { Eyebrow, Button } from "@/components/ui";
 import { EchoLogo } from "@/components/EchoLogo";
 
@@ -7,8 +8,22 @@ import { EchoLogo } from "@/components/EchoLogo";
  * echo ホーム（白世界・§5 デザインシステム準拠）。
  * サーバーコンポーネントで getSession() を読み、ログイン状態を出し分ける。
  * 個人情報の取得は service role でサーバー側のみ（原則7）。
+ *
+ * ?returnTo= を受け取り「LINEではじめる」に引き継ぐ（QR/招待導線の復帰用・§8）。
+ *   callback が失敗時に付けて戻す returnTo をここで拾い、ホームに落ちても join へ戻れるようにする。
  */
-export default async function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string }>;
+}) {
+  const { returnTo } = await searchParams;
+  const safeReturn = sanitizeReturnTo(returnTo);
+  const loginHref =
+    safeReturn === "/"
+      ? "/api/auth/line/login"
+      : `/api/auth/line/login?returnTo=${encodeURIComponent(safeReturn)}`;
+
   const session = await getSession();
 
   let displayName = "";
@@ -50,7 +65,7 @@ export default async function HomePage() {
               <br />
               言いそびれた、その「気持ち」を。
             </p>
-            <a href="/api/auth/line/login" className="btn btn-outline btn-block">
+            <a href={loginHref} className="btn btn-outline btn-block">
               LINEではじめる
             </a>
           </div>
