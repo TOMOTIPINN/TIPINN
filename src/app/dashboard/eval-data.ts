@@ -56,6 +56,7 @@ export type StaffFlow = {
   counts: number[]; // 直近Nヶ月と同順の月次評価件数（感想＋評価スタンプ）
   status: FlowStatus;
   voice: string | null; // 直近スパンで最新のリアルボイス
+  archived: boolean; // 退職者（グレー表示＋要ケア判定から除外）
 };
 
 // 月次件数列からステータスを判定（増減の傾向のみ・絶対値は見ない・§12）。

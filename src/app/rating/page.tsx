@@ -39,6 +39,7 @@ export default async function RatingPage({
       .select("name")
       .eq("id", staffId)
       .eq("salon_id", salonId)
+      .is("archived_at", null)
       .single(),
   ]);
 

@@ -25,12 +25,14 @@ import {
 export default function StaffPeriodView({
   staffNames,
   staffRole,
+  staffArchived,
   cur,
   prev,
   label,
 }: {
   staffNames: string[];
   staffRole: Record<string, string>;
+  staffArchived: Record<string, boolean>;
   cur: Record<string, StaffAgg>;
   prev: Record<string, StaffAgg>;
   label: string;
@@ -96,11 +98,16 @@ export default function StaffPeriodView({
               ? TIER_ORDER.filter((t) => a.tiers[t] > 0)
               : TIER_ORDER;
             const showPillRow = isAll ? a.ratings > 0 : true;
+            const archived = staffArchived[name];
             return (
-              <div key={name} className="staff-period">
+              <div
+                key={name}
+                className={`staff-period${archived ? " is-archived" : ""}`}
+              >
                 <div className="staff-period-head">
                   <span className="staff-period-name">{name}</span>
                   <span className="role-tag">{staffRole[name]}</span>
+                  {archived && <span className="archived-tag">退職</span>}
                   <span className={`staff-period-trend${up ? " trend-up" : ""}`}>
                     {trendText(prevTotal, curTotal)}
                   </span>

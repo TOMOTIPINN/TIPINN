@@ -26,10 +26,12 @@ export async function getStaffContext(): Promise<StaffContext | null> {
   const session = await getSession();
   if (!session?.line_user_id) return null;
 
+  // 退職者（archived_at 有り）はアクセス失効＝文脈を返さない（/staff・/manager に入れない）。
   const { data } = await supabaseAdmin
     .from("staff")
     .select("id, salon_id, role, name")
     .eq("line_user_id", session.line_user_id)
+    .is("archived_at", null)
     .maybeSingle();
 
   if (!data) return null;

@@ -182,6 +182,7 @@ export default function DashboardClient({
               <StaffPeriodView
                 staffNames={data.staffNames}
                 staffRole={data.staffRole}
+                staffArchived={data.staffArchived}
                 cur={data.cur}
                 prev={data.prev}
                 label={label}

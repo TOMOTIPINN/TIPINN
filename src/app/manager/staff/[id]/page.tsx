@@ -63,7 +63,7 @@ export default async function StaffEditPage({
   const { data: staff } = await supabaseAdmin
     .from("staff")
     .select(
-      "id, name, photo_url, photo_pos_x, photo_pos_y, photo_zoom, job_title, bio",
+      "id, name, photo_url, photo_pos_x, photo_pos_y, photo_zoom, job_title, bio, archived_at",
     )
     .eq("id", id)
     .eq("salon_id", ctx.salon_id)
@@ -114,6 +114,42 @@ export default async function StaffEditPage({
             initialJobTitle={staff.job_title ?? ""}
             initialBio={staff.bio ?? ""}
           />
+        </Card>
+
+        {/* 退職（論理削除）/ 復帰。編集フォームとは別フォーム（名前必須と干渉させない）。 */}
+        <Card>
+          <div className="stack-sm">
+            <Eyebrow className="eyebrow-mint">
+              {staff.archived_at ? "Restore" : "Archive"}
+            </Eyebrow>
+            {staff.archived_at ? (
+              <>
+                <p className="muted">
+                  このスタッフは退職（アーカイブ）済みです。復帰すると一覧・スタッフ選択に再表示され、評価を受け付けます。
+                </p>
+                <form action="/api/manager/staff/archive" method="post">
+                  <input type="hidden" name="staffId" value={staff.id} />
+                  <input type="hidden" name="action" value="unarchive" />
+                  <button type="submit" className="btn btn-outline btn-block">
+                    復帰させる
+                  </button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="muted">
+                  退職にすると、一覧・お客様のスタッフ選択・新規評価から外れます。過去の実績（感想・評価）はそのまま残ります。
+                </p>
+                <form action="/api/manager/staff/archive" method="post">
+                  <input type="hidden" name="staffId" value={staff.id} />
+                  <input type="hidden" name="action" value="archive" />
+                  <button type="submit" className="btn btn-quiet btn-block">
+                    退職にする（アーカイブ）
+                  </button>
+                </form>
+              </>
+            )}
+          </div>
         </Card>
 
         <Link href="/manager/staff" className="btn btn-quiet btn-block">

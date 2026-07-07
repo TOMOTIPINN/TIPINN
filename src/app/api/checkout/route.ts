@@ -49,12 +49,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "salon_not_onboarded" }, { status: 409 });
   }
 
-  // staff が当該サロンの所属か確認（評価対象の整合性 / マルチテナント起点 salon_id）
+  // staff が当該サロンの所属か確認（評価対象の整合性 / マルチテナント起点 salon_id）。
+  // 退職者（archived_at 有り）へは新規評価を受け付けない（過去の実績・台帳は残す）。
   const { data: staff } = await supabaseAdmin
     .from("staff")
     .select("id")
     .eq("id", staffId)
     .eq("salon_id", salonId)
+    .is("archived_at", null)
     .single();
   if (!staff) {
     return NextResponse.json({ error: "invalid_staff" }, { status: 400 });

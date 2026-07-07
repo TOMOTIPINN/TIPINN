@@ -1131,6 +1131,43 @@ textarea.field {
   border-radius: var(--radius-full);
   white-space: nowrap;
 }
+/* 退職者タグ（褪せグレー・§12 ネガティブは赤ではなくグレーで）。役職タグ隣に置く。 */
+.archived-tag {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--g25);
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  background: #FAF9F7;
+}
+/* 退職者の行はグレーアウト（在籍と視覚的に区別・実績は残す）。 */
+.staff-period.is-archived,
+.flow-row.is-archived {
+  opacity: 0.55;
+}
+
+/* 退職者セクション（スタッフ管理・折りたたみ）。控えめに分離する。 */
+.archived-section {
+  gap: var(--space-md);
+}
+.archived-summary {
+  cursor: pointer;
+  font-family: var(--font-serif-en);
+  font-style: italic;
+  letter-spacing: 0.12em;
+  color: var(--g25);
+  padding: 0.4rem 0;
+}
+.staff-admin-head.is-archived {
+  opacity: 0.6;
+}
+.archived-restore {
+  margin-top: 0.75rem;
+}
+
 /* ステータス（ドット＋ラベル）。右寄せ・ゴシック。色はステータス修飾子で上書き。 */
 .flow-status {
   margin-left: auto;

@@ -38,6 +38,7 @@ type StaffRow = {
   invite_expires_at: string | null;
   bound_at: string | null;
   created_at: string;
+  archived_at: string | null;
 };
 
 const ROLE_LABEL: Record<string, string> = { manager: "店長", staff: "スタッフ" };
@@ -45,9 +46,14 @@ const ROLE_LABEL: Record<string, string> = { manager: "店長", staff: "スタ�
 export default async function ManagerStaffPage({
   searchParams,
 }: {
-  searchParams: Promise<{ created?: string; reissued?: string }>;
+  searchParams: Promise<{
+    created?: string;
+    reissued?: string;
+    archived?: string;
+    restored?: string;
+  }>;
 }) {
-  const { created, reissued } = await searchParams;
+  const { created, reissued, archived, restored } = await searchParams;
 
   const session = await getSession();
   if (!session) {
@@ -80,13 +86,16 @@ export default async function ManagerStaffPage({
     supabaseAdmin
       .from("staff")
       .select(
-        "id, name, role, job_title, bio, photo_url, photo_pos_x, photo_pos_y, photo_zoom, line_user_id, invite_token, invite_expires_at, bound_at, created_at",
+        "id, name, role, job_title, bio, photo_url, photo_pos_x, photo_pos_y, photo_zoom, line_user_id, invite_token, invite_expires_at, bound_at, created_at, archived_at",
       )
       .eq("salon_id", ctx.salon_id)
       .order("created_at", { ascending: true }),
   ]);
 
-  const staff = (staffData ?? []) as StaffRow[];
+  const allStaff = (staffData ?? []) as StaffRow[];
+  // 在籍を主表示、退職者は折りたたみで分離（復帰導線付き）。QR/招待は在籍のみ。
+  const staff = allStaff.filter((s) => s.archived_at == null);
+  const archivedStaff = allStaff.filter((s) => s.archived_at != null);
 
   // 状態判定（参加済み / 招待中 / 未参加）。招待中のみ QR を生成。
   type View = {
@@ -130,6 +139,14 @@ export default async function ManagerStaffPage({
             {created
               ? "新しいスタッフを追加しました。下のQRを本人に見せてください。"
               : "招待を再発行しました。新しいQRを本人に見せてください。"}
+          </div>
+        )}
+
+        {(archived || restored) && (
+          <div className="notice notice-success">
+            {archived
+              ? "スタッフを退職（アーカイブ）にしました。一覧・お客様の選択・新規評価から外れます。"
+              : "スタッフを復帰させました。一覧・お客様の選択に再表示されます。"}
           </div>
         )}
 
@@ -257,6 +274,44 @@ export default async function ManagerStaffPage({
             ))
           )}
         </section>
+
+        {/* 退職者（アーカイブ）— 折りたたみで分離。復帰導線のみ（QR/招待は出さない）。 */}
+        {archivedStaff.length > 0 && (
+          <details className="stack archived-section">
+            <summary className="archived-summary">
+              退職者（{archivedStaff.length}）
+            </summary>
+            {archivedStaff.map((s) => (
+              <Card key={s.id}>
+                <div className="staff-admin-head is-archived">
+                  <div className="staff-admin-id">
+                    <span className="staff-admin-name">{s.name}</span>
+                    {s.job_title && (
+                      <span className="staff-admin-jobtitle">
+                        {s.job_title}
+                      </span>
+                    )}
+                  </div>
+                  <span className="role-tag">
+                    {ROLE_LABEL[s.role] ?? "スタッフ"}
+                  </span>
+                  <span className="archived-tag">退職</span>
+                </div>
+                <form
+                  action="/api/manager/staff/archive"
+                  method="post"
+                  className="archived-restore"
+                >
+                  <input type="hidden" name="staffId" value={s.id} />
+                  <input type="hidden" name="action" value="unarchive" />
+                  <button type="submit" className="btn btn-subtle btn-block">
+                    復帰させる
+                  </button>
+                </form>
+              </Card>
+            ))}
+          </details>
+        )}
 
         <Link href="/manager/profile" className="btn btn-quiet btn-block">
           店舗プロフィール（ロゴ）へ

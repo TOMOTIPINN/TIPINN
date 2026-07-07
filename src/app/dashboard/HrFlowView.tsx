@@ -51,10 +51,12 @@ export default function HrFlowView({
   label: string;
 }) {
   // サマリー: 承認が届いている人数（要ケアでなく活動あり）／要ケア人数／チーム評価件数（直近月）。
-  const reaching = flows.filter(
+  // 退職者は在籍者の指標に混ぜない（自然な減少で偽の「要ケア」を出さないため・方針①）。
+  const activeFlows = flows.filter((f) => !f.archived);
+  const reaching = activeFlows.filter(
     (f) => f.status !== "care" && f.counts.some((c) => c > 0),
   ).length;
-  const careFlows = flows.filter((f) => f.status === "care");
+  const careFlows = activeFlows.filter((f) => f.status === "care");
   const teamLatest = flows.reduce((s, f) => s + (f.counts[f.counts.length - 1] ?? 0), 0);
   const latestLabel = monthLabels[monthLabels.length - 1] ?? "今月";
 
@@ -144,14 +146,20 @@ function FlowRow({
   const max = Math.max(...flow.counts, 0);
   const trail = monthLabels.map((m, i) => `${m} ${flow.counts[i] ?? 0}`).join(" → ");
   return (
-    <div className={`flow-row is-${flow.status}`}>
+    <div
+      className={`flow-row is-${flow.status}${flow.archived ? " is-archived" : ""}`}
+    >
       <div className="flow-head">
         <span className="flow-name">{flow.staff}</span>
         <span className="role-tag">{role}</span>
-        <span className="flow-status">
-          <span className="flow-dot" aria-hidden="true" />
-          {STATUS_LABEL[flow.status]}
-        </span>
+        {flow.archived && <span className="archived-tag">退職</span>}
+        {/* 退職者は要ケア等の判定を出さない（自然減少のため）。在籍者のみステータス表示。 */}
+        {!flow.archived && (
+          <span className="flow-status">
+            <span className="flow-dot" aria-hidden="true" />
+            {STATUS_LABEL[flow.status]}
+          </span>
+        )}
       </div>
 
       <div className="flow-body">
@@ -168,7 +176,9 @@ function FlowRow({
       </div>
 
       {flow.voice && <p className="vip-voice">「{flow.voice}」</p>}
-      <p className="flow-action">{STATUS_ACTION[flow.status]}</p>
+      {!flow.archived && (
+        <p className="flow-action">{STATUS_ACTION[flow.status]}</p>
+      )}
     </div>
   );
 }

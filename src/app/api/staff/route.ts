@@ -27,6 +27,7 @@ export async function GET(req: Request) {
       "id, name, photo_url, job_title, photo_pos_x, photo_pos_y, photo_zoom",
     )
     .eq("salon_id", salonId)
+    .is("archived_at", null)
     .order("name", { ascending: true });
 
   if (error) {

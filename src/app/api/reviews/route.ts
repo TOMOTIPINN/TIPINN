@@ -51,6 +51,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_tags" }, { status: 400 });
   }
 
+  // 退職者（archived_at 有り）／他サロン／不存在の staff には新規感想を受け付けない。
+  // 過去の reviews は残す（論理削除のため staff_id は保持される）。
+  const { data: staff } = await supabaseAdmin
+    .from("staff")
+    .select("id")
+    .eq("id", staffId)
+    .eq("salon_id", salonId)
+    .is("archived_at", null)
+    .maybeSingle();
+  if (!staff) {
+    return NextResponse.json({ error: "invalid_staff" }, { status: 400 });
+  }
+
   const { data, error } = await supabaseAdmin.rpc(
     "submit_review_and_earn_stamp",
     {

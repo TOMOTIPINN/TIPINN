@@ -53,6 +53,7 @@ export type DashboardData = {
   label: string;
   staffNames: string[];
   staffRole: Record<string, string>;
+  staffArchived: Record<string, boolean>;
   cur: Record<string, StaffAgg>;
   prev: Record<string, StaffAgg>;
   salonRevenueCur: number;
@@ -85,6 +86,7 @@ type StaffRow = {
   name: string;
   role: string;
   job_title: string | null;
+  archived_at: string | null;
 };
 type StampRow = { customer_id: string; count: number | null };
 
@@ -126,7 +128,7 @@ export async function getDashboardData(
     supabaseAdmin.from("salons").select("name").eq("id", salonId).single(),
     supabaseAdmin
       .from("staff")
-      .select("id, name, role, job_title")
+      .select("id, name, role, job_title, archived_at")
       .eq("salon_id", salonId)
       .order("created_at", { ascending: true }),
     supabaseAdmin
@@ -152,10 +154,13 @@ export async function getDashboardData(
 
   const staffNames = staff.map((s) => s.name);
   const staffRole: Record<string, string> = {};
+  // 退職者（archived_at 有り）は client でグレーアウト。集計からは外さず期間内実績を残す（方針①）。
+  const staffArchived: Record<string, boolean> = {};
   const idToName = new Map<string, string>();
   for (const s of staff) {
     // 役職タグは job_title（自由文）を採用。無ければ role からフォールバック。
     staffRole[s.name] = s.job_title || (s.role === "manager" ? "店長" : "スタッフ");
+    staffArchived[s.name] = s.archived_at != null;
     idToName.set(s.id, s.name);
   }
 
@@ -267,6 +272,7 @@ export async function getDashboardData(
     counts: flowCounts[name],
     status: flowStatus(flowCounts[name]),
     voice: flowVoice[name],
+    archived: staffArchived[name] ?? false,
   }));
 
   // VIP（earned_stamps を salon スコープで集計）。VIP判定は computeVipProgress（単一ソース）。
@@ -311,6 +317,7 @@ export async function getDashboardData(
     label: "今月",
     staffNames,
     staffRole,
+    staffArchived,
     cur,
     prev,
     salonRevenueCur: curTot.revenue,
