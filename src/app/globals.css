@@ -32,6 +32,7 @@
      カスタマーUIには入れない。赤は使わずネガティブは褪せグレーで表現する。 */
   --mint: #11A697;       /* サロンUI専用・好調/ブランド */
   --mint-deep: #0E8E80;  /* 濃いミント（hover・強調） */
+  --mint-deeper: #085A50; /* さらに濃い深緑ミント（manager アクセント専用・staff mint と明確に差をつける） */
   --mint-tint: #E6F4F1;  /* 極淡ミント地（好調ステータスの背景） */
   --mint-tint2: #F2FAF8; /* さらに淡いミント地（声カード等の最小フィル・スタッフ画面） */
   --mint-line: #BFE3DD;  /* ミントの罫線・枠 */
@@ -188,7 +189,7 @@ a {
    大きく外さない。customer（白の世界）は既定=gold のまま＝白の世界は不変。 */
 [data-role="customer"] { --accent: var(--gold); }
 [data-role="staff"]    { --accent: var(--mint); }
-[data-role="manager"]  { --accent: var(--mint-deep); }
+[data-role="manager"]  { --accent: var(--mint-deeper); }
 [data-role="owner"]    { --accent: var(--bronze); }
 
 /* ロールバー: サロンUI上部に現在の権限を斜体英字（Staff/Manager/Owner）で示す。
