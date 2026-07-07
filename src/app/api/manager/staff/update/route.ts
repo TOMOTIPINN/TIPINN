@@ -22,6 +22,7 @@ import {
  */
 export const runtime = "nodejs";
 
+const NAME_MAX = 50;
 const JOB_TITLE_MAX = 30;
 const BIO_MAX = 100;
 
@@ -74,6 +75,13 @@ export async function POST(req: Request) {
     });
   }
 
+  // 名前は必須（staff.name は NOT NULL）。空・超過は 400（作成APIと同じ扱い）。role は非タッチ。
+  const nameRaw = form.get("name");
+  const name = typeof nameRaw === "string" ? nameRaw.trim() : "";
+  if (!name || name.length > NAME_MAX) {
+    return NextResponse.json({ error: "invalid_name" }, { status: 400 });
+  }
+
   const jobTitleRaw = form.get("job_title");
   const bioRaw = form.get("bio");
   const jobTitle =
@@ -85,6 +93,7 @@ export async function POST(req: Request) {
 
   // 空文字は null として保存（未設定扱い）。位置・ズームはサーバー側でも必ずクランプ。
   const update: {
+    name: string;
     job_title: string | null;
     bio: string | null;
     photo_pos_x: number;
@@ -92,6 +101,7 @@ export async function POST(req: Request) {
     photo_zoom: number;
     photo_url?: string;
   } = {
+    name,
     job_title: jobTitle || null,
     bio: bio || null,
     photo_pos_x: clampNumber(form.get("photo_pos_x"), -50, 50, 0),

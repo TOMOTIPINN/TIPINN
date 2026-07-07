@@ -106,6 +106,7 @@ export default async function StaffEditPage({
         <Card>
           <StaffEditForm
             staffId={staff.id}
+            initialName={staff.name}
             initialPhotoUrl={staff.photo_url ?? null}
             initialPhotoX={staff.photo_pos_x ?? 0}
             initialPhotoY={staff.photo_pos_y ?? 0}

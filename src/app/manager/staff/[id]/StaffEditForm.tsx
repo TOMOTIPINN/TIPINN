@@ -10,6 +10,7 @@ import { ImageAdjuster } from "@/components/ImageAdjuster";
  * ネイティブの multipart フォームPOST（/api/manager/staff/update）。JSでの送信制御はしない。
  * 写真の調整UI（ロゴと共通の汎用 ImageAdjuster）が photo / photo_pos_x/y / photo_zoom を出力する。
  */
+const NAME_MAX = 50;
 const BIO_MAX = 100;
 const JOB_TITLE_MAX = 30;
 
@@ -27,6 +28,7 @@ const JOB_TITLE_PRESETS = [
 
 export function StaffEditForm({
   staffId,
+  initialName,
   initialPhotoUrl,
   initialPhotoX,
   initialPhotoY,
@@ -35,6 +37,7 @@ export function StaffEditForm({
   initialBio,
 }: {
   staffId: string;
+  initialName: string;
   initialPhotoUrl: string | null;
   initialPhotoX: number;
   initialPhotoY: number;
@@ -72,6 +75,24 @@ export function StaffEditForm({
           </>
         }
       />
+
+      {/* 名前（必須・staff.name は NOT NULL） */}
+      <div className="field-group">
+        <label className="field-label" htmlFor="name">
+          スタッフ名
+        </label>
+        <input
+          id="name"
+          name="name"
+          type="text"
+          className="field"
+          defaultValue={initialName}
+          maxLength={NAME_MAX}
+          required
+          placeholder="例：山田 はな"
+          autoComplete="off"
+        />
+      </div>
 
       {/* 職種（プリセット＋自由入力） */}
       <div className="field-group">
