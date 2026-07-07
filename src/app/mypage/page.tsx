@@ -160,6 +160,12 @@ export default async function MyPage() {
         <header className="stack-sm">
           <Eyebrow>MY echo</Eyebrow>
           <h1 className="headline">{displayName}</h1>
+          <Link
+            href="/onboarding/name?edit=1&returnTo=%2Fmypage"
+            className="btn btn-quiet name-edit-link"
+          >
+            お名前を変更
+          </Link>
         </header>
 
         <hr className="rule" />

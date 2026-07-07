@@ -17,10 +17,12 @@ import { Eyebrow, Card } from "@/components/ui";
 export default async function OnboardingNamePage({
   searchParams,
 }: {
-  searchParams: Promise<{ returnTo?: string; error?: string }>;
+  searchParams: Promise<{ returnTo?: string; error?: string; edit?: string }>;
 }) {
-  const { returnTo, error } = await searchParams;
+  const { returnTo, error, edit } = await searchParams;
   const safeReturn = returnTo ? sanitizeReturnTo(returnTo) : "/mypage";
+  // 変更導線（?edit=1）: 確定済みでもフォームを出す（初回ゲートの素通しをバイパス）。
+  const isEdit = edit === "1";
 
   const session = await getSession();
   if (!session) {
@@ -34,8 +36,8 @@ export default async function OnboardingNamePage({
     .eq("id", session.customer_id)
     .single();
 
-  // 確定済みなら二度と挟まない（returnTo へ素通し）。
-  if (customer?.name_confirmed_at) {
+  // 確定済みなら二度と挟まない（returnTo へ素通し）。ただし ?edit=1 のときは変更用に表示する。
+  if (!isEdit && customer?.name_confirmed_at) {
     redirect(safeReturn);
   }
 
@@ -45,8 +47,10 @@ export default async function OnboardingNamePage({
   return (
     <main className="page">
       <div className="container stack center-text animate-in">
-        <Eyebrow>Welcome to echo</Eyebrow>
-        <h1 className="headline">お名前を教えてください</h1>
+        <Eyebrow>{isEdit ? "Edit your name" : "Welcome to echo"}</Eyebrow>
+        <h1 className="headline">
+          {isEdit ? "お名前を変更" : "お名前を教えてください"}
+        </h1>
         <Card>
           <form action="/api/customer/name" method="post" className="stack-md">
             <input type="hidden" name="returnTo" value={safeReturn} />
@@ -70,7 +74,7 @@ export default async function OnboardingNamePage({
               <p className="muted">お名前を入力してください。</p>
             )}
             <button type="submit" className="btn btn-outline btn-block">
-              はじめる
+              {isEdit ? "変更する" : "はじめる"}
             </button>
           </form>
           <p className="note-fine">

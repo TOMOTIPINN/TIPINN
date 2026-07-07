@@ -313,6 +313,12 @@ a {
   padding: 0.5rem 0.75rem;
 }
 .btn-quiet:not(:disabled):hover { color: var(--g25); }
+/* 名前の下に置く控えめな変更リンク（mypage）。左寄せ＋左パディング0で見出しと頭を揃える。 */
+.name-edit-link {
+  align-self: flex-start;
+  padding-left: 0;
+  color: var(--g25);
+}
 
 /* 控えめな補助アクション: 薄いグレー面＋細枠（任意導線の評価スタンプ等） */
 .btn-subtle {
