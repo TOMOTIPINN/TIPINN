@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { jstPeriodStartISO } from "@/lib/staff-stats";
+import { resolveSalonRole } from "@/lib/display-role";
 import { getDashboardData } from "./dashboard-data";
 import DashboardClient from "./DashboardClient";
 
@@ -32,6 +33,7 @@ export default async function DashboardPage() {
   const periodStart = jstPeriodStartISO("month");
   const periodEnd = new Date().toISOString();
   const data = await getDashboardData(ctx.salon_id, periodStart, periodEnd);
+  const displayRole = await resolveSalonRole(ctx);
 
-  return <DashboardClient data={data} />;
+  return <DashboardClient data={data} role={displayRole} />;
 }

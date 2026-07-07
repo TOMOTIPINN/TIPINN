@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
+import { resolveSalonRole } from "@/lib/display-role";
 import { ImageAdjuster } from "@/components/ImageAdjuster";
 
 /**
@@ -64,10 +65,12 @@ export default async function ManagerProfilePage({
   const name = salon?.name ?? "サロン";
   const logoUrl = salon?.logo_url ?? null;
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
-        <SalonNav />
+        <SalonNav role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Salon profile</Eyebrow>
           <h1 className="headline">{name} ・ 店舗プロフィール</h1>

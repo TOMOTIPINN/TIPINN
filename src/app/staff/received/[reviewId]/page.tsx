@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow } from "@/components/ui";
+import RoleBar from "@/components/RoleBar";
+import { resolveSalonRole } from "@/lib/display-role";
 import { getTier } from "@/lib/rating-tiers";
 import { REVIEW_RATINGS } from "@/lib/review";
 import { jstPeriodStartISO, rankForCount } from "@/lib/staff-stats";
@@ -135,9 +137,12 @@ export default async function StaffReceivedPage({
 
   const tags = (review.tags ?? []).filter(Boolean);
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
+        <RoleBar role={displayRole} />
         {/* ヘッダー（← 戻る ＋ 中央タイトル ＋ 細罫線） */}
         <div className="staff-topbar">
           <Link href="/staff" className="staff-back" aria-label="戻る">

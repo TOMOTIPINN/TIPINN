@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
+import RoleBar from "@/components/RoleBar";
+import { resolveSalonRole } from "@/lib/display-role";
 import {
   GREETING_LABEL,
   jstGreeting,
@@ -112,9 +114,12 @@ export default async function StaffHomePage() {
 
   const greeting = GREETING_LABEL[jstGreeting()];
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
+        <RoleBar role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">{greeting}</Eyebrow>
           <h1 className="headline">{ctx.name} さん</h1>

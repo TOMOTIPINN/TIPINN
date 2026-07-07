@@ -11,6 +11,7 @@ import {
 } from "@/lib/staff-invite";
 import { Eyebrow, Card } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
+import { resolveSalonRole } from "@/lib/display-role";
 import { LogoCircle } from "@/components/LogoCircle";
 import CopyButton from "./CopyButton";
 
@@ -113,10 +114,12 @@ export default async function ManagerStaffPage({
     }),
   );
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
-        <SalonNav />
+        <SalonNav role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Staff invitations</Eyebrow>
           <h1 className="headline">{salon?.name ?? "サロン"} ・ スタッフ管理</h1>

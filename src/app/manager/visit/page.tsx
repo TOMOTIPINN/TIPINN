@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
+import { resolveSalonRole } from "@/lib/display-role";
 
 /**
  * 来店スタンプ設定（/manager/visit・サロンUI世界 / Phase 7・ブロック4 / [[auth-method-line-b]]）。
@@ -63,10 +64,12 @@ export default async function ManagerVisitPage({
   const enabled = salon?.visit_axis_enabled === true;
   const cycleSize = salon?.visit_cycle_size ?? 20;
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
-        <SalonNav />
+        <SalonNav role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Visit stamps</Eyebrow>
           <h1 className="headline">{salon?.name ?? "サロン"} ・ 来店スタンプ設定</h1>

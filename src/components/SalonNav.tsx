@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import RoleBar, { type SalonRole } from "@/components/RoleBar";
 
 /**
  * サロン（店長）UI の共通ナビ。数字管理トップ〜声〜スタッフを1本で行き来する。
@@ -59,13 +60,15 @@ const SETTINGS: NavItem[] = [
   },
 ];
 
-export default function SalonNav() {
+export default function SalonNav({ role }: { role: SalonRole }) {
   const pathname = usePathname() ?? "";
   const settingsActive = SETTINGS.some((i) => i.match(pathname));
   const [open, setOpen] = useState(settingsActive);
 
   return (
     <nav className="salon-nav" aria-label="サロン管理ナビ">
+      {/* 上部ロールバー（§12）。権限を斜体英字＋--accent で示す。customer には出ない。 */}
+      <RoleBar role={role} />
       <div className="salon-nav-bar">
         {/* 主ナビ＝3タブを独立したピルグループとして横1段に */}
         <div className="salon-nav-row">

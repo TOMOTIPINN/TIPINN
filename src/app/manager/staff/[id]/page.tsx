@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
+import RoleBar from "@/components/RoleBar";
+import { resolveSalonRole } from "@/lib/display-role";
 import { StaffEditForm } from "./StaffEditForm";
 
 /**
@@ -81,9 +83,12 @@ export default async function StaffEditPage({
     );
   }
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
+        <RoleBar role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Edit staff</Eyebrow>
           <h1 className="headline">{staff.name} ・ プロフィール編集</h1>

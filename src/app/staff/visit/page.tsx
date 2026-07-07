@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
+import { getStaffContext } from "@/lib/staff-session";
 import { getVisitContext } from "@/lib/visit-context";
+import { resolveSalonRole } from "@/lib/display-role";
 import { Eyebrow } from "@/components/ui";
+import RoleBar from "@/components/RoleBar";
 import VisitScanner from "./VisitScanner";
 
 /**
@@ -26,9 +29,15 @@ export default async function StaffVisitPage({
   const vctx = await getVisitContext();
 
   if (vctx) {
+    // ロールバーはスタッフ経路のみ。端末（匿名キオスク）経路は「役割」を持たないので出さない。
+    const staffCtx =
+      vctx.source === "staff" ? await getStaffContext() : null;
+    const displayRole = staffCtx ? await resolveSalonRole(staffCtx) : null;
+
     return (
-      <main className="page page-top">
+      <main className="page page-top" data-role={displayRole ?? undefined}>
         <div className="container stack animate-in">
+          {displayRole && <RoleBar role={displayRole} />}
           <header className="stack-sm">
             <Eyebrow className="eyebrow-mint">Check-in</Eyebrow>
             <h1 className="headline">来店受付</h1>

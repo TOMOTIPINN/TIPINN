@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
+import { resolveSalonRole } from "@/lib/display-role";
 import SalonQr from "@/app/manager/salon/new/SalonQr";
 
 /**
@@ -50,10 +51,12 @@ export default async function ManagerKioskPage({
     qr = await QRCode.toDataURL(setupUrl, { margin: 1, width: 240 });
   }
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
-        <SalonNav />
+        <SalonNav role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Reception device</Eyebrow>
           <h1 className="headline">{salonName} ・ 受付端末</h1>

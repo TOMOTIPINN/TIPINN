@@ -73,9 +73,9 @@ export default async function ManagerSalonNewPage({
       const qr = await QRCode.toDataURL(visitUrl, { margin: 1, width: 240 });
 
       return (
-        <main className="page page-top">
+        <main className="page page-top" data-role="owner">
           <div className="container stack animate-in">
-            <SalonNav />
+            <SalonNav role="owner" />
             <header className="stack-sm">
               <Eyebrow className="eyebrow-mint">Salon created</Eyebrow>
               <h1 className="headline">{salon.name} を登録しました</h1>
@@ -115,9 +115,9 @@ export default async function ManagerSalonNewPage({
 
   // ── 入力フォーム ───────────────────────────────────
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role="owner">
       <div className="container stack animate-in">
-        <SalonNav />
+        <SalonNav role="owner" />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">New salon</Eyebrow>
           <h1 className="headline">サロンを登録</h1>

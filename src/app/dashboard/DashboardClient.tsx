@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Card, Eyebrow, VipBadge } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
+import type { SalonRole } from "@/components/RoleBar";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import StaffPeriodView from "./StaffPeriodView";
 import HrFlowView from "./HrFlowView";
@@ -37,7 +38,13 @@ function DeltaPct({ prev, cur }: { prev: number; cur: number }) {
   return <span className={up ? "trend-up" : undefined}>{pct(prev, cur)}</span>;
 }
 
-export default function DashboardClient({ data }: { data: DashboardData }) {
+export default function DashboardClient({
+  data,
+  role,
+}: {
+  data: DashboardData;
+  role: SalonRole;
+}) {
   // ビュー切替: 日次（今の状態）/ HR月次（echo flow トレンド）。§12 の2タブ構成。
   const [view, setView] = useState<"daily" | "hr">("daily");
 
@@ -48,9 +55,9 @@ export default function DashboardClient({ data }: { data: DashboardData }) {
   const salonRevPrev = data.salonRevenuePrev;
 
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={role}>
       <div className="container container-wide stack animate-in">
-        <SalonNav />
+        <SalonNav role={role} />
         {/* 1. ヘッダー */}
         <header className="dash-head">
           <div className="stack-sm">

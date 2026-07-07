@@ -6,6 +6,7 @@ import { Eyebrow, Card } from "@/components/ui";
 import { REVIEW_RATINGS } from "@/lib/review";
 import InboxList, { type InboxRow } from "./InboxList";
 import SalonNav from "@/components/SalonNav";
+import { resolveSalonRole } from "@/lib/display-role";
 
 /**
  * 11 店長 Inbox（画面マップ11・サロンUI世界）。ルート: /manager/inbox
@@ -126,10 +127,12 @@ export default async function ManagerInboxPage() {
   const sharedCount = rows.filter((r) => r.visibility === "all").length;
   const heldCount = rows.filter((r) => r.visibility === "manager").length;
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
-        <SalonNav />
+        <SalonNav role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Manager inbox</Eyebrow>
           <h1 className="headline">{salon.name} ・ 声の一覧</h1>

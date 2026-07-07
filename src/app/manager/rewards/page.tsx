@@ -11,6 +11,7 @@ import {
 } from "@/lib/rewards";
 import { Eyebrow, Card } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
+import { resolveSalonRole } from "@/lib/display-role";
 
 /**
  * A3 特典設定（/manager/rewards・サロンUI世界 / [[auth-method-line-b]]）。
@@ -65,10 +66,12 @@ export default async function ManagerRewardsPage({
 
   const atLimit = rewards.length >= MAX_REWARDS;
 
+  const displayRole = await resolveSalonRole(ctx);
+
   return (
-    <main className="page page-top">
+    <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
-        <SalonNav />
+        <SalonNav role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">VIP perks</Eyebrow>
           <h1 className="headline">{salon?.name ?? "サロン"} ・ 特典設定</h1>

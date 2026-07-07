@@ -26,6 +26,7 @@
 
   /* ---- アクセント ---- */
   --gold: #B08D57;       /* 鈍いゴールド（アンティークゴールド）: VIP系UIの共通アクセント。金ピカは不可 */
+  --bronze: #8C6A3F;     /* owner用: gold をサロン向けに引き締めた青銅色（mint→濃mint→bronze の同系終端） */
 
   /* echoミント（§12・サロンUI専用）。好調/上昇・ブランド波紋・アクティブタブだけに差す。
      カスタマーUIには入れない。赤は使わずネガティブは褪せグレーで表現する。 */
@@ -179,6 +180,34 @@ a {
   letter-spacing: 0.22em;
   color: var(--g25);
   text-transform: none;
+}
+
+/* ---- ロール別アクセント（§12）----
+   data-role を付けた要素の配下で --accent を切り替える。権限を色の「濃さ」で示す：
+   staff=mint → manager=濃mint → owner=bronze と同系統で濃くし、サロンUIのミント基調から
+   大きく外さない。customer（白の世界）は既定=gold のまま＝白の世界は不変。 */
+[data-role="customer"] { --accent: var(--gold); }
+[data-role="staff"]    { --accent: var(--mint); }
+[data-role="manager"]  { --accent: var(--mint-deep); }
+[data-role="owner"]    { --accent: var(--bronze); }
+
+/* ロールバー: サロンUI上部に現在の権限を斜体英字（Staff/Manager/Owner）で示す。
+   customer には出さない（RoleBar を呼ばない）。色は配下の --accent を使う。
+   ラベルは Eyebrow（.eyebrow）を再利用し、色だけ --accent で上書きする。 */
+.role-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.role-bar::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 1.6rem;
+  height: 1px;
+  background: var(--accent, var(--line-strong));
+}
+.role-bar-label {
+  color: var(--accent, var(--g25));
 }
 
 /* ブランド/英字の大見出し — 例: echo, Welcome, Thank you */
