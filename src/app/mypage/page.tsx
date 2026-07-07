@@ -58,6 +58,17 @@ export default async function MyPage() {
     redirect("/api/auth/line/login");
   }
 
+  // 表示名ゲート（初回チェックイン直前・[[auth-method-line-b]]）: name_confirmed_at 未設定なら
+  //   /onboarding/name で名前を確定させてから戻す（チェックインQRを見せる手前に1画面挟む）。
+  const { data: gate } = await supabaseAdmin
+    .from("customers")
+    .select("name_confirmed_at")
+    .eq("id", session.customer_id)
+    .single();
+  if (!gate?.name_confirmed_at) {
+    redirect(`/onboarding/name?returnTo=${encodeURIComponent("/mypage")}`);
+  }
+
   // 第1波: 顧客 / 感想軸カウント / 来店行（来店行は1日1行なのでJSでsalonごとにCOUNT集計）
   //        / 送った評価の履歴（既存3クエリとは独立・時系列 desc・FK埋め込みで名前も同時取得）。
   const [{ data: customer }, { data: reviews }, { data: visits }, { data: sent }] =

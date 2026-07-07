@@ -145,18 +145,27 @@ export async function GET(request: Request) {
     return res;
   }
 
-  // 3. customers を upsert（line_user_id で一意）。service role = RLSバイパス
+  // 3. customers を確保（line_user_id で一意）。service role = RLSバイパス。
+  //    ★ display_name は「挿入時のみ」セットし、既存行は上書きしない（本人が /onboarding/name で
+  //      確定した表示名や name_confirmed_at を、再ログインの度に LINE 名で潰さないため）。
+  //    ON CONFLICT DO NOTHING（ignoreDuplicates）で挿入 → 常に select で行を取得（レース安全）。
+  const { error: insErr } = await supabaseAdmin.from("customers").upsert(
+    { line_user_id: profile.sub, display_name: profile.name ?? "" },
+    { onConflict: "line_user_id", ignoreDuplicates: true },
+  );
+  if (insErr) {
+    const res = fail(baseUrl, "error", { step: "upsert", error: insErr }, returnTo);
+    clearHandshake(res);
+    return res;
+  }
   const { data: customer, error } = await supabaseAdmin
     .from("customers")
-    .upsert(
-      { line_user_id: profile.sub, display_name: profile.name ?? "" },
-      { onConflict: "line_user_id" },
-    )
     .select("id, line_user_id")
+    .eq("line_user_id", profile.sub)
     .single();
 
   if (error || !customer) {
-    const res = fail(baseUrl, "error", { step: "upsert", error }, returnTo);
+    const res = fail(baseUrl, "error", { step: "select", error }, returnTo);
     clearHandshake(res);
     return res;
   }
