@@ -187,6 +187,10 @@
   - `POST /api/staff/visit` に action `migrate`（未移行→INSERT / 既移行→UPDATE・0〜cycleSizeに正クランプ）。**入力・訂正は在籍staff/端末いずれも可＝ロール判定なし**。`created_by`/`updated_by` は「誰が入力・訂正したか」の追跡用に保持するだけ（操作は止めない・端末経路は個人特定不可で null）
   - `/mypage` は移行deltaを合算し、移行のみ（実来店ゼロ）のサロンもカード対象に含める。特典は count 純粋関数由来のため、移行でハードル到達→即発火（表示に自動反映）。感想軸（`earned_stamps`・3固定）は移行対象外＝不介入
   - ⚠️ 運用前提（コードでは強制しない・カットオーバー規律）: echo来店チェックインはカットオーバー時点から開始／delta＝カットオーバー時点の旧カード残高。移行時 COUNT(visits)≈0 のため実来店と重複しない（遡及バックフィルの除外ロジックは持たない）
+- 不具合修正: staff/manager がホーム保存した PWA を起動すると顧客ホーム "/" 経由で /mypage に流れ、staff世界に入れなかった件 … ✓ DB変更なし
+  - 主因＝PWA start_url。root layout が全ページ共通で customer 用 `/manifest.json`（start_url:"/"）を配るため、iOS16.4+ は保存パス /staff を無視して "/" から冷起動していた。**`/staff`・`/manager` 配下にセグメント layout を新設し `metadata.manifest` を `/manifest-staff.json`（start_url:"/staff"）に上書き**（ネスト metadata は scalar を最深セグメント優先で上書き＝`<link rel="manifest">` は1本）。manager も staff世界の住人＝専用manifestは別立てせず /staff に集約
+  - 再発防止＝LINE callback の着地先にロール分岐を追加。**returnTo が明示ターゲット（/staff・/staff/join?token=…・/onboard…）なら尊重（署名付きstate往復＝#1は不変）／既定 "/" のときだけ `line_user_id` で在籍staff判定 → staff は /staff・非staff は "/"（顧客着地を維持）**。staff 解決は `@/lib/staff-session` の `resolveStaffByLineUserId`（session cookie 非依存・callback は cookie 発行前のため）に単一ソース化し `getStaffContext` もこれ経由
+  - 顧客側（`public/manifest.json`・root `layout.tsx`・`page.tsx`・`@/lib/return-to`・login route）は**一切無改変**＝顧客ログイン（returnToなし→"/"着地）に回帰なし
 
 ---
 
