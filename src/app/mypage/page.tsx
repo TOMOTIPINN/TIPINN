@@ -24,7 +24,7 @@ import { getTier } from "@/lib/rating-tiers";
  * 個人情報は service role でサーバー側のみ。
  */
 type ReviewRow = { salon_id: string; count: number | null; updated_at: string };
-type VisitRow = { salon_id: string };
+type VisitRow = { salon_id: string; created_at: string };
 // 送った評価の履歴（Your echoes sent）。FK埋め込みでスタッフ名・サロン名も同時取得。
 // amount は案B（金額ゼロ）のため取得も表示もしない。staff は退職時 null になり得る。
 type SentEchoRow = {
@@ -85,7 +85,7 @@ export default async function MyPage() {
         .order("updated_at", { ascending: false }),
       supabaseAdmin
         .from("visits")
-        .select("salon_id")
+        .select("salon_id, created_at")
         .eq("customer_id", session.customer_id),
       supabaseAdmin
         .from("rating_purchases")
@@ -101,25 +101,44 @@ export default async function MyPage() {
   const reviewMap = new Map<string, ReviewRow>();
   for (const r of reviewRows) reviewMap.set(r.salon_id, r);
 
+  // 累計来店回数（表示・進捗用）と、最終来店日時 MAX(created_at)（並び順用）を同じ1パスで集計。
   const visitCountMap = new Map<string, number>();
+  const lastVisitMap = new Map<string, string>();
   for (const v of visitRows) {
     visitCountMap.set(v.salon_id, (visitCountMap.get(v.salon_id) ?? 0) + 1);
-  }
-
-  // 和集合の並び: 感想軸サロン(updated_at desc) → 来店のみサロン(累計来店 desc)。
-  const orderedIds: string[] = [];
-  const seen = new Set<string>();
-  for (const r of reviewRows) {
-    if (!seen.has(r.salon_id)) {
-      seen.add(r.salon_id);
-      orderedIds.push(r.salon_id);
+    const prev = lastVisitMap.get(v.salon_id);
+    if (!prev || new Date(v.created_at) > new Date(prev)) {
+      lastVisitMap.set(v.salon_id, v.created_at);
     }
   }
-  for (const [id] of [...visitCountMap.entries()]
-    .filter(([id]) => !seen.has(id))
-    .sort((a, b) => b[1] - a[1])) {
-    orderedIds.push(id);
-  }
+
+  // 和集合の並び（最終来店 MAX(created_at) 基準）:
+  //   ・来店あり(lastVisit あり)を上、未来店(visit=0)を下。
+  //   ・来店ありグループ内は最終来店の降順（今日来店した店が最上部）。
+  //   ・同着 or 未来店グループは既存シグナル earned_stamps.updated_at の降順で安定化。
+  // 候補は感想(earned_stamps)∪来店(visits) の和集合。挿入順(感想→来店)が sort 安定時の最終フォールバック。
+  const candidateIds = new Set<string>([
+    ...reviewRows.map((r) => r.salon_id),
+    ...visitRows.map((v) => v.salon_id),
+  ]);
+  const orderedIds = [...candidateIds].sort((a, b) => {
+    const va = lastVisitMap.get(a);
+    const vb = lastVisitMap.get(b);
+    // 来店ありを未来店より上に。
+    if (va && !vb) return -1;
+    if (!va && vb) return 1;
+    if (va && vb) {
+      const d = new Date(vb).getTime() - new Date(va).getTime();
+      if (d !== 0) return d; // 最終来店の降順
+    }
+    // 同着（同時刻来店）または両方未来店: 直近レビューの降順で安定化。
+    const ra = reviewMap.get(a)?.updated_at;
+    const rb = reviewMap.get(b)?.updated_at;
+    if (ra && rb) return new Date(rb).getTime() - new Date(ra).getTime();
+    if (ra && !rb) return -1;
+    if (!ra && rb) return 1;
+    return 0;
+  });
 
   // 第2波: 和集合IDのサロンメタ(来店列込み) と rewards を一括取得（N+1回避）。
   const [{ data: salonData }, rewardsMap] = await Promise.all([
