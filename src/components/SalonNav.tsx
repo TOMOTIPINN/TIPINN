@@ -58,6 +58,11 @@ const SETTINGS: NavItem[] = [
     label: "受付端末",
     match: (p) => p.startsWith("/manager/kiosk"),
   },
+  {
+    href: "/manager/onboard-qr",
+    label: "店頭QR",
+    match: (p) => p.startsWith("/manager/onboard-qr"),
+  },
 ];
 
 export default function SalonNav({ role }: { role: SalonRole }) {

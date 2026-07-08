@@ -45,6 +45,13 @@ export async function GET(request: Request) {
   authorizeUrl.searchParams.set("scope", "openid profile");
   authorizeUrl.searchParams.set("nonce", nonce);
 
+  // 店頭オンボーディング（returnTo=/onboard…）経由のログインでは、同意画面で echo 公式アカウントの
+  // 友だち追加を促す（follow は /api/line/webhook が拾い customers.line_is_friend を同期）。
+  // bot_prompt は authorize 時のみ効くパラメータで callback は無関与。他導線のログインには付けない。
+  if (returnTo.startsWith("/onboard")) {
+    authorizeUrl.searchParams.set("bot_prompt", "aggressive");
+  }
+
   const res = NextResponse.redirect(authorizeUrl);
   // defense-in-depth: 同一ブラウザで cookie が生き残る通常フローでは、callback が state と
   //   突き合わせてブラウザ束縛（CSRF）を効かせる。cookie が消える経路では署名+exp で担保する。
