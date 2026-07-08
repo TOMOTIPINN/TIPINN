@@ -174,6 +174,13 @@
     - tier CHECK は slug 一致のため migration 不要（0001/0003で確認済）
     - ⚠️ Stripeダッシュボードで **Connect用** webhookエンドポイント（`{APP_BASE_URL}/api/stripe/webhook`・checkout.session.completed）を作成し whsec_ を `.env.local` に設定すること
   - 4.3 完了画面 `/rating/complete?session_id=...`（success_urlの遷移先）… ✓ 静的な温かいサンキュー画面（DB書き込みなし＝記録はwebhook / 二重記録防止）。マイページ/ホーム導線。tier/金額表示はDirect Charge都合でMVP省略（§5準拠・インラインstyle無し）
+- 来店スタンプ移行（旧LINEショップカード引き継ぎ・来店軸 / Phase 7 の上に追加）… ✓ migration 0019
+  - `stamp_adjustments`(customer_id, salon_id, delta, source='migration', note, created_by, updated_by, …) 追加。`unique(customer_id, salon_id, source)`＝顧客×サロン×sourceで1回（冪等・訂正は既存行UPDATE）。RLS deny-by-default（service_roleのみ）
+  - 累計来店の定義を **COUNT(visits) + COALESCE(SUM(stamp_adjustments.delta),0)** の1式に一本化。SQL側は RPC `submit_visit_and_earn_stamp` を 0019 で再定義（`new_count` に加算・`stamp_awarded` は不変＝当日初回来店の成否のみ）／app側は `@/lib/stamp-adjustments`（`getMigrationEntry` / `getCustomerMigrationDeltas`）が同式のミラー
+  - 入力導線＝来店受付スキャナ `/staff/visit`（VisitScanner）。未移行時に残数入力欄（0〜`salons.visit_cycle_size`）→ 1タップ「移行して記録」で migrate→record を連続実行。既移行は移行済み表示＋「訂正」
+  - `POST /api/staff/visit` に action `migrate`（未移行→INSERT / 既移行→UPDATE・0〜cycleSizeに正クランプ）。**入力・訂正は在籍staff/端末いずれも可＝ロール判定なし**。`created_by`/`updated_by` は「誰が入力・訂正したか」の追跡用に保持するだけ（操作は止めない・端末経路は個人特定不可で null）
+  - `/mypage` は移行deltaを合算し、移行のみ（実来店ゼロ）のサロンもカード対象に含める。特典は count 純粋関数由来のため、移行でハードル到達→即発火（表示に自動反映）。感想軸（`earned_stamps`・3固定）は移行対象外＝不介入
+  - ⚠️ 運用前提（コードでは強制しない・カットオーバー規律）: echo来店チェックインはカットオーバー時点から開始／delta＝カットオーバー時点の旧カード残高。移行時 COUNT(visits)≈0 のため実来店と重複しない（遡及バックフィルの除外ロジックは持たない）
 
 ---
 
