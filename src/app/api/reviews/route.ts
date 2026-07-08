@@ -83,6 +83,13 @@ export async function POST(req: Request) {
   }
 
   const r = Array.isArray(data) ? data[0] : data;
+
+  // 本日分の感想が既に存在＝2通目以降。エラーではなく既送信を優しく返す（客を責めない・要件2）。
+  // 判定は RPC 側（advisory lock 内・0020）で行い、ここは 200 でフラグを返すだけ。
+  if (r.already_submitted) {
+    return NextResponse.json({ alreadySubmitted: true });
+  }
+
   return NextResponse.json({
     reviewId: r.review_id,
     earnedCount: r.new_count,

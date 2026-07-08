@@ -105,6 +105,13 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? "server_error");
 
+      // 本日分は送信済み（2通目以降）＝フォームには戻さず、/review の既送信カードへ寄せる。
+      // ページ側の当日判定が同じ既送信状態を返す（URL直打ちと同一画面・要件2）。
+      if (data.alreadySubmitted) {
+        router.replace(`/review?salon=${encodeURIComponent(salonId)}`);
+        return;
+      }
+
       // 完了画面へ遷移（フォームには戻さない）。
       const awarded = data.stampAwarded ? "1" : "0";
       router.push(

@@ -160,6 +160,12 @@
   - `/review/complete` 送信完了画面 ✓ stamp_awardedで分岐・円スタンプ点灯・マイページ/ホーム導線（再送ループ無し）
   - `/mypage`（画面10）✓ サロンごとのスタンプカード（円形ロゴ＋スタンプリング＋次の特典までの進捗 / rewards未設定でも壊れない）。`StampRing` を `@/components/ui` に共通化
   - 体験タグは当面ハードコード（将来 A4 タグ設定で可変化）
+  - 感想の重複投稿制限（1顧客/1サロン/JST日 につき1回）… ✓ migration 0020
+    - RPC `submit_review_and_earn_stamp` を 0020 で再定義（戻り値に `already_submitted` 追加）。advisory lock 内で INSERT 前に当日(JST) review の存在を確認し、既存なら**挿入せず** `already_submitted=true` を返す。判定単位はスタンプの「1個/顧客/サロン/日(JST)」と同一＝**staff 非依存**（ALL staff も個別も「その日の1回」／個別複数送信は不可）。本日初回分岐は定義上 `stamp_awarded=true` 固定
+    - reviews に UNIQUE は張らない（`(created_at AT TIME ZONE 'Asia/Tokyo')::date` は STABLE で関数一意index不可・既存重複行で作成失敗のリスク）。0004/0009/0019 と同じ advisory lock + RPC内判定で担保
+    - `POST /api/reviews` は `already_submitted` を**エラーでなく 200 `{ alreadySubmitted: true }`** で返す（客を責めない）。`ReviewForm` は既送信時 `/review?salon=` へ `router.replace`
+    - `/review`（server）は `@/lib/review-server` の `hasReviewedToday()`（当日既送信判定・supabaseAdmin をクライアントに巻き込まないサーバー専用モジュール）で、既送信ならフォームを出さず**インライン既送信カード**（「本日分の感想は送信済みです／またのご来店をお待ちしています」＋マイページ/ホーム導線）。URL直打ち・リロードでも同一画面＝サーバー側で守る（UI非表示だけに依存しない）
+    - 感想スタンプの 1個/日 farming 対策（0004）は不変。今回は review 投稿そのものの重複制限を追加しただけ
 - フェーズ4 評価スタンプ購入（Stripe Connect / Direct Charge）… 🚧 実装中
   - 4.0 Stripe下準備 … ✓ テストモード（platform名 echo）/ 連結アカウント `acct_1TjCCY50hwlsDBtH`（Standard・Direct Charge＝連結が手数料負担）→ テストサロン `682336ef-997e-4b07-876e-b71fb032b71b` の `salons.stripe_account_id` に紐付け済 / env: `STRIPE_SECRET_KEY` `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` `APP_BASE_URL` / `stripe@22` 導入済
   - 4.1 購入フロー（顧客側）… ✓
