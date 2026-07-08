@@ -9,11 +9,16 @@ import { Card, VipBadge } from "@/components/ui";
  * 来店受付スキャナ（/staff/visit・クライアント / 来店スライス1・LINE無し）。
  *
  * お客様が /mypage で提示するQR（中身＝customer_id 生UUID）を、カメラ or 画像アップロードで読み取る。
- * 読み取り→ /api/staff/visit(lookup) で確認カード（名前・累計来店・VIP）→「来店を記録」で record。
+ * 読み取り→ /api/staff/visit(lookup) で確認カード（名前・累計来店・VIP・移行状態）→「来店を記録」で record。
  * 本日すでに記録済みなら awarded=false で「本日は記録済みです」を明示（エラー画面にしない）。
  *
- * 書き込み・salon スコープはすべて API 側（getStaffContext・ctx.salon_id）。ここは表示と読み取りのみ。
- * §8 インラインstyle無し（.visit-scan* は globals.css）。§5 ¥・鮮やか色を出さない。
+ * 旧LINEショップカードの移行（stamp_adjustments・0019）:
+ *   ・未移行なら残数入力欄を出し、値ありなら「移行して記録」1タップで migrate→record を連続実行。
+ *   ・既移行なら移行済み表示＋「訂正」（在籍staff/端末いずれも可・ロール判定なし）。
+ *   ・入力範囲は 0〜そのサロンのハードル値（cycleSize）。誰が入力/訂正したかはサーバー側で追跡保持。
+ *
+ * 書き込み・salon スコープはすべて API 側（getVisitContext・ctx.salon_id）。ここは表示と読み取りのみ。
+ * §8 インラインstyle無し（.visit-scan* / .field は globals.css）。§5 ¥・鮮やか色を出さない。
  */
 
 const UUID_RE =
@@ -24,8 +29,11 @@ type Phase = "scanning" | "looking" | "confirm" | "recording" | "done";
 type Target = {
   customerId: string;
   name: string;
-  visitCount: number;
+  visitCount: number; // 実来店 + 移行delta の合算
   isVIP: boolean;
+  migrated: boolean;
+  migrationDelta: number;
+  cycleSize: number; // 移行入力の上限（salons.visit_cycle_size）
 };
 
 type Result = { name: string; awarded: boolean; newCount: number };
@@ -36,6 +44,12 @@ export default function VisitScanner() {
   const [cameraOff, setCameraOff] = useState(false);
   const [target, setTarget] = useState<Target | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+
+  // 移行入力（未移行時）と訂正入力（既移行時）。migrating は migrate 通信中フラグ。
+  const [migrateValue, setMigrateValue] = useState("");
+  const [editValue, setEditValue] = useState("");
+  const [editingMigration, setEditingMigration] = useState(false);
+  const [migrating, setMigrating] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -73,6 +87,8 @@ export default function VisitScanner() {
       }
       const data = (await res.json()) as Omit<Target, "customerId">;
       setTarget({ customerId, ...data });
+      setMigrateValue("");
+      setEditingMigration(false);
       setPhase("confirm");
     } catch {
       setError("通信に失敗しました。電波状況をご確認ください。");
@@ -183,6 +199,59 @@ export default function VisitScanner() {
     [handleDecoded],
   );
 
+  // 移行台帳への入力/訂正（migrate）。成功で確認カードの累計を即更新。true=成功。
+  const doMigrate = useCallback(
+    async (deltaNum: number): Promise<boolean> => {
+      if (!target) return false;
+      setMigrating(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/staff/visit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "migrate",
+            customer_id: target.customerId,
+            delta: deltaNum,
+          }),
+        });
+        if (!res.ok) {
+          const j = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          setError(
+            j?.error === "out_of_range"
+              ? `残数は 0〜${target.cycleSize} で入力してください。`
+              : "移行の保存に失敗しました。もう一度お試しください。",
+          );
+          setMigrating(false);
+          return false;
+        }
+        const data = (await res.json()) as {
+          migrationDelta: number;
+          visitCount: number;
+        };
+        setTarget((t) =>
+          t
+            ? {
+                ...t,
+                migrated: true,
+                migrationDelta: data.migrationDelta,
+                visitCount: data.visitCount,
+              }
+            : t,
+        );
+        setMigrating(false);
+        return true;
+      } catch {
+        setError("通信に失敗しました。電波状況をご確認ください。");
+        setMigrating(false);
+        return false;
+      }
+    },
+    [target],
+  );
+
   // 確認カードの「来店を記録」。1日1回・累計はサーバー(RPC)が返す。
   const record = useCallback(async () => {
     if (!target) return;
@@ -211,12 +280,36 @@ export default function VisitScanner() {
     }
   }, [target]);
 
+  // 主ボタン: 未移行かつ残数入力ありなら「移行して記録」（migrate→record）、それ以外は record のみ。
+  const wantMigrate =
+    !!target && !target.migrated && migrateValue.trim() !== "";
+  const migrateDelta = Number(migrateValue);
+  const migrateInvalid =
+    wantMigrate &&
+    (!Number.isInteger(migrateDelta) ||
+      migrateDelta < 0 ||
+      (!!target && migrateDelta > target.cycleSize));
+
+  const onPrimary = useCallback(async () => {
+    if (wantMigrate) {
+      const ok = await doMigrate(migrateDelta);
+      if (!ok) return; // 移行失敗時は記録しない
+    }
+    await record();
+  }, [wantMigrate, doMigrate, migrateDelta, record]);
+
   const reset = useCallback(() => {
     setTarget(null);
     setResult(null);
     setError(null);
+    setMigrateValue("");
+    setEditValue("");
+    setEditingMigration(false);
+    setMigrating(false);
     setPhase("scanning");
   }, []);
+
+  const busy = phase === "recording" || migrating;
 
   return (
     <div className="stack">
@@ -278,19 +371,112 @@ export default function VisitScanner() {
                   累計来店 {target.visitCount} 回
                   {target.isVIP ? "・VIP" : ""}
                 </p>
+
+                {/* 未移行: 旧カード残数の入力欄（任意）。値ありなら主ボタンが「移行して記録」に。 */}
+                {!target.migrated && (
+                  <div className="stack stack-sm">
+                    <label className="field-label" htmlFor="migrate-delta">
+                      旧LINEショップカードの残り（任意・0〜{target.cycleSize}）
+                    </label>
+                    <input
+                      id="migrate-delta"
+                      type="number"
+                      min={0}
+                      max={target.cycleSize}
+                      inputMode="numeric"
+                      className="field"
+                      value={migrateValue}
+                      onChange={(e) => setMigrateValue(e.target.value)}
+                      placeholder="0"
+                      disabled={busy}
+                    />
+                  </div>
+                )}
+
+                {/* 既移行: 移行済み表示＋訂正（在籍staff/端末いずれも可）。 */}
+                {target.migrated && (
+                  <div className="stack stack-sm">
+                    <p className="muted">
+                      旧カード移行済み：{target.migrationDelta} 個
+                    </p>
+                    {editingMigration ? (
+                      <>
+                        <input
+                          type="number"
+                          min={0}
+                          max={target.cycleSize}
+                          inputMode="numeric"
+                          className="field"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          disabled={busy}
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-block"
+                          disabled={busy}
+                          onClick={async () => {
+                            const v = Number(editValue);
+                            if (
+                              !Number.isInteger(v) ||
+                              v < 0 ||
+                              v > target.cycleSize
+                            ) {
+                              setError(
+                                `残数は 0〜${target.cycleSize} で入力してください。`,
+                              );
+                              return;
+                            }
+                            const ok = await doMigrate(v);
+                            if (ok) setEditingMigration(false);
+                          }}
+                        >
+                          {migrating ? "保存しています…" : "訂正を保存"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-quiet btn-block"
+                          disabled={busy}
+                          onClick={() => setEditingMigration(false)}
+                        >
+                          やめる
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-subtle btn-block"
+                        disabled={busy}
+                        onClick={() => {
+                          setEditValue(String(target.migrationDelta));
+                          setEditingMigration(true);
+                        }}
+                      >
+                        旧カード残数を訂正
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 <button
                   type="button"
                   className="btn btn-outline btn-block"
-                  onClick={record}
-                  disabled={phase === "recording"}
+                  onClick={onPrimary}
+                  disabled={busy || migrateInvalid || editingMigration}
                 >
-                  {phase === "recording" ? "記録しています…" : "来店を記録"}
+                  {phase === "recording"
+                    ? "記録しています…"
+                    : migrating
+                      ? "移行しています…"
+                      : wantMigrate
+                        ? "移行して記録"
+                        : "来店を記録"}
                 </button>
                 <button
                   type="button"
                   className="btn btn-quiet btn-block"
                   onClick={reset}
-                  disabled={phase === "recording"}
+                  disabled={busy}
                 >
                   やめる
                 </button>

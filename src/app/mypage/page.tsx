@@ -9,6 +9,7 @@ import CheckInCard from "@/components/CheckInCard";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { computeVisitProgress } from "@/lib/visit";
 import { getSalonRewardsMap } from "@/lib/rewards";
+import { getCustomerMigrationDeltas } from "@/lib/stamp-adjustments";
 import { getTier } from "@/lib/rating-tiers";
 
 /**
@@ -70,29 +71,36 @@ export default async function MyPage() {
   }
 
   // 第1波: 顧客 / 感想軸カウント / 来店行（来店行は1日1行なのでJSでsalonごとにCOUNT集計）
-  //        / 送った評価の履歴（既存3クエリとは独立・時系列 desc・FK埋め込みで名前も同時取得）。
-  const [{ data: customer }, { data: reviews }, { data: visits }, { data: sent }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("customers")
-        .select("display_name")
-        .eq("id", session.customer_id)
-        .single(),
-      supabaseAdmin
-        .from("earned_stamps")
-        .select("salon_id, count, updated_at")
-        .eq("customer_id", session.customer_id)
-        .order("updated_at", { ascending: false }),
-      supabaseAdmin
-        .from("visits")
-        .select("salon_id, created_at")
-        .eq("customer_id", session.customer_id),
-      supabaseAdmin
-        .from("rating_purchases")
-        .select("created_at, tier, staff:staff(name), salon:salons(name, logo_url)")
-        .eq("customer_id", session.customer_id)
-        .order("created_at", { ascending: false }),
-    ]);
+  //        / 送った評価の履歴（既存3クエリとは独立・時系列 desc・FK埋め込みで名前も同時取得）
+  //        / 移行台帳（旧カード引き継ぎ・source='migration'・0019）。
+  const [
+    { data: customer },
+    { data: reviews },
+    { data: visits },
+    { data: sent },
+    migrationDeltaMap,
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("customers")
+      .select("display_name")
+      .eq("id", session.customer_id)
+      .single(),
+    supabaseAdmin
+      .from("earned_stamps")
+      .select("salon_id, count, updated_at")
+      .eq("customer_id", session.customer_id)
+      .order("updated_at", { ascending: false }),
+    supabaseAdmin
+      .from("visits")
+      .select("salon_id, created_at")
+      .eq("customer_id", session.customer_id),
+    supabaseAdmin
+      .from("rating_purchases")
+      .select("created_at, tier, staff:staff(name), salon:salons(name, logo_url)")
+      .eq("customer_id", session.customer_id)
+      .order("created_at", { ascending: false }),
+    getCustomerMigrationDeltas(session.customer_id),
+  ]);
 
   const reviewRows = (reviews ?? []) as ReviewRow[];
   const visitRows = (visits ?? []) as VisitRow[];
@@ -116,10 +124,13 @@ export default async function MyPage() {
   //   ・来店あり(lastVisit あり)を上、未来店(visit=0)を下。
   //   ・来店ありグループ内は最終来店の降順（今日来店した店が最上部）。
   //   ・同着 or 未来店グループは既存シグナル earned_stamps.updated_at の降順で安定化。
-  // 候補は感想(earned_stamps)∪来店(visits) の和集合。挿入順(感想→来店)が sort 安定時の最終フォールバック。
+  // 候補は感想(earned_stamps)∪来店(visits)∪移行(stamp_adjustments) の和集合。
+  //   移行のみ(実来店ゼロ)のサロンも累計>0 なのでカード対象に含める。
+  //   挿入順(感想→来店→移行)が sort 安定時の最終フォールバック。
   const candidateIds = new Set<string>([
     ...reviewRows.map((r) => r.salon_id),
     ...visitRows.map((v) => v.salon_id),
+    ...migrationDeltaMap.keys(),
   ]);
   const orderedIds = [...candidateIds].sort((a, b) => {
     const va = lastVisitMap.get(a);
@@ -216,11 +227,12 @@ export default async function MyPage() {
                 ? computeVipProgress(reviewCount, rewards)
                 : null;
 
-              // 来店軸（visit_axis_enabled のときのみ）。
+              // 来店軸（visit_axis_enabled のときのみ）。累計＝実来店 + 移行delta（1式一本化）。
               const axisOn = meta.visit_axis_enabled === true;
               const visit = axisOn
                 ? computeVisitProgress(
-                    visitCountMap.get(id) ?? 0,
+                    (visitCountMap.get(id) ?? 0) +
+                      (migrationDeltaMap.get(id) ?? 0),
                     meta.visit_cycle_size,
                   )
                 : null;
