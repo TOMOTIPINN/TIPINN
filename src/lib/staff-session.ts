@@ -22,15 +22,23 @@ export type StaffContext = {
   name: string;
 };
 
-export async function getStaffContext(): Promise<StaffContext | null> {
-  const session = await getSession();
-  if (!session?.line_user_id) return null;
+/**
+ * line_user_id から在籍 staff 文脈を解決する（session cookie 非依存）。
+ *
+ * getStaffContext() はログイン後の session cookie を前提にするが、LINE callback は
+ * まだ cookie を発行していない段階でロール別着地を決める必要がある（不具合 #2）。
+ * そのため staff 解決ロジックをこの関数に単一ソース化し、両者から使う。
+ * 退職者（archived_at 有り）はアクセス失効＝null（/staff・/manager に入れない）。
+ */
+export async function resolveStaffByLineUserId(
+  lineUserId: string | null | undefined,
+): Promise<StaffContext | null> {
+  if (!lineUserId) return null;
 
-  // 退職者（archived_at 有り）はアクセス失効＝文脈を返さない（/staff・/manager に入れない）。
   const { data } = await supabaseAdmin
     .from("staff")
     .select("id, salon_id, role, name")
-    .eq("line_user_id", session.line_user_id)
+    .eq("line_user_id", lineUserId)
     .is("archived_at", null)
     .maybeSingle();
 
@@ -42,4 +50,9 @@ export async function getStaffContext(): Promise<StaffContext | null> {
     role: data.role === "manager" ? "manager" : "staff",
     name: data.name,
   };
+}
+
+export async function getStaffContext(): Promise<StaffContext | null> {
+  const session = await getSession();
+  return resolveStaffByLineUserId(session?.line_user_id);
 }

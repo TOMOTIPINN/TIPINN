@@ -1,0 +1,17 @@
+{
+  "name": "echo staff - サロン向け",
+  "short_name": "echo staff",
+  "description": "サロンスタッフ向け（来店受付・届いた評価の確認）。",
+  "start_url": "/staff",
+  "display": "standalone",
+  "background_color": "#FAFAFA",
+  "theme_color": "#06C755",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}

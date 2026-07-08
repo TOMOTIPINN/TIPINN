@@ -7,6 +7,7 @@ import {
   SESSION_MAX_AGE,
 } from "@/lib/session";
 import { verifyOAuthState } from "@/lib/oauth-state";
+import { resolveStaffByLineUserId } from "@/lib/staff-session";
 
 /**
  * GET /api/auth/line/callback
@@ -170,13 +171,24 @@ export async function GET(request: Request) {
     return res;
   }
 
-  // 4. セッションCookie発行 → returnTo（招待 join 等）へ
+  // 4. セッションCookie発行 → 着地先へ
   const token = await createSessionToken({
     customer_id: customer.id,
     line_user_id: customer.line_user_id,
   });
 
-  const res = NextResponse.redirect(new URL(returnTo, baseUrl));
+  // 着地先の決定（不具合 #2 の再発防止）:
+  //   ・returnTo が明示ターゲット（/staff・/staff/join?token=…・/onboard… 等）なら尊重＝#1 の往復に触れない。
+  //   ・returnTo が既定 "/"（明示先なし＝ホーム/PWA起動由来）のときだけロールで出し分ける。
+  //     在籍 staff → /staff、非staff → "/"（現行の顧客着地を維持＝顧客回帰なし）。
+  //   顧客ログイン（明示 returnTo あり）は staff 判定クエリを一切通らない。
+  let destination = returnTo;
+  if (returnTo === "/") {
+    const staff = await resolveStaffByLineUserId(customer.line_user_id);
+    if (staff) destination = "/staff";
+  }
+
+  const res = NextResponse.redirect(new URL(destination, baseUrl));
   res.cookies.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
