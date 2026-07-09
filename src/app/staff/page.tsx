@@ -194,9 +194,11 @@ export default async function StaffHomePage() {
           </div>
         </Card>
 
-        <Link href="/" className="btn btn-quiet btn-block">
-          ホームへ
-        </Link>
+        {displayRole !== "staff" && (
+          <Link href="/dashboard" className="btn btn-quiet btn-block">
+            ダッシュボードへ
+          </Link>
+        )}
       </div>
     </main>
   );
