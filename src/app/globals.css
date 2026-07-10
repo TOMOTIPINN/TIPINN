@@ -902,13 +902,26 @@ textarea.field {
   .metric-grid { grid-template-columns: 1fr; }
 }
 
-/* Your appreciation（画面12）用のコンパクト版：狭幅（スマホ）でも横3列を維持し、
-   数値を縮めて収める。metric-grid/metric-card を土台に再利用し、寸法だけ調整（§8）。 */
-.metric-grid.is-compact { gap: var(--space-sm); }
-.metric-grid.is-compact .metric-card { padding: var(--space-md) var(--space-sm); }
-.metric-grid.is-compact .metric-value { font-size: 1.25rem; }
-@media (max-width: 520px) {
-  .metric-grid.is-compact { grid-template-columns: repeat(3, 1fr); }
+/* Your appreciation（画面12）：期間×種類のマトリクス（期間=行 / 種類=列）。
+   値セルは metric-card を流用。ダッシュボードの .metric-grid には影響させない。 */
+.appreciation-grid {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  gap: var(--space-sm);
+  align-items: center;
+}
+.appreciation-grid.is-single { grid-template-columns: auto 1fr; }
+.appreciation-grid .metric-value { margin-top: 0; }
+.appreciation-colhead {
+  font-size: 0.78rem;
+  color: var(--g25);
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+.appreciation-rowhead {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  padding-right: var(--space-xs);
 }
 
 /* 前期間比の方向色（§12・サロンHRステータス配色）。

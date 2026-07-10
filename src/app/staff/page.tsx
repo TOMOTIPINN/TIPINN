@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
@@ -64,31 +65,43 @@ async function countRows(
   return count ?? 0;
 }
 
-/** Your appreciation の1行（感想 or 評価スタンプ）を今週/今月/今期で描画。¥は出さない。 */
-function AppreciationRow({
-  kind,
-  counts,
+const APPRECIATION_ROWS: { label: string; key: keyof PeriodCounts }[] = [
+  { label: "今週", key: "week" },
+  { label: "今月", key: "month" },
+  { label: "今期", key: "quarter" },
+];
+
+/**
+ * Your appreciation のマトリクス（期間=行 / 種類=列）。列見出しは1回だけ。¥は出さない。
+ * stamps が null（評価スタンプ非表示）のときは感想の1列だけにする（is-single）。
+ */
+function AppreciationTable({
+  reviews,
+  stamps,
 }: {
-  kind: string;
-  counts: PeriodCounts;
+  reviews: PeriodCounts;
+  stamps: PeriodCounts | null;
 }) {
   return (
-    <div className="stack-sm">
-      <p className="metric-label">{kind}</p>
-      <div className="metric-grid is-compact">
-        <div className="metric-card">
-          <p className="metric-label">今週</p>
-          <p className="metric-value">{counts.week}件</p>
-        </div>
-        <div className="metric-card">
-          <p className="metric-label">今月</p>
-          <p className="metric-value">{counts.month}件</p>
-        </div>
-        <div className="metric-card">
-          <p className="metric-label">今期</p>
-          <p className="metric-value">{counts.quarter}件</p>
-        </div>
-      </div>
+    <div className={`appreciation-grid${stamps ? "" : " is-single"}`}>
+      {/* 列見出し（左上は空・種類名は1回だけ） */}
+      <span aria-hidden="true" />
+      <span className="appreciation-colhead">感想</span>
+      {stamps && <span className="appreciation-colhead">評価スタンプ</span>}
+      {/* 期間ごとの行 */}
+      {APPRECIATION_ROWS.map((row) => (
+        <Fragment key={row.key}>
+          <span className="appreciation-rowhead">{row.label}</span>
+          <div className="metric-card">
+            <p className="metric-value">{reviews[row.key]}件</p>
+          </div>
+          {stamps && (
+            <div className="metric-card">
+              <p className="metric-value">{stamps[row.key]}件</p>
+            </div>
+          )}
+        </Fragment>
+      ))}
     </div>
   );
 }
@@ -219,19 +232,13 @@ export default async function StaffHomePage() {
 
           <div className="stack-sm">
             <h2 className="headline-sm">あなたへ</h2>
-            <AppreciationRow kind="感想" counts={youReviews} />
-            {youStamps && (
-              <AppreciationRow kind="評価スタンプ" counts={youStamps} />
-            )}
+            <AppreciationTable reviews={youReviews} stamps={youStamps} />
           </div>
 
           <div className="stack-sm">
             <h2 className="headline-sm">お店全体</h2>
             <p className="muted">（あなたへの分を含む）</p>
-            <AppreciationRow kind="感想" counts={shopReviews} />
-            {shopStamps && (
-              <AppreciationRow kind="評価スタンプ" counts={shopStamps} />
-            )}
+            <AppreciationTable reviews={shopReviews} stamps={shopStamps} />
           </div>
 
           <p className="note-fine">
