@@ -912,6 +912,15 @@ textarea.field {
 }
 .appreciation-grid.is-single { grid-template-columns: auto 1fr; }
 .appreciation-grid .metric-value { margin-top: 0; }
+/* 0 は薄く（muted 相当＝.muted と同じ --g25）。1以上は既定の ink のまま。 */
+.appreciation-grid .metric-value.is-zero { color: var(--g25); }
+/* 単位「件」は数字より一段小さく・薄く。 */
+.appreciation-grid .metric-unit {
+  font-size: 0.62em;
+  font-weight: 500;
+  color: var(--g25);
+  margin-left: 2px;
+}
 .appreciation-colhead {
   font-size: 0.78rem;
   color: var(--g25);

@@ -71,6 +71,18 @@ const APPRECIATION_ROWS: { label: string; key: keyof PeriodCounts }[] = [
   { label: "今期", key: "quarter" },
 ];
 
+/** マトリクスの値セル。0 は薄く（muted 相当）、単位「件」は数字より一段小さく薄く。¥は出さない。 */
+function ValueCell({ n }: { n: number }) {
+  return (
+    <div className="metric-card">
+      <p className={`metric-value${n === 0 ? " is-zero" : ""}`}>
+        {n}
+        <span className="metric-unit">件</span>
+      </p>
+    </div>
+  );
+}
+
 /**
  * Your appreciation のマトリクス（期間=行 / 種類=列）。列見出しは1回だけ。¥は出さない。
  * stamps が null（評価スタンプ非表示）のときは感想の1列だけにする（is-single）。
@@ -92,14 +104,8 @@ function AppreciationTable({
       {APPRECIATION_ROWS.map((row) => (
         <Fragment key={row.key}>
           <span className="appreciation-rowhead">{row.label}</span>
-          <div className="metric-card">
-            <p className="metric-value">{reviews[row.key]}件</p>
-          </div>
-          {stamps && (
-            <div className="metric-card">
-              <p className="metric-value">{stamps[row.key]}件</p>
-            </div>
-          )}
+          <ValueCell n={reviews[row.key]} />
+          {stamps && <ValueCell n={stamps[row.key]} />}
         </Fragment>
       ))}
     </div>
