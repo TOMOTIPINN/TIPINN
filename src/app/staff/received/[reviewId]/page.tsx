@@ -8,7 +8,11 @@ import RoleBar from "@/components/RoleBar";
 import { resolveSalonRole } from "@/lib/display-role";
 import { getTier } from "@/lib/rating-tiers";
 import { REVIEW_RATINGS } from "@/lib/review";
-import { jstPeriodStartISO, rankForCount } from "@/lib/staff-stats";
+import {
+  jstPeriodStartISO,
+  rankForCount,
+  PAID_STAMPS_ENABLED,
+} from "@/lib/staff-stats";
 
 /**
  * 13 スタッフ通知（画面マップ13・確定UI＝デッキ v6 P8）。
@@ -48,8 +52,11 @@ async function countEvals(staffId: string, sinceISO?: string): Promise<number> {
     if (sinceISO) q = q.gte("created_at", sinceISO);
     return q;
   };
-  const [r, p] = await Promise.all([head("reviews"), head("rating_purchases")]);
-  return (r.count ?? 0) + (p.count ?? 0);
+  // 評価スタンプ（有償）は有償フラグ ON のときだけ加算（staff/page.tsx と扱いを揃える）。
+  const tasks = [head("reviews")];
+  if (PAID_STAMPS_ENABLED) tasks.push(head("rating_purchases"));
+  const results = await Promise.all(tasks);
+  return results.reduce((sum, res) => sum + (res.count ?? 0), 0);
 }
 
 function one<T>(v: T | T[] | null): T | null {
@@ -203,16 +210,18 @@ export default async function StaffReceivedPage({
 
         <hr className="rule" />
 
-        {/* 累計（今週件数）／ランク */}
+        {/* 累計（今週件数）／ランク（ランクは有償フラグ ON のときのみ） */}
         <div className="received-foot">
           <span>
             <span className="received-foot-label">累計</span>
             <span className="received-foot-value">{weekCount}</span>
           </span>
-          <span>
-            <span className="received-foot-label">ランク</span>
-            <span className="received-foot-value">{rank}</span>
-          </span>
+          {PAID_STAMPS_ENABLED && (
+            <span>
+              <span className="received-foot-label">ランク</span>
+              <span className="received-foot-value">{rank}</span>
+            </span>
+          )}
         </div>
 
         <Link href="/staff" className="btn btn-quiet btn-block">
