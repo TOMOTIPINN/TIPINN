@@ -150,6 +150,20 @@ export default async function StaffHomePage() {
   const youScope = { staffId: ctx.staff_id } as const;
   const salonScope = { salonId: ctx.salon_id, wholeSalon: true } as const;
 
+  // Team voices の中身はロールで出し分ける（件数の集計は不変＝数字は全部・中身は選ばれたものだけ）。
+  //  ・staff       : share_scope='everyone' かつ rating>=3 のみ（either は「全員に見せる」明示でない／
+  //                  rating 1,2 は要対応の声で店長が受け止める）。
+  //  ・manager/owner: 従来どおり manager_only 以外・rating 制限なし。
+  const displayRole = await resolveSalonRole(ctx);
+  const voicesBase = supabaseAdmin
+    .from("reviews")
+    .select("id, body, rating, created_at, share_scope, staff(name)")
+    .eq("salon_id", ctx.salon_id);
+  const voicesQuery =
+    displayRole === "staff"
+      ? voicesBase.eq("share_scope", "everyone").gte("rating", 3)
+      : voicesBase.neq("share_scope", "manager_only");
+
   // 感想（reviews）: あなたへ／お店への各グループ×今週/今月/今期 ＋ Team voices。
   const [youRvW, youRvM, youRvQ, shopRvW, shopRvM, shopRvQ, voicesRes] =
     await Promise.all([
@@ -159,14 +173,7 @@ export default async function StaffHomePage() {
       countRows("reviews", salonScope, weekStart),
       countRows("reviews", salonScope, monthStart),
       countRows("reviews", salonScope, quarterStart),
-      // Team voices: 同サロンの新着感想（店長のみ宛＝manager_only は除外）。
-      supabaseAdmin
-        .from("reviews")
-        .select("id, body, rating, created_at, share_scope, staff(name)")
-        .eq("salon_id", ctx.salon_id)
-        .neq("share_scope", "manager_only")
-        .order("created_at", { ascending: false })
-        .limit(5),
+      voicesQuery.order("created_at", { ascending: false }).limit(5),
     ]);
 
   const youReviews: PeriodCounts = {
@@ -210,8 +217,6 @@ export default async function StaffHomePage() {
   const voices = (voicesRes.data ?? []) as VoiceRow[];
 
   const greeting = GREETING_LABEL[jstGreeting()];
-
-  const displayRole = await resolveSalonRole(ctx);
 
   return (
     <main className="page page-top" data-role={displayRole}>
