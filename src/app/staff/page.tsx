@@ -75,7 +75,7 @@ function AppreciationRow({
   return (
     <div className="stack-sm">
       <p className="metric-label">{kind}</p>
-      <div className="metric-grid">
+      <div className="metric-grid is-compact">
         <div className="metric-card">
           <p className="metric-label">今週</p>
           <p className="metric-value">{counts.week}件</p>

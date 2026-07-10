@@ -902,6 +902,15 @@ textarea.field {
   .metric-grid { grid-template-columns: 1fr; }
 }
 
+/* Your appreciation（画面12）用のコンパクト版：狭幅（スマホ）でも横3列を維持し、
+   数値を縮めて収める。metric-grid/metric-card を土台に再利用し、寸法だけ調整（§8）。 */
+.metric-grid.is-compact { gap: var(--space-sm); }
+.metric-grid.is-compact .metric-card { padding: var(--space-md) var(--space-sm); }
+.metric-grid.is-compact .metric-value { font-size: 1.25rem; }
+@media (max-width: 520px) {
+  .metric-grid.is-compact { grid-template-columns: repeat(3, 1fr); }
+}
+
 /* 前期間比の方向色（§12・サロンHRステータス配色）。
    上昇＝ミントのポイント使い／横ばい・下降は既定のグレーのまま（赤は使わない＝褪せグレー）。
    白地での小さな文字の可読性のため mint-deep を ink 側に締める（.vip-badge と同じ流儀でAA確保）。 */
