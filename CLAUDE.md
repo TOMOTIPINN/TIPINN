@@ -36,6 +36,7 @@
   - `SUPABASE_SECRET_KEY`（旧 service_role key 相当）
 - **DB書き込みは全て** `@/lib/supabase-admin` の共有 `supabaseAdmin`（service_role）をサーバー側で使う。**独自に `createClient` しない。**
 - **マイグレーションは `supabase/migrations/` にSQLを置きつつ、適用は常にSupabase SQLエディタで手動。`supabase db push` は使わない。**
+- **既存関数を `drop function` → `create function` で再定義する migration を書くときは、必ず本番の `prosrc` を `select` して現行本文を確認し、過去の migration が追加した処理を全部持ってくること。**（実例: 0019 が 0014 の `notification_outbox` enqueue を落とし、7/8〜7/10 の2日間、全サロンで来店リマインド通知が停止した。0021 で再統合。）
 - セッション: `@/lib/session` の `getSession()` → `{ customer_id, line_user_id } | null`。Cookie名 `echo_session`。
 
 ---
