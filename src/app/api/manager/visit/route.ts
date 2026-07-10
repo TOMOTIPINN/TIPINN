@@ -13,6 +13,8 @@ import { requireManager } from "@/lib/manager-guard";
  */
 const CYCLE_MIN = 10;
 const CYCLE_MAX = 20;
+const NOTIFY_MIN = 30;
+const NOTIFY_MAX = 360;
 
 export async function POST(req: Request) {
   const gate = await requireManager();
@@ -22,19 +24,67 @@ export async function POST(req: Request) {
   const isJson = (req.headers.get("content-type") ?? "").includes(
     "application/json",
   );
+  const baseUrl = process.env.APP_BASE_URL!;
 
-  let enabled: boolean;
-  let sizeRaw: unknown;
-  if (isJson) {
-    const body = await req.json().catch(() => null);
-    enabled = body?.visit_axis_enabled === true;
-    sizeRaw = body?.visit_cycle_size;
-  } else {
-    const form = await req.formData().catch(() => null);
-    // 未チェックのcheckboxはフィールド自体が送られない＝存在でtrue。
-    enabled = form?.get("visit_axis_enabled") != null;
-    sizeRaw = form?.get("visit_cycle_size");
+  // body/form を1度だけ読み、section で保存対象を分岐（single-read: bodyは二重取得できない）。
+  const body = isJson ? await req.json().catch(() => null) : null;
+  const form = isJson ? null : await req.formData().catch(() => null);
+  const field = (name: string): unknown =>
+    isJson ? body?.[name] : form?.get(name);
+
+  // ── 来店後の感想リクエスト（notify_after_minutes 単体保存・他フィールド非巻き込み）──
+  if (field("section") === "notify") {
+    const notifyRaw = field("notify_after_minutes");
+    const mins =
+      typeof notifyRaw === "number"
+        ? notifyRaw
+        : typeof notifyRaw === "string" && notifyRaw.trim() !== ""
+          ? Number(notifyRaw)
+          : NaN;
+    // 0014 の CHECK（30〜360）と一致。整数のみ許可。
+    if (!Number.isInteger(mins) || mins < NOTIFY_MIN || mins > NOTIFY_MAX) {
+      if (isJson) {
+        return NextResponse.json(
+          { error: "invalid_notify_after_minutes" },
+          { status: 400 },
+        );
+      }
+      return NextResponse.redirect(
+        new URL(`/manager/visit?error=notify_range`, baseUrl),
+        { status: 303 },
+      );
+    }
+
+    // notify_after_minutes のみ更新（visit_axis_enabled / visit_cycle_size は触らない）。
+    const { data, error } = await supabaseAdmin
+      .from("salons")
+      .update({ notify_after_minutes: mins })
+      .eq("id", ctx.salon_id)
+      .select("id")
+      .maybeSingle();
+
+    if (error) {
+      console.error("notify settings update failed:", error);
+      return NextResponse.json({ error: "server_error" }, { status: 500 });
+    }
+    if (!data) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
+    }
+
+    if (isJson) {
+      return NextResponse.json({ ok: true, notify_after_minutes: mins });
+    }
+    return NextResponse.redirect(
+      new URL(`/manager/visit?saved=1`, baseUrl),
+      { status: 303 },
+    );
   }
+
+  // 未チェックのcheckboxはフィールド自体が送られない＝存在でtrue。
+  const enabled = isJson
+    ? body?.visit_axis_enabled === true
+    : form?.get("visit_axis_enabled") != null;
+  const sizeRaw = field("visit_cycle_size");
 
   // 数値化（form-dataは文字列）。整数かつ 10〜20 のみ許可。
   const size =
@@ -47,7 +97,6 @@ export async function POST(req: Request) {
     if (isJson) {
       return NextResponse.json({ error: "invalid_cycle_size" }, { status: 400 });
     }
-    const baseUrl = process.env.APP_BASE_URL!;
     return NextResponse.redirect(
       new URL(`/manager/visit?error=range`, baseUrl),
       { status: 303 },
@@ -78,7 +127,6 @@ export async function POST(req: Request) {
     });
   }
 
-  const baseUrl = process.env.APP_BASE_URL!;
   return NextResponse.redirect(new URL(`/manager/visit?saved=1`, baseUrl), {
     status: 303,
   });

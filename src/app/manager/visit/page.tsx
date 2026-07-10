@@ -17,11 +17,14 @@ import { resolveSalonRole } from "@/lib/display-role";
  */
 const CYCLE_MIN = 10;
 const CYCLE_MAX = 20;
+const NOTIFY_MIN = 30;
+const NOTIFY_MAX = 360;
 
 type SalonVisit = {
   name: string;
   visit_axis_enabled: boolean;
   visit_cycle_size: number;
+  notify_after_minutes: number;
 };
 
 export default async function ManagerVisitPage({
@@ -57,12 +60,13 @@ export default async function ManagerVisitPage({
 
   const { data: salon } = await supabaseAdmin
     .from("salons")
-    .select("name, visit_axis_enabled, visit_cycle_size")
+    .select("name, visit_axis_enabled, visit_cycle_size, notify_after_minutes")
     .eq("id", ctx.salon_id)
     .single<SalonVisit>();
 
   const enabled = salon?.visit_axis_enabled === true;
   const cycleSize = salon?.visit_cycle_size ?? 20;
+  const notifyAfter = salon?.notify_after_minutes ?? 180;
 
   const displayRole = await resolveSalonRole(ctx);
 
@@ -84,6 +88,11 @@ export default async function ManagerVisitPage({
         {error === "range" && (
           <div className="notice notice-error">
             ハードルは{CYCLE_MIN}〜{CYCLE_MAX}の数値で入力してください。
+          </div>
+        )}
+        {error === "notify_range" && (
+          <div className="notice notice-error">
+            感想リクエストは{NOTIFY_MIN}〜{NOTIFY_MAX}分の数値で入力してください。
           </div>
         )}
 
@@ -121,6 +130,40 @@ export default async function ManagerVisitPage({
               />
               <span className="field-help">
                 この回数ごとに特典が発動します（例：20なら20回・40回…）。
+              </span>
+            </div>
+
+            <button type="submit" className="btn btn-outline btn-block">
+              保存する
+            </button>
+          </form>
+        </Card>
+
+        {/* 来店後の感想リクエスト通知（notify_after_minutes 単体保存・他フィールド非巻き込み） */}
+        <Card>
+          <form action="/api/manager/visit" method="post" className="stack-md">
+            <input type="hidden" name="section" value="notify" />
+            <div className="field-group">
+              <label className="field-label" htmlFor="notify_after_minutes">
+                来店後の感想リクエスト
+              </label>
+              <span className="field-help">
+                来店受付から{notifyAfter}分後にLINEでお届けします。
+              </span>
+              <input
+                id="notify_after_minutes"
+                name="notify_after_minutes"
+                className="field"
+                type="number"
+                min={NOTIFY_MIN}
+                max={NOTIFY_MAX}
+                step={1}
+                required
+                defaultValue={notifyAfter}
+              />
+              <span className="field-help">
+                {NOTIFY_MIN}〜{NOTIFY_MAX}分で設定できます。通知は10分ごとに送信処理を行うため、
+                実際の着信は最大10分ほど遅れます。
               </span>
             </div>
 
