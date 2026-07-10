@@ -35,6 +35,8 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
   const [staffId, setStaffId] = useState("");
+  // 「お店のみんなへ」（サロン全体宛＝staff_id null）。staffId と排他。
+  const [toSalon, setToSalon] = useState(false);
   const [rating, setRating] = useState<Rating | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [shareScope, setShareScope] = useState<ShareScope | null>(null);
@@ -70,7 +72,7 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
   const trimmedLen = body.trim().length;
   const canSubmit =
     !submitting &&
-    !!staffId &&
+    (toSalon || !!staffId) &&
     rating !== null &&
     shareScope !== null &&
     trimmedLen >= REVIEW_BODY_MIN &&
@@ -96,6 +98,7 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
         body: JSON.stringify({
           salonId,
           staffId,
+          toSalon,
           body: body.trim(),
           rating,
           tags,
@@ -139,8 +142,26 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
             <p className="muted">読み込み中…</p>
           ) : (
             <div className="staff-pick" role="radiogroup" aria-label="スタッフ">
+              {/* お店のみんなへ（サロン全体宛＝staff_id null）。写真カードの先頭に置く。 */}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={toSalon}
+                className={`staff-pick-card${toSalon ? " is-active" : ""}`}
+                onClick={() => {
+                  setToSalon(true);
+                  setStaffId("");
+                }}
+                disabled={submitting}
+              >
+                <span className="staff-photo" aria-hidden="true">
+                  <LogoCircle logoUrl={null} fallback="店" />
+                </span>
+                <span className="staff-pick-name">お店のみんなへ</span>
+                <span className="staff-pick-jobtitle">サロン全体</span>
+              </button>
               {staff.map((s) => {
-                const active = staffId === s.id;
+                const active = !toSalon && staffId === s.id;
                 return (
                   <button
                     key={s.id}
@@ -148,7 +169,10 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
                     role="radio"
                     aria-checked={active}
                     className={`staff-pick-card${active ? " is-active" : ""}`}
-                    onClick={() => setStaffId(s.id)}
+                    onClick={() => {
+                      setToSalon(false);
+                      setStaffId(s.id);
+                    }}
                     disabled={submitting}
                   >
                     <span className="staff-photo" aria-hidden="true">

@@ -99,11 +99,13 @@ export default async function StaffReceivedPage({
 
   const review = data as ReviewRow | null;
 
-  // 本人宛、または同サロンの店長のみ閲覧可。それ以外は存在を伏せる（not-found 扱い）。
+  // 本人宛、同サロンの店長、またはサロン全体宛（staff_id null）を同サロンのスタッフが閲覧可。
+  // それ以外は存在を伏せる（not-found 扱い）。
   const canView =
     !!review &&
     (review.staff_id === ctx.staff_id ||
-      (ctx.role === "manager" && review.salon_id === ctx.salon_id));
+      (ctx.role === "manager" && review.salon_id === ctx.salon_id) ||
+      (review.staff_id === null && review.salon_id === ctx.salon_id));
 
   if (!review || !canView) {
     return (
@@ -116,6 +118,8 @@ export default async function StaffReceivedPage({
   const customer = one(review.customers);
   const fromName = customer?.display_name ?? "お客様";
   const staffId = review.staff_id;
+  // サロン全体宛（staff_id null）＝「お店のみんなへ」。個人指標（累計/ランク）は出さない。
+  const isSalonWide = staffId === null;
 
   // お客様が送った評価スタンプ（tier）をスタッフに見せる。amount は取得しない（¥非表示）。
   const { data: purchase } = await supabaseAdmin
@@ -128,7 +132,11 @@ export default async function StaffReceivedPage({
   // hero は「お客様が送った評価スタンプ（tier）」の絵柄＋tier名のみ。ムード顔文字は hero に出さない。
   // 無償の感想のみ（tierなし）は中立マーク＋「感想が届きました」にフォールバック。
   const heroEmoji = tierDef ? tierDef.emoji : "✉";
-  const heroTitle = tierDef ? "評価が届きました" : "感想が届きました";
+  const heroTitle = isSalonWide
+    ? "お店に感想が届きました"
+    : tierDef
+      ? "評価が届きました"
+      : "感想が届きました";
 
   // お客様の「その時の気分」＝絵文字評価（最高/よい/普通/改善）。Review セクション側に添える。
   const mood = REVIEW_RATINGS.find((r) => r.value === review.rating) ?? null;
@@ -173,7 +181,9 @@ export default async function StaffReceivedPage({
 
         {/* あなたへの評価 → tier名（件数ではなく評価スタンプの種類を主役にする） */}
         <section className="stack-sm center-text">
-          <p className="received-count-label">あなたへの評価</p>
+          <p className="received-count-label">
+            {isSalonWide ? "お店のみんなへ" : "あなたへの評価"}
+          </p>
           {tierDef ? (
             <p className="received-tier-name">{tierDef.label}</p>
           ) : (
@@ -210,19 +220,22 @@ export default async function StaffReceivedPage({
 
         <hr className="rule" />
 
-        {/* 累計（今週件数）／ランク（ランクは有償フラグ ON のときのみ） */}
-        <div className="received-foot">
-          <span>
-            <span className="received-foot-label">累計</span>
-            <span className="received-foot-value">{weekCount}</span>
-          </span>
-          {PAID_STAMPS_ENABLED && (
+        {/* 累計（今週件数）／ランク。個人指標のためサロン全体宛では丸ごと非表示。
+            ランクはさらに有償フラグ ON のときのみ。 */}
+        {!isSalonWide && (
+          <div className="received-foot">
             <span>
-              <span className="received-foot-label">ランク</span>
-              <span className="received-foot-value">{rank}</span>
+              <span className="received-foot-label">累計</span>
+              <span className="received-foot-value">{weekCount}</span>
             </span>
-          )}
-        </div>
+            {PAID_STAMPS_ENABLED && (
+              <span>
+                <span className="received-foot-label">ランク</span>
+                <span className="received-foot-value">{rank}</span>
+              </span>
+            )}
+          </div>
+        )}
 
         <Link href="/staff" className="btn btn-quiet btn-block">
           ホームへ

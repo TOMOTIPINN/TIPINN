@@ -17,6 +17,7 @@ export async function POST(req: Request) {
   let payload: {
     salonId?: string;
     staffId?: string;
+    toSalon?: boolean;
     body?: string;
     rating?: unknown;
     tags?: unknown;
@@ -28,8 +29,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const { salonId, staffId, body, rating, tags, shareScope } = payload;
-  if (!salonId || !staffId || typeof body !== "string") {
+  const { salonId, staffId, toSalon, body, rating, tags, shareScope } = payload;
+  if (!salonId || typeof body !== "string") {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
 
@@ -51,17 +52,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_tags" }, { status: 400 });
   }
 
-  // 退職者（archived_at 有り）／他サロン／不存在の staff には新規感想を受け付けない。
-  // 過去の reviews は残す（論理削除のため staff_id は保持される）。
-  const { data: staff } = await supabaseAdmin
-    .from("staff")
-    .select("id")
-    .eq("id", staffId)
-    .eq("salon_id", salonId)
-    .is("archived_at", null)
-    .maybeSingle();
-  if (!staff) {
-    return NextResponse.json({ error: "invalid_staff" }, { status: 400 });
+  // 宛先の解決。toSalon===true は「お店のみんなへ」＝staff_id null（明示フラグで未選択と区別）。
+  // それ以外は staffId 必須。空文字/undefined を null と取り違えない（未選択は 400）。
+  let resolvedStaffId: string | null;
+  if (toSalon === true) {
+    resolvedStaffId = null;
+  } else {
+    if (!staffId || typeof staffId !== "string") {
+      return NextResponse.json({ error: "invalid_input" }, { status: 400 });
+    }
+    // 退職者（archived_at 有り）／他サロン／不存在の staff には新規感想を受け付けない。
+    // 過去の reviews は残す（論理削除のため staff_id は保持される）。
+    const { data: staff } = await supabaseAdmin
+      .from("staff")
+      .select("id")
+      .eq("id", staffId)
+      .eq("salon_id", salonId)
+      .is("archived_at", null)
+      .maybeSingle();
+    if (!staff) {
+      return NextResponse.json({ error: "invalid_staff" }, { status: 400 });
+    }
+    resolvedStaffId = staffId;
   }
 
   const { data, error } = await supabaseAdmin.rpc(
@@ -69,7 +81,7 @@ export async function POST(req: Request) {
     {
       p_customer_id: session.customer_id,
       p_salon_id: salonId,
-      p_staff_id: staffId,
+      p_staff_id: resolvedStaffId,
       p_body: body.trim(),
       p_rating: rating,
       p_tags: normalizedTags,
