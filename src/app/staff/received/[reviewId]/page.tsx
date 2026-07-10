@@ -12,6 +12,7 @@ import {
   jstPeriodStartISO,
   rankForCount,
   PAID_STAMPS_ENABLED,
+  RANK_ENABLED,
 } from "@/lib/staff-stats";
 
 /**
@@ -99,13 +100,12 @@ export default async function StaffReceivedPage({
 
   const review = data as ReviewRow | null;
 
-  // 本人宛、同サロンの店長、またはサロン全体宛（staff_id null）を同サロンのスタッフが閲覧可。
-  // それ以外は存在を伏せる（not-found 扱い）。
+  // 本人宛、または同サロンの店長のみ閲覧可。それ以外は存在を伏せる（not-found 扱い）。
+  // サロン全体宛（staff_id null）も manager 経路（同サロン）でのみ閲覧できる。
   const canView =
     !!review &&
     (review.staff_id === ctx.staff_id ||
-      (ctx.role === "manager" && review.salon_id === ctx.salon_id) ||
-      (review.staff_id === null && review.salon_id === ctx.salon_id));
+      (ctx.role === "manager" && review.salon_id === ctx.salon_id));
 
   if (!review || !canView) {
     return (
@@ -221,14 +221,14 @@ export default async function StaffReceivedPage({
         <hr className="rule" />
 
         {/* 累計（今週件数）／ランク。個人指標のためサロン全体宛では丸ごと非表示。
-            ランクはさらに有償フラグ ON のときのみ。 */}
+            ランクはさらに RANK_ENABLED のときのみ（件数は出すがランクは伏せる）。 */}
         {!isSalonWide && (
           <div className="received-foot">
             <span>
               <span className="received-foot-label">累計</span>
               <span className="received-foot-value">{weekCount}</span>
             </span>
-            {PAID_STAMPS_ENABLED && (
+            {RANK_ENABLED && (
               <span>
                 <span className="received-foot-label">ランク</span>
                 <span className="received-foot-value">{rank}</span>

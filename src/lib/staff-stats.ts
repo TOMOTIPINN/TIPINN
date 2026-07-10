@@ -61,11 +61,17 @@ export const GREETING_LABEL: Record<ReturnType<typeof jstGreeting>, string> = {
 };
 
 /**
- * 有償「評価スタンプ」機能の表示スイッチ（唯一の正・§8）。
- * salons に有償フラグを持たない現状は false 固定＝評価スタンプ件数・ランク表示を全面 OFF。
- * 将来サロン単位で出し分ける場合はこの定数を差し替える（呼び出し側は真偽だけ見る）。
+ * 有償「評価スタンプ」件数の表示スイッチ（唯一の正・§8）。
+ * true＝評価スタンプの件数（¥ではない）を集計・表示する。
+ * ランク表示は別スイッチ RANK_ENABLED で制御する（件数は出すがランクは伏せる、が可能）。
  */
-export const PAID_STAMPS_ENABLED: boolean = false;
+export const PAID_STAMPS_ENABLED: boolean = true;
+
+/**
+ * ランク（A/B/C/D）表示のスイッチ（唯一の正・§8）。
+ * 現状は仮閾値で誤解を招くため false＝ランクは伏せる（PAID_STAMPS_ENABLED とは独立）。
+ */
+export const RANK_ENABLED: boolean = false;
 
 /**
  * 受け取った評価件数 → ランク（A/B/C/D）。

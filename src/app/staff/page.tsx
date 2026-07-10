@@ -12,6 +12,7 @@ import {
   jstPeriodStartISO,
   rankForCount,
   PAID_STAMPS_ENABLED,
+  RANK_ENABLED,
 } from "@/lib/staff-stats";
 
 /**
@@ -34,14 +35,14 @@ type VoiceRow = {
   staff: { name: string } | { name: string }[] | null;
 };
 
-/** 集計スコープ: あなたへ（staff_id 一致）／お店へ（ALL staff 宛＝staff_id is null・salon_id 軸）。 */
-type CountScope = { staffId: string } | { salonId: string; allStaff: true };
+/** 集計スコープ: あなたへ（staff_id 一致）／お店全体（salon_id のみ・staff_id 不問＝あなた宛も含む全レビュー）。 */
+type CountScope = { staffId: string } | { salonId: string; wholeSalon: true };
 
 type PeriodCounts = { week: number; month: number; quarter: number };
 
 /**
  * 件数カウント（¥は数えない・件数のみ）。[since, until) の半開区間で絞れる。
- * お店へ（allStaff）の salon_id は呼び出し側が必ず ctx.salon_id を渡す
+ * お店全体（wholeSalon）の salon_id は呼び出し側が必ず ctx.salon_id を渡す
  * （クライアントからは受け取らない構造・§8）。
  */
 async function countRows(
@@ -54,7 +55,8 @@ async function countRows(
   if ("staffId" in scope) {
     q = q.eq("staff_id", scope.staffId);
   } else {
-    q = q.is("staff_id", null).eq("salon_id", scope.salonId);
+    // お店全体＝salon_id のみで絞る（staff_id 不問。あなた宛・他スタッフ宛・全体宛すべて）。
+    q = q.eq("salon_id", scope.salonId);
   }
   if (sinceISO) q = q.gte("created_at", sinceISO);
   if (untilISO) q = q.lt("created_at", untilISO);
@@ -125,9 +127,9 @@ export default async function StaffHomePage() {
   const monthStart = jstPeriodStartISO("month");
   const quarterStart = jstPeriodStartISO("quarter");
 
-  // 集計スコープ。お店へ（ALL staff 宛）の salon_id は必ず ctx 由来（クライアント非経由・§8）。
+  // 集計スコープ。お店全体の salon_id は必ず ctx 由来（クライアント非経由・§8）。
   const youScope = { staffId: ctx.staff_id } as const;
-  const salonScope = { salonId: ctx.salon_id, allStaff: true } as const;
+  const salonScope = { salonId: ctx.salon_id, wholeSalon: true } as const;
 
   // 感想（reviews）: あなたへ／お店への各グループ×今週/今月/今期 ＋ Team voices。
   const [youRvW, youRvM, youRvQ, shopRvW, shopRvM, shopRvQ, voicesRes] =
@@ -159,33 +161,30 @@ export default async function StaffHomePage() {
     quarter: shopRvQ,
   };
 
-  // 評価スタンプ（rating_purchases）とランクは有償フラグ ON のときだけ集計・表示（¥は出さない）。
+  // 評価スタンプ（rating_purchases）の件数は PAID_STAMPS_ENABLED のときだけ集計・表示（¥は出さない）。
   let youStamps: PeriodCounts | null = null;
   let shopStamps: PeriodCounts | null = null;
-  let rank: "A" | "B" | "C" | "D" | null = null;
   if (PAID_STAMPS_ENABLED) {
-    const [
-      youPvW,
-      youPvM,
-      youPvQ,
-      shopPvW,
-      shopPvM,
-      shopPvQ,
-      youRvTotal,
-      youPvTotal,
-    ] = await Promise.all([
-      countRows("rating_purchases", youScope, weekStart),
-      countRows("rating_purchases", youScope, monthStart),
-      countRows("rating_purchases", youScope, quarterStart),
-      countRows("rating_purchases", salonScope, weekStart),
-      countRows("rating_purchases", salonScope, monthStart),
-      countRows("rating_purchases", salonScope, quarterStart),
+    const [youPvW, youPvM, youPvQ, shopPvW, shopPvM, shopPvQ] =
+      await Promise.all([
+        countRows("rating_purchases", youScope, weekStart),
+        countRows("rating_purchases", youScope, monthStart),
+        countRows("rating_purchases", youScope, quarterStart),
+        countRows("rating_purchases", salonScope, weekStart),
+        countRows("rating_purchases", salonScope, monthStart),
+        countRows("rating_purchases", salonScope, quarterStart),
+      ]);
+    youStamps = { week: youPvW, month: youPvM, quarter: youPvQ };
+    shopStamps = { week: shopPvW, month: shopPvM, quarter: shopPvQ };
+  }
+
+  // ランクは RANK_ENABLED のときだけ（PAID_STAMPS_ENABLED とは独立）。あなたへ通算（感想＋評価スタンプ）基準。
+  let rank: "A" | "B" | "C" | "D" | null = null;
+  if (RANK_ENABLED) {
+    const [youRvTotal, youPvTotal] = await Promise.all([
       countRows("reviews", youScope),
       countRows("rating_purchases", youScope),
     ]);
-    youStamps = { week: youPvW, month: youPvM, quarter: youPvQ };
-    shopStamps = { week: shopPvW, month: shopPvM, quarter: shopPvQ };
-    // ランクは あなたへ の通算（感想＋評価スタンプ）基準。
     rank = rankForCount(youRvTotal + youPvTotal);
   }
 
@@ -227,7 +226,8 @@ export default async function StaffHomePage() {
           </div>
 
           <div className="stack-sm">
-            <h2 className="headline-sm">お店へ</h2>
+            <h2 className="headline-sm">お店全体</h2>
+            <p className="muted">（あなたへの分を含む）</p>
             <AppreciationRow kind="感想" counts={shopReviews} />
             {shopStamps && (
               <AppreciationRow kind="評価スタンプ" counts={shopStamps} />
