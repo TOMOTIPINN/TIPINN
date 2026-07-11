@@ -13,8 +13,9 @@ import { requireManager } from "@/lib/manager-guard";
  */
 const CYCLE_MIN = 10;
 const CYCLE_MAX = 20;
-const NOTIFY_MIN = 30;
+const NOTIFY_MIN = 10;
 const NOTIFY_MAX = 360;
+const NOTIFY_STEP = 10;
 
 export async function POST(req: Request) {
   const gate = await requireManager();
@@ -41,8 +42,13 @@ export async function POST(req: Request) {
         : typeof notifyRaw === "string" && notifyRaw.trim() !== ""
           ? Number(notifyRaw)
           : NaN;
-    // 0014 の CHECK（30〜360）と一致。整数のみ許可。
-    if (!Number.isInteger(mins) || mins < NOTIFY_MIN || mins > NOTIFY_MAX) {
+    // DB の CHECK（10〜360 かつ 10の倍数）と一致。整数かつ 10分刻みのみ許可。
+    if (
+      !Number.isInteger(mins) ||
+      mins < NOTIFY_MIN ||
+      mins > NOTIFY_MAX ||
+      mins % NOTIFY_STEP !== 0
+    ) {
       if (isJson) {
         return NextResponse.json(
           { error: "invalid_notify_after_minutes" },

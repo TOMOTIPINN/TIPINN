@@ -17,8 +17,14 @@ import { resolveSalonRole } from "@/lib/display-role";
  */
 const CYCLE_MIN = 10;
 const CYCLE_MAX = 20;
-const NOTIFY_MIN = 30;
+const NOTIFY_MIN = 10;
 const NOTIFY_MAX = 360;
+const NOTIFY_STEP = 10;
+// 10, 20, 30 … 360（10分刻み・計36個）。DBの CHECK（10〜360 かつ 10の倍数）と一致。
+const NOTIFY_OPTIONS = Array.from(
+  { length: (NOTIFY_MAX - NOTIFY_MIN) / NOTIFY_STEP + 1 },
+  (_, i) => NOTIFY_MIN + i * NOTIFY_STEP,
+);
 
 type SalonVisit = {
   name: string;
@@ -92,7 +98,7 @@ export default async function ManagerVisitPage({
         )}
         {error === "notify_range" && (
           <div className="notice notice-error">
-            感想リクエストは{NOTIFY_MIN}〜{NOTIFY_MAX}分の数値で入力してください。
+            感想リクエストは{NOTIFY_MIN}〜{NOTIFY_MAX}分（10分刻み）で設定してください。
           </div>
         )}
 
@@ -150,19 +156,21 @@ export default async function ManagerVisitPage({
               <span className="field-help">
                 来店受付から{notifyAfter}分後にLINEでお届けします。
               </span>
-              <input
+              <select
                 id="notify_after_minutes"
                 name="notify_after_minutes"
                 className="field"
-                type="number"
-                min={NOTIFY_MIN}
-                max={NOTIFY_MAX}
-                step={1}
                 required
                 defaultValue={notifyAfter}
-              />
+              >
+                {NOTIFY_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}分
+                  </option>
+                ))}
+              </select>
               <span className="field-help">
-                {NOTIFY_MIN}〜{NOTIFY_MAX}分で設定できます。通知は10分ごとに送信処理を行うため、
+                {NOTIFY_MIN}〜{NOTIFY_MAX}分（10分刻み）で設定できます。通知は10分ごとに送信処理を行うため、
                 実際の着信は最大10分ほど遅れます。
               </span>
             </div>
