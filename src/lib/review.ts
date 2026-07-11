@@ -55,11 +55,10 @@ export function normalizeTags(tags: unknown): string[] | null {
   return out;
 }
 
-/* ---- 共有範囲（店長のみ/全員に/どちらでも） ---- */
+/* ---- 共有範囲（店長のみ/全員に） ---- */
 export const SHARE_SCOPES = [
   { value: "manager_only", label: "店長のみ" },
   { value: "everyone", label: "全員に" },
-  { value: "either", label: "どちらでも" },
 ] as const;
 
 export type ShareScope = (typeof SHARE_SCOPES)[number]["value"];
