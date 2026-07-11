@@ -37,6 +37,7 @@
 - **DB書き込みは全て** `@/lib/supabase-admin` の共有 `supabaseAdmin`（service_role）をサーバー側で使う。**独自に `createClient` しない。**
 - **マイグレーションは `supabase/migrations/` にSQLを置きつつ、適用は常にSupabase SQLエディタで手動。`supabase db push` は使わない。**
 - **既存関数を `drop function` → `create function` で再定義する migration を書くときは、必ず本番の `prosrc` を `select` して現行本文を確認し、過去の migration が追加した処理を全部持ってくること。**（実例: 0019 が 0014 の `notification_outbox` enqueue を落とし、7/8〜7/10 の2日間、全サロンで来店リマインド通知が停止した。0021 で再統合。）
+- **顧客の表示に関わる bool フラグ（`visit_axis_enabled` 等）は、新規サロン登録時に DB のカラムデフォルトで決まる。表示系フラグを追加・変更するときは、デフォルトが「顧客に見える側」になっているか必ず確認すること。**（実例: `visit_axis_enabled` が `default false` で作られており、新店の来店カードが全顧客に非表示になっていた。2026-07-11 発見・修正、0022 でデフォルト true 化。）
 - セッション: `@/lib/session` の `getSession()` → `{ customer_id, line_user_id } | null`。Cookie名 `echo_session`。
 
 ---
