@@ -15,12 +15,20 @@ export default async function RatingPage({
 }: {
   searchParams: Promise<{ salon?: string; staff?: string; reviewed?: string }>;
 }) {
+  // returnTo に元のパス（?salon=…&staff=…&reviewed=…）を載せるため、先にクエリを解決する。
+  // 未ログインでログインへ飛ばす際、ログイン後に同じ /rating へ戻すため（QR/通知導線・§8）。
+  const { salon: salonId, staff: staffId, reviewed } = await searchParams;
+
   const session = await getSession();
   if (!session) {
-    redirect("/api/auth/line/login");
+    const params = new URLSearchParams();
+    if (salonId) params.set("salon", salonId);
+    if (staffId) params.set("staff", staffId);
+    if (reviewed) params.set("reviewed", reviewed);
+    const qs = params.toString();
+    const returnTo = qs ? `/rating?${qs}` : "/rating";
+    redirect(`/api/auth/line/login?returnTo=${encodeURIComponent(returnTo)}`);
   }
-
-  const { salon: salonId, staff: staffId, reviewed } = await searchParams;
   // reviewed が付いていれば感想は送信済み → 「感想だけ送る」は不要。
   // フェイルセーフ：値が無ければ falsy として現状どおり表示する（緩い存在判定）。
   const alreadyReviewed = Boolean(reviewed);

@@ -16,12 +16,17 @@ export default async function ReviewPage({
 }: {
   searchParams: Promise<{ salon?: string }>;
 }) {
+  // returnTo に元のパス（?salon=…）を載せるため、salonId を先に解決する。
+  // 未ログインでログインへ飛ばす際、ログイン後に同じ /review へ戻すため（QR/通知導線・§8）。
+  const { salon: salonId } = await searchParams;
+
   const session = await getSession();
   if (!session) {
-    redirect("/api/auth/line/login");
+    const returnTo = salonId
+      ? `/review?salon=${encodeURIComponent(salonId)}`
+      : "/review";
+    redirect(`/api/auth/line/login?returnTo=${encodeURIComponent(returnTo)}`);
   }
-
-  const { salon: salonId } = await searchParams;
   if (!salonId) {
     return (
       <main className="page">
