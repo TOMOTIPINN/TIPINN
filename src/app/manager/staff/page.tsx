@@ -15,6 +15,7 @@ import { resolveSalonRole } from "@/lib/display-role";
 import { LogoCircle } from "@/components/LogoCircle";
 import CopyButton from "./CopyButton";
 import AddStaffForm from "./AddStaffForm";
+import DeleteStaffButton from "./DeleteStaffButton";
 
 /**
  * A1 スタッフ管理（/manager/staff・サロンUI世界 / [[auth-method-line-b]]）。
@@ -52,9 +53,10 @@ export default async function ManagerStaffPage({
     reissued?: string;
     archived?: string;
     restored?: string;
+    deleted?: string;
   }>;
 }) {
-  const { created, reissued, archived, restored } = await searchParams;
+  const { created, reissued, archived, restored, deleted } = await searchParams;
 
   const session = await getSession();
   if (!session) {
@@ -151,6 +153,12 @@ export default async function ManagerStaffPage({
           </div>
         )}
 
+        {deleted && (
+          <div className="notice notice-success">
+            スタッフを削除しました。
+          </div>
+        )}
+
         {/* 新規追加フォーム（送信→作成→/manager/staff?created= に戻りQR表示）。
             二重送信防止のため client component（submitting disabled + idempotency_key）。 */}
         <Card>
@@ -243,6 +251,17 @@ export default async function ManagerStaffPage({
                       </button>
                     </form>
                   )}
+
+                  {/* 誤登録の重複を消す用の hard delete（実績ゼロのみ・確認モーダル）。
+                      実在スタッフの退職は編集ページの archive を使う棲み分け。 */}
+                  <DeleteStaffButton
+                    staffId={v.row.id}
+                    name={v.row.name}
+                    photoUrl={v.row.photo_url}
+                    photoPosX={v.row.photo_pos_x}
+                    photoPosY={v.row.photo_pos_y}
+                    photoZoom={v.row.photo_zoom}
+                  />
                 </div>
               </Card>
             ))

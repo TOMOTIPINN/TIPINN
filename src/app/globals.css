@@ -346,6 +346,52 @@ a {
 /* LINE 等の外部認証導線（緑は使わず、控えめな枠で統一） */
 .btn-block { width: 100%; }
 
+/* スタッフカードの削除リンク（控えめ・褪せグレー。赤は使わない §12）。 */
+.staff-delete-link {
+  color: var(--g25);
+  font-size: 0.9rem;
+}
+.staff-delete-link:not(:disabled):hover { color: var(--ink-soft); }
+
+/* ============================================================
+   Modal（確認ダイアログ。白世界・カードUI・§5 / 赤は使わない §12）
+   ============================================================ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  background: rgba(43, 43, 43, 0.32); /* --ink 相当の半透明バックドロップ */
+  animation: fadeIn 0.2s ease both;
+}
+.modal-card {
+  width: 100%;
+  max-width: 24rem;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space-xl) var(--space-lg);
+  animation: fadeInUp 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.modal-staff-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+.modal-staff-name {
+  font-family: var(--font-serif-jp);
+  font-size: 1.15rem;
+  color: var(--ink);
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 /* ============================================================
    Form fields
    ============================================================ */
