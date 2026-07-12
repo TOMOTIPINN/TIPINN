@@ -49,6 +49,8 @@
   ```
 - **migration の「作成」と「適用」は別物。** ローカルで `supabase/migrations/` に SQL ファイルを作っただけでは**本番 DB には一切反映されない**。必ず **Supabase SQL エディタで手動適用（＋ 列/index を変えたら `notify pgrst, 'reload schema';` でスキーマキャッシュをリロード）を先に実行**し、`REST` または `information_schema` でカラム/オブジェクトの**実在を確認してからコードを push** する。（実例: 0023 を「適用した」つもりがファイル作成だけで、本番に `staff.idempotency_key` が無く REST が `column ... does not exist` を返し続けた。2026-07-12。）
 - **表示制御の `disabled` を、送信が必要な `input`/`select`（特に `name` 等の必須フィールド）に付けてはいけない。** ネイティブ form POST では **`disabled` 要素は送信データから脱落**し（HTML 仕様）、サーバー側で必須欠落エラー（例: `invalid_name` 400）→ フォームがハングする。送信中に入力を止めたいなら `readonly` ＋ `pointer-events`、または **fetch 送信にして body を state から明示構築**する（DOM シリアライズに依存しない）。（実例: `AddStaffForm` で送信中に name input を disabled にし、name 欠落で 400・「作成中…」のまま復帰不能。2026-07-12・fetch 化で解消。）
+- **`position: fixed` のモーダル/オーバーレイは `createPortal(..., document.body)` で body 直下に出す。** 祖先要素に `transform`（`animate` 系の `translate` 等を含む・`translateY(0)` でも該当）があると、`position: fixed` の基準がビューポートでなくその祖先になり、中央配置のモーダルが画面外へ飛ぶ。（実例: `.animate-in` の `transform` に閉じ込められ、削除モーダルがオーバーレイだけ見えて中身が画面外。2026-07-12・portal 化で解消。）
+- **取り返しのつかない操作（hard delete 等）は「原因を1つ直す」のではなく「確認を経た状態でしか実行に到達できない」ガードで構造的に守る。** 実行関数の入口で、モーダルの open 状態と実行条件（対象の件数が 0 等）を検査し、満たさなければ即 `return` する。単一機序に依存せず、状態の完全初期化・毎回新しいモーダルDOM（`key`）等と合わせた多層防御にする。（実例: スタッフ連続削除の2回目で確認がスキップされた件を、`handleDelete` 入口ガード＋全リセット＋portal key で不能化。2026-07-12。）
 - **顧客の表示に関わる bool フラグ（`visit_axis_enabled` 等）は、新規サロン登録時に DB のカラムデフォルトで決まる。表示系フラグを追加・変更するときは、デフォルトが「顧客に見える側」になっているか必ず確認すること。**（実例: `visit_axis_enabled` が `default false` で作られており、新店の来店カードが全顧客に非表示になっていた。2026-07-11 発見・修正、0022 でデフォルト true 化。）
 - セッション: `@/lib/session` の `getSession()` → `{ customer_id, line_user_id } | null`。Cookie名 `echo_session`。
 

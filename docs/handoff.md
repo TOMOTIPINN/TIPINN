@@ -74,11 +74,34 @@
 
 15. **本番テストデータのクリーンアップ**: 旧コード時代にスマホ本番で二度押しして生まれた「あみ」2件（`feefdcca-2b60-45a2-b8d6-0eea07861f3f` / `b71ae5cc-1d5c-4796-abf1-be1f891c971a`）を、**reviews 参照なし・未紐付け（`line_user_id`/`bound_at` null）を確認の上 DELETE**。
 
+### 完了（夜・スタッフ削除UI）
+
+16. **スタッフ削除UIを実装**（commit `dd97663`・push 済み）
+    - **archive（実績あり・退職）と hard delete（実績ゼロ・誤登録）の棲み分け**。各在籍カードに削除導線、確認モーダルに photo / 感想件数 / 評価スタンプ件数を表示。
+    - `reviews.staff_id` と `rating_purchases.staff_id` が**両方 0 のときだけ hard delete 可**、どちらか > 0 なら編集ページの archive へ誘導。
+    - 新規: `GET /api/manager/staff/counts`（HEAD count）／`POST /api/manager/staff/delete`（実行直前に両方を再カウントするサーバー権威 guard）。
+    - **マイグレーション不要**（FK は既に `on delete set null`）。localhost 実機で全ケース確認（両方0で削除成功／実績>0で削除ボタン非表示＆archive誘導／連続削除で毎回確認）。
+
+17. **【バグと修正・その1】モーダルが画面中央に出ず、オーバーレイ（グレー）だけになる**
+    - 原因: 祖先の `.animate-in` が持つ `transform: translateY(0)`（`both` fill の残留）が `position: fixed` の**包含ブロック**になり、モーダルがビューポートではなくコンテナ基準で配置され画面外へ飛んでいた。
+    - 対応: `createPortal(..., document.body)` で **body 直下**にレンダーして解消（transform 祖先の外＝viewport 基準に戻る）。
+    - 教訓は CLAUDE.md §3 に鉄則化。
+
+18. **【バグと修正・その2】連続削除の2回目で確認モーダルがスキップされ即削除される**
+    - 原因は単一機序では特定しきれず（各カードは `Card key=staffId` で keyed＝本来は独立 state）、**多層防御で構造的に不可能化**：
+      - `handleDelete` 入口で「`open` かつ この開いたセッションの counts が**両方 0**」でなければ `return` する**厳格ガード（核心）**＝確認を飛ばした delete に到達できない。
+      - 開くたびに全 state 初期化 ＋ portal に `key={openSeq}`（開くたび新しいモーダルDOM）。
+      - 削除成功後 `resetModal()` で完全リセット。
+      - 同一 URL `?deleted=1` への push が no-op になり一覧が更新されない問題を **`router.refresh()`** で回避（URL 不変でも server component 再取得）。
+      - counts fetch に `cache: "no-store"`。
+    - 教訓は CLAUDE.md §3 に鉄則化。
+
+19. スタッフ削除UI は完了（残タスクから削除）。
+
 ### 残タスク（申し送り）
 
 - **感想フォームUI**: スタッフをタップした時点で濃い枠にしたい（現状は顔文字を選ぶまで薄い枠）。バグではなく UI 改善。
-- **管理画面からのスタッフ削除UI**（未着手）: 今日の「たくま」「あみ」手動 del が動機。`reviews.staff_id` は `on delete set null` のため、**review_count>0 は archive に誘導 / =0 は hard delete**、確認モーダルに `photo_url` ＋ review_count を表示して誤削除防止。
-- **本番スマホ実機での最終確認（PWA＋LINE内ブラウザ環境）**: デプロイ後に 通常追加 / 二度押し / 別名2人目 の3ケース。明日以降で OK。
+- **本番スマホ実機での最終確認（PWA＋LINE内ブラウザ環境）**: デプロイ後に、スタッフ追加（通常/二度押し/別名2人目）＋ スタッフ削除（両方0で削除/実績>0でarchive誘導/連続削除で毎回確認）。明日以降で OK。
 - **L/MA（個人事業主）に Stripe 本人確認（KYC）を通す打診**: 登記前にやっておく。
 - **POP 3店分**（Niii / suco / nun）: CARTA 雛形に各店 QR URL。
 - **/dashboard モックデータ撤去**。
