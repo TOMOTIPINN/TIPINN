@@ -14,6 +14,7 @@ import SalonNav from "@/components/SalonNav";
 import { resolveSalonRole } from "@/lib/display-role";
 import { LogoCircle } from "@/components/LogoCircle";
 import CopyButton from "./CopyButton";
+import AddStaffForm from "./AddStaffForm";
 
 /**
  * A1 スタッフ管理（/manager/staff・サロンUI世界 / [[auth-method-line-b]]）。
@@ -150,37 +151,10 @@ export default async function ManagerStaffPage({
           </div>
         )}
 
-        {/* 新規追加フォーム（送信→作成→/manager/staff?created= に戻りQR表示） */}
+        {/* 新規追加フォーム（送信→作成→/manager/staff?created= に戻りQR表示）。
+            二重送信防止のため client component（submitting disabled + idempotency_key）。 */}
         <Card>
-          <form action="/api/manager/staff" method="post" className="stack-md">
-            <Eyebrow className="eyebrow-mint">Add staff</Eyebrow>
-            <div className="field-group">
-              <label className="field-label" htmlFor="name">
-                スタッフ名
-              </label>
-              <input
-                id="name"
-                name="name"
-                className="field"
-                type="text"
-                maxLength={50}
-                required
-                placeholder="例：山田 はな"
-              />
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="role">
-                役割
-              </label>
-              <select id="role" name="role" className="field" defaultValue="staff">
-                <option value="staff">スタッフ</option>
-                <option value="manager">店長</option>
-              </select>
-            </div>
-            <button type="submit" className="btn btn-outline btn-block">
-              追加してQRを表示
-            </button>
-          </form>
+          <AddStaffForm />
         </Card>
 
         {/* 一覧（状態出し分け） */}
