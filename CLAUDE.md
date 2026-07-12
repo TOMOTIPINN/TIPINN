@@ -37,6 +37,16 @@
 - **DB書き込みは全て** `@/lib/supabase-admin` の共有 `supabaseAdmin`（service_role）をサーバー側で使う。**独自に `createClient` しない。**
 - **マイグレーションは `supabase/migrations/` にSQLを置きつつ、適用は常にSupabase SQLエディタで手動。`supabase db push` は使わない。**
 - **既存関数を `drop function` → `create function` で再定義する migration を書くときは、必ず本番の `prosrc` を `select` して現行本文を確認し、過去の migration が追加した処理を全部持ってくること。**（実例: 0019 が 0014 の `notification_outbox` enqueue を落とし、7/8〜7/10 の2日間、全サロンで来店リマインド通知が停止した。0021 で再統合。）
+- **関数の signature（引数の型・数）を変える migration は、`create or replace` では“置き換わらない”。** PostgreSQL は関数を「名前＋引数型の並び」で識別するため、引数の型（例: `smallint`→`integer`）や引数の数を1つでも変えると、`create or replace` は既存定義を置き換えず**別関数として新規作成**し、古い定義が残って**同名関数が複数並存**する。これは PostgREST の `PGRST203 "Could not choose the best candidate function"`（候補を一意に選べず全呼び出しが失敗）や、意図しない旧版の呼び出しを招く。`drop function if exists ...(旧シグネチャ)` を書いても、DROP の引数型が本番の現行関数と1つでもズレると DROP は黙って空振りし、同じ事故になる。（実例: `submit_review_and_earn_stamp` が3バージョン並存し、感想送信が全て 500 になっていた。2026-07-12 発見・修正。）**対策: RPC の signature を変える migration の後は必ず `pg_proc` を `select` して同名関数が1つだけかを確認する。**
+  ```sql
+  select p.oid,
+         pg_get_function_identity_arguments(p.oid) as args,
+         pg_get_function_result(p.oid)             as result
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.proname = '<関数名>';
+  -- 2行以上返ったら並存＝事故。古い方を drop function public.<関数名>(<旧引数型>) で除去する。
+  ```
 - **顧客の表示に関わる bool フラグ（`visit_axis_enabled` 等）は、新規サロン登録時に DB のカラムデフォルトで決まる。表示系フラグを追加・変更するときは、デフォルトが「顧客に見える側」になっているか必ず確認すること。**（実例: `visit_axis_enabled` が `default false` で作られており、新店の来店カードが全顧客に非表示になっていた。2026-07-11 発見・修正、0022 でデフォルト true 化。）
 - セッション: `@/lib/session` の `getSession()` → `{ customer_id, line_user_id } | null`。Cookie名 `echo_session`。
 
