@@ -6,9 +6,8 @@
 ---
 
 ## マイグレーション番号メモ
-- 最新適用済み: **0022**（`salons.visit_axis_enabled` のデフォルトを true 化）。
-- 旧メモの「0022=通知」は消化済み（通知10分刻み化はコード変更のみでマイグレーション不要だった）。
-- **次に振る番号は 0023。**
+- 最新適用済み: **0023**（`staff.idempotency_key` ＋ フル unique index・招待の二重送信防止）。
+- **次に振る番号は 0024。**
 
 ---
 
@@ -51,11 +50,35 @@
 10. **Stripe KYB（夏井氏回答）**: Stripeアカウント登録に入金用銀行口座の登録は必須だが、**代表者個人名義の口座で暫定登録して審査を進められる**。法人口座開設後にダッシュボードで法人名義へ変更可能。→ **法人口座開設がクリティカルパスから外れた**。登記完了と同時に KYB 開始でき、有償軸の開始が口座開設の遅れに引きずられない。
 11. **PayPay 審査期間**: 通常 **2〜3週間**（追加情報要求でさらに延びる）。入金フロー/サイクルはカード決済と同じ。
 
+### 完了（午後・スタッフ二重送信防止）
+
+12. **スタッフ招待の二重送信防止を実装**（commit `2cab672`・push 済み）
+    - 発端: 今日 CARTA で「たくま」が3秒差で2件作られ手動 del した、その再発防止。
+    - migration **0023**（`staff.idempotency_key uuid` ＋ フル unique index）。
+    - `route.ts`: `insert` → `upsert`（`onConflict=idempotency_key, ignoreDuplicates`）。conflict 時は空 `[]` が返るので、**既存行を再取得して同じ `staff_id` / `invite_url` を返すフォールバック**を実装（冪等）。
+    - `AddStaffForm.tsx`: ネイティブ form POST → **onSubmit + preventDefault + fetch(JSON)** に全面書き換え。body は state（`name` / `role` / `idempotency_key`）から明示構築。成功後 `setName("")` ＋ 新 idemKey 生成、失敗/catch でも **finally で `setSubmitting(false)`**。
+    - 二重送信防止は **submitting ガード（client）＋ idempotency_key unique（DB）の二重**。
+
+13. **【重要な発見】migration 0023 が本番プロジェクト（`ztvjwfofznqndqbsnluq`）に未適用だった**
+    - REST が `column staff.idempotency_key does not exist` を返し続けた。
+    - 原因: 「0023 適用」とはローカルの **SQL ファイル作成**のことで、**Supabase SQL Editor での手動適用が抜けていた**。
+    - 対応: SQL Editor で `alter add column` ＋ `create unique index` ＋ `notify pgrst, 'reload schema'` を実行して本番に適用。REST 再プローブでカラム認識を確認。
+    - 教訓: **migration 作成 ≠ 本番適用。SQL Editor 手動適用を必ず先に**（CLAUDE.md §3 に鉄則化）。
+
+14. **【重要なバグ・本日の罠】`disabled` が `name` を POST から脱落させハングする**
+    - 症状: localhost UI で新規スタッフ追加すると「作成中…」で永久ハング、DB に行が作られず、dev ログは `400 invalid_name`。
+    - 原因: ネイティブ form POST で `<input name="name" disabled={submitting}>` にしていたため、submit 時に `setSubmitting(true)` → 再レンダーで input が disabled 化 → **HTML 仕様で disabled 要素は送信データに含まれず**、`name` がボディから丸ごと欠落 → API が `invalid_name` で 400 → **エラー時に submitting を戻す導線が無くハング**。
+    - 対応: 上記の fetch 化で解消（DOM シリアライズ非依存・body を state から構築・失敗時も finally で submitting 解除）。
+    - 検証: localhost で3ケース（通常追加＝一覧表示＋QR／別名で2人目＝別 key で +2／二度押し＝DB dedup を REST で実証）全通過。
+    - 教訓は CLAUDE.md §3 に鉄則化（下記）。
+
+15. **本番テストデータのクリーンアップ**: 旧コード時代にスマホ本番で二度押しして生まれた「あみ」2件（`feefdcca-2b60-45a2-b8d6-0eea07861f3f` / `b71ae5cc-1d5c-4796-abf1-be1f891c971a`）を、**reviews 参照なし・未紐付け（`line_user_id`/`bound_at` null）を確認の上 DELETE**。
+
 ### 残タスク（申し送り）
 
 - **感想フォームUI**: スタッフをタップした時点で濃い枠にしたい（現状は顔文字を選ぶまで薄い枠）。バグではなく UI 改善。
-- **［優先/根本対策］スタッフ二重送信防止**: 招待作成ボタンを submitting 中 disabled に（「たくま」二重登録の根本対策）。
-- **管理画面からのスタッフ削除UI**: 削除時に `photo_url` と review_count を表示して誤削除防止（staff 削除で `reviews.staff_id` は `on delete set null`）。
+- **管理画面からのスタッフ削除UI**（未着手）: 今日の「たくま」「あみ」手動 del が動機。`reviews.staff_id` は `on delete set null` のため、**review_count>0 は archive に誘導 / =0 は hard delete**、確認モーダルに `photo_url` ＋ review_count を表示して誤削除防止。
+- **本番スマホ実機での最終確認（PWA＋LINE内ブラウザ環境）**: デプロイ後に 通常追加 / 二度押し / 別名2人目 の3ケース。明日以降で OK。
 - **L/MA（個人事業主）に Stripe 本人確認（KYC）を通す打診**: 登記前にやっておく。
 - **POP 3店分**（Niii / suco / nun）: CARTA 雛形に各店 QR URL。
 - **/dashboard モックデータ撤去**。
