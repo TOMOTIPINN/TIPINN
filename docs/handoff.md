@@ -6,8 +6,8 @@
 ---
 
 ## マイグレーション番号メモ
-- 最新適用済み: **0023**（`staff.idempotency_key` ＋ フル unique index・招待の二重送信防止）。
-- **次に振る番号は 0024。**
+- 最新適用済み: **0024**（`notification_outbox.skip_reason` ＋ CHECK・LINE通知の既感想スキップ観測用）。
+- **次に振る番号は 0025。**
 
 ---
 
@@ -21,7 +21,7 @@
      - 表示条件: **移行後 visit（実来店）が2回以下（`postMigrationVisits <= 2`）のときだけ訂正ボタンを表示。3回目以降は隠す。**
      - 移行後 visit 数 = `count(visits where customer_id=… and salon_id=… and created_at > migration.created_at)`。**A案採用＝移行当日のチェックイン（VisitScanner の migrate→record 連続実行）も created_at が移行より後になり visit #1 としてカウントする**（`visited_on` の JST 日付比較は入れない）。
      - 初回移行時刻の基準 = `stamp_adjustments(source='migration').created_at`。**訂正は既存行の UPDATE（0019）なので created_at は不変**＝訂正のたびにカウントがリセットされる問題は構造的に起きない。単一行のため `min()` 不要。
-     - **migration 0024 は不要**（`stamp_adjustments.created_at`・`visits.created_at` とも既存カラム・追加 index も不要）。着手前に本番で両カラムの実在を REST で確認済み。
+     - **migration 不要**（`stamp_adjustments.created_at`・`visits.created_at` とも既存カラム・追加 index も不要）。着手前に本番で両カラムの実在を REST で確認済み。（※この機能では新規 migration を使わない。当日別途 0024 を切ったのは下記2の LINE 通知スキップ機能。）
    - 実装（コードのみ・DB 変更なし）:
      - `src/lib/stamp-adjustments.ts`: `getMigrationEntry` が `created_at` も select し `MigrationEntry.createdAt` を返す。
      - `src/app/api/staff/visit/route.ts`（`lookup`）: 移行行があれば `visits` を `created_at > migration.createdAt` で count し、`migrationCorrectable = (count <= 2)` を応答に追加。
@@ -32,9 +32,24 @@
      - **ケース#1（コードレビューで担保）**: 移行後 visit ≤2 で `true` を返す境界の反対側。条件式が単純な `<= 2` 比較で、`false` 側が実路経で確認できている以上 `true` 側が返らない理由がなく、本番への一時行 INSERT リスクに見合わないため実データ検証は見送り。条件付きレンダーが `target.migrationCorrectable` に直結していることをコード目視で確認。
      - `npx tsc --noEmit` パス。
 
+2. **LINE通知の既感想スキップを実装**（migration 0024 ＋ cron ワーカー）
+   - 概要: 来店リマインド通知（`/api/cron/line-push`）で、その来店日に感想も評価スタンプも送り終えた顧客への「来店ありがとう」リマインドを送らない。
+   - **migration 0024**（`0024_outbox_skip_reason.sql`）: `notification_outbox` に `skip_reason text` を追加（NULL 許容＋既知値限定の CHECK：`already_completed` / `stale` / `not_friend` / `no_line_user`）。**SQL Editor で本番適用済み・実在確認済み**（`information_schema` に 1 row / `skip_reason` / `text`）＋ `notify pgrst, 'reload schema'` 実行済み。status（状態機械）は不変。
+   - **判定キー**: `reviews`・`rating_purchases` とも `visit_id` を持たない（調査で確認）ため、`outbox.visited_on`(JST暦日) を UTC 範囲 `[当日00:00 JST, 翌日00:00 JST)` に展開して `created_at` を挟む方式。`reviews` が 1顧客/1サロン/JST日につき1件（0020）と綺麗に対応。
+   - **skip 条件【厳しめ】**: `reviews` と `rating_purchases` の**両方**が hit したときのみ skip（`already_completed`）。**片方だけなら送信**して残りを促す。立ち上げ期は LINE 原価よりデータ密度を優先。
+   - **判定順は「既感想 → 鮮度」**。完了済みかつ鮮度切れは `already_completed` に分類（観測したい本命カテゴリを優先）。
+   - **既存の鮮度 skip も理由付与**: `no_line_user` → `not_friend` → `stale` の順に分岐（deliverability の根本ブロッカーから先に）。
+   - `mark()` を第3引数 `skipReason` 対応に拡張（デフォルト null で既存呼び出しを壊さない）。`.eq('status','pending')` の二重送信ガードは不変。
+   - レスポンス JSON に `skippedByReason: { already_completed, stale, not_friend, no_line_user }` を追加（即時観測）。DB 側は `skip_reason` 列で durable に残る。
+   - 実装ファイル: `src/app/api/cron/line-push/route.ts`（`hasReviewAndPurchase()` 追加・ループ再構成・`mark()` 拡張・レスポンス細分化）。
+   - **検証**: 本番 pending=0 を確認のうえ、ローカルで authorized 呼び出し → レスポンス形を確認（`{ok, picked:0, sent:0, skipped:0, skippedByReason:{…}, failed:0}`）。非認証は 401。呼び出し前後で outbox 内訳は不変（pending0 / sent9 / skipped1 / failed0）＝書き込みゼロ。既存 skipped 1件は `skip_reason=NULL` のまま維持。`npx tsc --noEmit` パス。
+   - **【未検証・要観測】** pending=0 のため skip 分岐の実発火は未確認。8月ドッグフーディングで pending が流れ始めたら `select skip_reason, count(*) from notification_outbox where status='skipped' group by skip_reason` で観測する。
+   - **【将来の緩和】** サロン数増で LINE コストが効いてきたら、skip 条件を「どちらか1つ」に緩める（`hasReviewAndPurchase` の `&&` を `||` に変えるだけ）。`skip_reason` の観測データが判断材料になる。
+
 ### 残タスク（申し送り）
 
 - （2026-07-12 の残タスクを継続。下記 2026-07-12 セクション参照。）
+- ※「LINE通知の既感想スキップ」は本日実装完了（上記2）。handoff 残タスク一覧には明示行が無かったため、削除ではなく完了として本セクションに記録。
 
 ---
 
