@@ -33,6 +33,8 @@ type Target = {
   isVIP: boolean;
   migrated: boolean;
   migrationDelta: number;
+  // 移行後 visit（実来店）が2回以下＝訂正ボタンを出してよい（3回目以降は隠す）。
+  migrationCorrectable: boolean;
   cycleSize: number; // 移行入力の上限（salons.visit_cycle_size）
 };
 
@@ -399,7 +401,10 @@ export default function VisitScanner() {
                     <p className="muted">
                       旧カード移行済み：{target.migrationDelta} 個
                     </p>
-                    {editingMigration ? (
+                    {/* 訂正ボタンは移行後 visit が2回以下のときだけ。3回目以降は隠す
+                        （旧カード残数は移行時に確定・訂正は入力ミス直後だけ・画面ノイズ低減）。 */}
+                    {target.migrationCorrectable &&
+                      (editingMigration ? (
                       <>
                         <input
                           type="number"
@@ -454,7 +459,7 @@ export default function VisitScanner() {
                       >
                         旧カード残数を訂正
                       </button>
-                    )}
+                      ))}
                   </div>
                 )}
 

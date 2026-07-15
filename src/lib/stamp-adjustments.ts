@@ -10,22 +10,25 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
  * 全クエリは service_role でサーバー側のみ（RLS deny-by-default・CLAUDE.md §8）。書き込みは API 側。
  */
 
-export type MigrationEntry = { id: string; delta: number };
+export type MigrationEntry = { id: string; delta: number; createdAt: string };
 
-/** 単一 (顧客, サロン) の移行行。未存在は null（＝未移行。入力欄の表示ゲートに使う）。 */
+/** 単一 (顧客, サロン) の移行行。未存在は null（＝未移行。入力欄の表示ゲートに使う）。
+ *  created_at ＝初回移行時刻（訂正は UPDATE なので不変・0019）。移行後 visit 数の基準に使う。 */
 export async function getMigrationEntry(
   customerId: string,
   salonId: string,
 ): Promise<MigrationEntry | null> {
   const { data } = await supabaseAdmin
     .from("stamp_adjustments")
-    .select("id, delta")
+    .select("id, delta, created_at")
     .eq("customer_id", customerId)
     .eq("salon_id", salonId)
     .eq("source", "migration")
-    .maybeSingle<{ id: string; delta: number | null }>();
+    .maybeSingle<{ id: string; delta: number | null; created_at: string }>();
 
-  return data ? { id: data.id, delta: data.delta ?? 0 } : null;
+  return data
+    ? { id: data.id, delta: data.delta ?? 0, createdAt: data.created_at }
+    : null;
 }
 
 /**

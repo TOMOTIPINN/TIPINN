@@ -85,6 +85,23 @@ export async function POST(req: Request): Promise<NextResponse> {
     // VIPは感想軸（earned_stamps.count）から。金額・順位は一切扱わない（原則5）。
     const vip = computeVipProgress(earned?.count ?? 0);
     const migrationDelta = migration?.delta ?? 0;
+
+    // 「旧カード残数を訂正」ボタンの表示ゲート。
+    // 旧カード残数は移行時に一度確定する値で、訂正が要るのは入力ミスに気づく初回付近だけ。
+    // 移行後 visit（実来店）が2回以下のときだけ訂正ボタンを出し、3回目以降は隠す（画面のノイズ低減）。
+    // 基準は初回移行時刻（migration.createdAt・訂正の UPDATE では不変・0019）。移行当日の
+    // チェックイン（migrate→record 連続実行）も created_at が移行より後になり #1 としてカウントする。
+    let migrationCorrectable = false;
+    if (migration) {
+      const { count: postMigrationVisits } = await supabaseAdmin
+        .from("visits")
+        .select("id", { count: "exact", head: true })
+        .eq("customer_id", customerId)
+        .eq("salon_id", vctx.salon_id)
+        .gt("created_at", migration.createdAt);
+      migrationCorrectable = (postMigrationVisits ?? 0) <= 2;
+    }
+
     return NextResponse.json({
       name: customer.display_name,
       // 累計は実来店 + 移行オフセット（1式一本化）。
@@ -93,6 +110,8 @@ export async function POST(req: Request): Promise<NextResponse> {
       // 移行UI用: 未移行なら入力欄、既移行なら訂正欄（在籍staff/端末いずれも可）。
       migrated: migration !== null,
       migrationDelta,
+      // 訂正ボタンを出してよいか（移行後 visit <= 2）。未移行時は無関係（false）。
+      migrationCorrectable,
       cycleSize: salon?.visit_cycle_size ?? 20,
     });
   }
