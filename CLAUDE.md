@@ -243,3 +243,12 @@
 ### 関連原則（再掲）
 - スタッフ個人の¥は出さない（チップ感回避・原則5）。お金は店舗合計のみ。
 - 賞与は購入と機械的に連動しない（原則6・金融庁回答の前提）。echo flow・ダッシュボードは「判断材料」であって賞与自動算出ツールではない。
+
+---
+
+## 変更時セキュリティ・チェック（2026-07-14 棚卸しで確定した不変条件。機能追加・変更のたびに確認）
+
+- **テナント分離は RLS ではなく `salon_id` スコープで担保する。** 全テーブルは RLS 有効・deny-by-default（直アクセスは全拒否）で、実分離は `supabaseAdmin` を使うサーバーコードが `ctx.salon_id`／`vctx.salon_id` で必ず絞ることで成立している。この salon_id は**必ずセッション由来**（`getStaffContext()` → `line_user_id` から `staff` を引いた DB 上の値）であり、**リクエストの body／query の salon_id は絶対に信用しない**。新しく `supabaseAdmin` で読み書きするクエリ・RPC を書くときは、`.eq("salon_id", vctx.salon_id)` 相当のスコープ（RPC なら `p_salon_id: vctx.salon_id`）を必ず付ける。（確認済: `staff-session.ts` が salon_id を DB 由来に固定＝越境不能。`api/staff/visit` 等の書き込みは全て自店スコープ。）
+- **新テーブルを追加したら、必ず RLS を有効化して deny-by-default に乗せる。** 有効化を忘れた1テーブルが全テナント漏洩の穴になる。追加後に `select tablename, rowsecurity from pg_tables where schemaname='public'` で `rowsecurity=true` を確認する。（確認済: 現行10テーブルすべて有効。ポリシーは0件＝全拒否で正常。）
+- **secret を `NEXT_PUBLIC_` に置かない。** `SUPABASE_SECRET_KEY`（service_role・RLSバイパス）は `@/lib/supabase-admin` 経由のサーバー側のみで使う。env を追加するとき、秘密値に `NEXT_PUBLIC_` prefix を付けない（バンドルに焼き込まれ全公開になる）。`.env`／`.env.local` は git 追跡しない（追跡は値の無い `.env.example` のみ）。（確認済: secret は `supabase-admin.ts` 1ファイルに隔離、クライアントは publishable key のみ、`.env` は check-ignore 済。）
+- **積み残し（いつか閉じる・優先度低）:** ①`api/staff/visit` の `customers.display_name` 取得が salon_id 非スコープ（UUID 既知なら他店顧客の表示名のみ取得可・機微データは漏れない）。②`submit_visit_and_earn_stamp` RPC 内の customer↔salon 所属チェック（上流で salon_id が固定されるため越境は不能・念のためレベル）。
