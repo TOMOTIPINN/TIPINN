@@ -14,9 +14,9 @@ import DashboardClient from "./DashboardClient";
  *   厳密に合わせる：
  *   - 未ログイン（session なし）      → LINEログインへ（returnTo=/dashboard・401相当）
  *   - 非manager（ctx なし or role≠manager）→ /staff へ（requireManager が両者を 403 に畳むのに合わせ単一分岐・403相当）
- *   manager のみ DashboardClient（"use client" のモック画面）を描画する。
+ *   manager のみ DashboardClient を描画する（"use client" の表示専用）。
  *
- * ※ 中身のデータは DashboardClient 側のモックのまま（実データ化は本番タスク）。ここは認可のみ担う。
+ * ※ 中身のデータは実データ（dashboard-data.ts が salon_id スコープで集計）を描画する。ここは認可のみ担う。
  */
 export default async function DashboardPage() {
   const session = await getSession();

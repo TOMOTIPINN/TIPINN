@@ -46,6 +46,12 @@
    - **【未検証・要観測】** pending=0 のため skip 分岐の実発火は未確認。8月ドッグフーディングで pending が流れ始めたら `select skip_reason, count(*) from notification_outbox where status='skipped' group by skip_reason` で観測する。
    - **【将来の緩和】** サロン数増で LINE コストが効いてきたら、skip 条件を「どちらか1つ」に緩める（`hasReviewAndPurchase` の `&&` を `||` に変えるだけ）。`skip_reason` の観測データが判断材料になる。
 
+3. **/dashboard モックデータ撤去 → 完了**（残タスクから削除）
+   - 調査結果: `/dashboard`（manager 専用・数字管理／画面14系）のモックは**すでに撤去済み**だった。`0bc3666 feat(dashboard): manager認証ガード＋実データ接続` で実データ化されており、`dashboard-data.ts`（server / supabaseAdmin）が `salons`/`staff`/`reviews`/`rating_purchases`/`earned_stamps`/`customers` を salon_id スコープで集計し、`DashboardClient`/`StaffPeriodView`/`HrFlowView` は props を描画するだけ（ハードコード値・ダミー配列なし）。`eval-data.ts` は旧mock層の名残だが今は型＋純粋関数のみ（データを持たない）。
+   - 残っていたのは `page.tsx` の**陳腐化コメント2行だけ**（「モック画面」「中身のデータは…モックのまま」＝実態と食い違う虚偽）。本日これを「実データ（dashboard-data.ts が salon_id スコープで集計）を描画」に修正して完了。`eval-data.ts:2` の「（旧: mock データ層）」は正確なので不変。
+   - コメント修正のみ・DB 変更なし・push 済み。
+   - **補足（範囲外・認識合わせ）**: `scripts/demo-seed.sql` で **【DEMO】echo デモサロン**に seed が入っているのは意図的（`/demo` ペルソナ導線用）。`/dashboard` は demo ユーザーでも seed 済みサロンの**実集計**を出すだけで、コードにモックを注入する分岐は無い。これはデモ用の正規データなので「撤去」対象ではない。
+
 ### 残タスク（申し送り）
 
 - （2026-07-12 の残タスクを継続。下記 2026-07-12 セクション参照。）
@@ -146,7 +152,7 @@
 - **本番スマホ実機での最終確認（PWA＋LINE内ブラウザ環境）**: デプロイ後に、スタッフ追加（通常/二度押し/別名2人目）＋ スタッフ削除（両方0で削除/実績>0でarchive誘導/連続削除で毎回確認）。明日以降で OK。
 - **L/MA（個人事業主）に Stripe 本人確認（KYC）を通す打診**: 登記前にやっておく。
 - **POP 3店分**（Niii / suco / nun）: CARTA 雛形に各店 QR URL。
-- **/dashboard モックデータ撤去**。
+- ~~/dashboard モックデータ撤去~~ → **2026-07-15 完了**（上部セクション参照）。
 - **顧客フォームの share_scope 文言見直し**（either 廃止後の2値）。
 - **通知の起点問題**: チェックイン起点だと長時間施術客に早すぎる。8月ドッグフーディングで着信時刻を記録し、経過時間 vs 絶対時刻を判断。
 - **個人事業主（L/MA）の特商法表記**: 有償軸を出す際、個人名・住所の表示義務が絡む。顧問弁護士を付けるタイミングで確認。
