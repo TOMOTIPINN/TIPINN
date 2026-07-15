@@ -151,8 +151,8 @@ export default async function StaffHomePage() {
   const salonScope = { salonId: ctx.salon_id, wholeSalon: true } as const;
 
   // Team voices の中身はロールで出し分ける（件数の集計は不変＝数字は全部・中身は選ばれたものだけ）。
-  //  ・staff       : share_scope='everyone' かつ rating>=3 のみ（either は「全員に見せる」明示でない／
-  //                  rating 1,2 は要対応の声で店長が受け止める）。
+  //  ・staff       : share_scope='everyone'（お店のスタッフに共有）かつ rating>=3 のみ
+  //                  （rating 1,2 は要対応の声で店長が受け止める）。
   //  ・manager/owner: 従来どおり manager_only 以外・rating 制限なし。
   const displayRole = await resolveSalonRole(ctx);
   const voicesBase = supabaseAdmin

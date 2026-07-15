@@ -55,10 +55,13 @@ export function normalizeTags(tags: unknown): string[] | null {
   return out;
 }
 
-/* ---- 共有範囲（店長のみ/全員に） ---- */
+/* ---- 共有範囲（店長のみ/お店のスタッフに） ----
+   everyone は「お店のスタッフ全員が Team voices で読む」の意味（外部公開ではない）。
+   ラベルに「お店の」を付けて外部公開でないことを示し、宛先フィールドの
+   「お店のみんなへ」（＝誰への感想か）と語を差別化する（可視性 vs 宛先の混同防止）。 */
 export const SHARE_SCOPES = [
   { value: "manager_only", label: "店長のみ" },
-  { value: "everyone", label: "全員に" },
+  { value: "everyone", label: "お店のスタッフに" },
 ] as const;
 
 export type ShareScope = (typeof SHARE_SCOPES)[number]["value"];
