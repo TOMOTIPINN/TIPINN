@@ -211,10 +211,14 @@
   - 症状: `/staff/visit` を表示中でもホーム追加時に staff manifest（start_url:`/staff`）が使われ、アイコン起動が `/staff`→LINEログイン要求になっていた。加えて iOS の standalone PWA は Safari と**別 cookie ジャー**で、QR（Safari）で入れた `echo_device` がアイコン起動時に無く、start_url を変えるだけでは救えない
   - 対策＝**`/kiosk` 独立セグメント**を新設し per-salon 動的 manifest を配る:
     - `src/app/kiosk/manifest/route.ts`（動的・per-salon）: `?salon=&device=` を DB 突合（device_token 一致・非null / 不一致は 404）し、`name`＝「{サロン名} 受付」、**`start_url`＝`/kiosk/setup?salon=&device=`**、**`scope`＝`/kiosk`（末尾スラッシュ無し）**、`id`＝`/kiosk` を返す（`Cache-Control: no-store`）
-    - `src/app/kiosk/layout.tsx`: `generateMetadata` が `echo_device` cookie を署名検証（`getDeviceCookie`・DB突合はしない）→ `manifest` を `/kiosk/manifest?salon=&device=` に上書き（scalar 最深優先＝`<link rel=manifest>` 1本 / cookie 無しは `/manifest-staff.json` へ退避）
+    - `src/app/kiosk/layout.tsx`: `generateMetadata` が `echo_device` cookie を署名検証（`getDeviceCookie`・DB突合はしない）→ `manifest` を `/kiosk/manifest?salon=&device=` に上書き（scalar 最深優先＝`<link rel=manifest>` 1本 / cookie 無しは `/manifest-staff.json` へ退避）。あわせて `salons.name` を引いて `appleWebApp.title`＝「{サロン名} 受付」を出す（下記アプリ名の知見）／業務側 `icons`（apple=mint・favicon 併記）も同層で指定
     - `src/app/kiosk/page.tsx`: 受付スキャナ本体（start_url→303 の着地先）。**認可は device cookie のみ**（`getDeviceContext`・DB再照合）＝LINEに飛ばさない。`VisitScanner`＋`/api/staff/visit`（`getVisitContext`）を再利用
     - `src/app/kiosk/setup/route.ts`: 303 先を `/staff/visit`→**`/kiosk`**、失敗を `/kiosk?device=error` に変更（cookie 発行ロジックは不変）
   - **アイコン起動のたびに start_url=`/kiosk/setup` を通り cookie を張り直す**＝①standalone 別ジャー隔離 ②iOS ITP 失効 ③cookie 1年超え、を都度救う。**遷移は `/kiosk/setup`→`/kiosk` と全て scope `/kiosk` 内**に閉じ standalone を維持（scope の within はパス前方一致のため末尾スラッシュ無し必須。`/api/staff/visit` は fetch＝scope 対象外で問題なし）
+  - **ホーム画面アプリ名は manifest の `name` では決まらない（iOS の重要な落とし穴・2026-07-16 実機で判明）。** iOS Safari は「ホーム画面に追加」時のアプリ名を **`<meta name="apple-mobile-web-app-title">`（＝Next の `appleWebApp.title`）** から取り、無ければ **`<title>`** にフォールバックする（manifest の `name`/`short_name` は**見ない**）。Android/Chrome は逆に manifest の `name` を見る。
+    - 当初 `/kiosk` は appleWebApp 未指定だったため、iOS では顧客 root の `<title>`「echo - 感謝と評価を、サロンへ」がアプリ名になっていた（manifest.name「CARTA 受付」は無視）。**対策＝`kiosk/layout.tsx` の `generateMetadata` で per-salon の `appleWebApp.title` を明示**し、**manifest route と同一ソース（`salons.name`）・同一文字列（`` `${salonName} 受付` ``）**にして iOS 名と Android 名を一致させる。salon 特定不可（cookie 無/不正/失効）の分岐は汎用「echo 受付」で顧客 `<title>` 落ちを防ぐ
+    - **`appleWebApp` を付けるのは `/kiosk` のみ。** root/staff/manager/dashboard は現状の `<title>` 由来（echo / echo staff 等）で足りるため付けない（不要に付けると各画面のアプリ名を `<title>` から奪う）
+    - **iOS はアプリ名/アイコンを「追加時に確定・キャッシュ」する**＝名前やアイコンを変えても**既存のホーム画面アイコンには反映されない**。反映には**一度削除→再追加**が必要（実機検証時の必須手順）
   - `/staff/visit`（ログイン中スタッフ用・staff ホーム/`SalonNav` から被リンク）は**温存**＝端末経路だけ `/kiosk` に分離（既存導線に影響なし）
   - device_token は `salons` に1つ＝**iPad 3台で共有**。1台紛失で再発行すると全端末が失効し全台再スキャンが必要（3台規模では許容・端末別失効が要れば `device_tokens` テーブルへ分割）
   - ⚠️ **設計判断（token 露出）: per-salon manifest の start_url に device_token が載る**。据え置き受付端末を standalone で自己プロビジョニングさせるための対価で、**httpOnly cookie ほどは隠れない**ことを承知の上で採用する
