@@ -61,14 +61,14 @@ export default async function ManagerKioskPage({
           <Eyebrow className="eyebrow-mint">Reception device</Eyebrow>
           <h1 className="headline">{salonName} ・ 受付端末</h1>
           <p className="muted">
-            店頭の iPad を常設の受付端末にします。下のQRを iPad で一度読み込むと、LINEログイン無しで
-            来店受付が使えるようになります。
+            店頭の iPad を常設の受付端末にします。下のQRを iPad で一度読み込み、開いた受付画面で
+            「ホーム画面に追加」すると、アイコンから1タップで来店受付が開きます（LINEログイン不要・QR再読み込み不要）。
           </p>
         </header>
 
         {issued && (
           <div className="notice notice-success">
-            端末トークンを発行しました。下のQRを受付端末で読み込んでください。
+            端末トークンを発行しました。下のQRを受付端末で読み込み、開いた画面で「ホーム画面に追加」してください。
           </div>
         )}
         {error === "save" && (

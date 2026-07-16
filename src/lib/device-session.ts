@@ -48,6 +48,19 @@ async function verifyDeviceToken(token: string): Promise<DevicePayload | null> {
 }
 
 /**
+ * cookie の JWT を **署名検証だけ** して payload（salon_id, device_token）を返す（未ログインなら null）。
+ * DB 再照合はしない。用途は per-salon manifest の href 組み立て（/kiosk/layout の generateMetadata）に限る
+ * — manifest route 側で DB 突合するので、ここは「どのURLを配るか」を決めるためのローカル読み出しでよい。
+ * 認可判定（実際に受付を通すか）は必ず getDeviceContext()（DB再照合あり）を使うこと。
+ */
+export async function getDeviceCookie(): Promise<DevicePayload | null> {
+  const store = await cookies();
+  const token = store.get(DEVICE_COOKIE_NAME)?.value;
+  if (!token) return null;
+  return verifyDeviceToken(token);
+}
+
+/**
  * 現在のリクエストの端末コンテキストを解決する（未登録/失効なら null）。
  * cookie の JWT を検証したうえで、salons.device_token と一致するかを DB で必ず再確認する。
  * 一致しない（= 再発行済み or 削除済み or 端末未発行）場合は null＝失効扱い。

@@ -207,6 +207,20 @@
   - 主因＝PWA start_url。root layout が全ページ共通で customer 用 `/manifest.json`（start_url:"/"）を配るため、iOS16.4+ は保存パス /staff を無視して "/" から冷起動していた。**`/staff`・`/manager` 配下にセグメント layout を新設し `metadata.manifest` を `/manifest-staff.json`（start_url:"/staff"）に上書き**（ネスト metadata は scalar を最深セグメント優先で上書き＝`<link rel="manifest">` は1本）。manager も staff世界の住人＝専用manifestは別立てせず /staff に集約
   - 再発防止＝LINE callback の着地先にロール分岐を追加。**returnTo が明示ターゲット（/staff・/staff/join?token=…・/onboard…）なら尊重（署名付きstate往復＝#1は不変）／既定 "/" のときだけ `line_user_id` で在籍staff判定 → staff は /staff・非staff は "/"（顧客着地を維持）**。staff 解決は `@/lib/staff-session` の `resolveStaffByLineUserId`（session cookie 非依存・callback は cookie 発行前のため）に単一ソース化し `getStaffContext` もこれ経由
   - 顧客側（`public/manifest.json`・root `layout.tsx`・`page.tsx`・`@/lib/return-to`・login route）は**一切無改変**＝顧客ログイン（returnToなし→"/"着地）に回帰なし
+- 受付端末（kiosk）を独立 PWA 化: 常設 iPad のアイコン1タップで来店受付カメラを開く（LINE不要・setup QR 再読み込み不要）… ✓ DB変更なし（2026-07-16）
+  - 症状: `/staff/visit` を表示中でもホーム追加時に staff manifest（start_url:`/staff`）が使われ、アイコン起動が `/staff`→LINEログイン要求になっていた。加えて iOS の standalone PWA は Safari と**別 cookie ジャー**で、QR（Safari）で入れた `echo_device` がアイコン起動時に無く、start_url を変えるだけでは救えない
+  - 対策＝**`/kiosk` 独立セグメント**を新設し per-salon 動的 manifest を配る:
+    - `src/app/kiosk/manifest/route.ts`（動的・per-salon）: `?salon=&device=` を DB 突合（device_token 一致・非null / 不一致は 404）し、`name`＝「{サロン名} 受付」、**`start_url`＝`/kiosk/setup?salon=&device=`**、**`scope`＝`/kiosk`（末尾スラッシュ無し）**、`id`＝`/kiosk` を返す（`Cache-Control: no-store`）
+    - `src/app/kiosk/layout.tsx`: `generateMetadata` が `echo_device` cookie を署名検証（`getDeviceCookie`・DB突合はしない）→ `manifest` を `/kiosk/manifest?salon=&device=` に上書き（scalar 最深優先＝`<link rel=manifest>` 1本 / cookie 無しは `/manifest-staff.json` へ退避）
+    - `src/app/kiosk/page.tsx`: 受付スキャナ本体（start_url→303 の着地先）。**認可は device cookie のみ**（`getDeviceContext`・DB再照合）＝LINEに飛ばさない。`VisitScanner`＋`/api/staff/visit`（`getVisitContext`）を再利用
+    - `src/app/kiosk/setup/route.ts`: 303 先を `/staff/visit`→**`/kiosk`**、失敗を `/kiosk?device=error` に変更（cookie 発行ロジックは不変）
+  - **アイコン起動のたびに start_url=`/kiosk/setup` を通り cookie を張り直す**＝①standalone 別ジャー隔離 ②iOS ITP 失効 ③cookie 1年超え、を都度救う。**遷移は `/kiosk/setup`→`/kiosk` と全て scope `/kiosk` 内**に閉じ standalone を維持（scope の within はパス前方一致のため末尾スラッシュ無し必須。`/api/staff/visit` は fetch＝scope 対象外で問題なし）
+  - `/staff/visit`（ログイン中スタッフ用・staff ホーム/`SalonNav` から被リンク）は**温存**＝端末経路だけ `/kiosk` に分離（既存導線に影響なし）
+  - device_token は `salons` に1つ＝**iPad 3台で共有**。1台紛失で再発行すると全端末が失効し全台再スキャンが必要（3台規模では許容・端末別失効が要れば `device_tokens` テーブルへ分割）
+  - ⚠️ **設計判断（token 露出）: per-salon manifest の start_url に device_token が載る**。据え置き受付端末を standalone で自己プロビジョニングさせるための対価で、**httpOnly cookie ほどは隠れない**ことを承知の上で採用する
+    - ホーム画面 web clip 自体は iCloud 同期しない＝token はショートカット経由で伝播しない。漏れ口は **Safari 履歴/ブックマークの iCloud 同期**に限られる → 据え置き端末は**専用 Apple ID・Safari 同期OFF が推奨**
+    - 既存 iPad が店長 Apple ID（同期ON）で運用開始する場合: 伝播先は**店長自身の端末＝すでに token に正当アクセスできる本人**なので実害は小さい。ただし**共用 Apple ID（店長以外も触れる）は不可**（本人前提が崩れる）。同期でコピー面が増える弱さは、**再発行＝全コピー即時失効**が担保する
+    - token は**サロン単位の bearer**。被害範囲は当該サロンの来店記録に限定（他店越境不可・PII 非開放）。紛失時は `/manager/kiosk` で再発行
 
 ---
 
