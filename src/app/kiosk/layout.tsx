@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { getDeviceCookie } from "@/lib/device-session";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 
 /**
  * /kiosk 配下のセグメント layout（受付端末専用 PWA・独立セグメント）。
@@ -13,6 +14,11 @@ import { getDeviceCookie } from "@/lib/device-session";
  * （DB 突合は manifest route 側でやる）。cookie が無い＝未登録/失効時は staff 用 manifest に退避する
  * （その場合 /kiosk ページは再登録を促すカードを出す）。
  *
+ * ホーム画面のアプリ名: iOS は manifest の name ではなく apple-mobile-web-app-title（appleWebApp.title）を
+ * 使い、無ければ <title> にフォールバックする。よって per-salon の appleWebApp.title を明示して
+ * 「{サロン名} 受付」を出す（Android/Chrome は manifest の name を見るので、manifest route と同じ
+ * ソース（salons.name）・同じ文字列にして両者を一致させる）。root/staff/manager/dashboard には付けない。
+ *
  * customer 側（root layout / public/manifest.json）・staff/manager 側は一切変更しない。pass-through。
  */
 export async function generateMetadata(): Promise<Metadata> {
@@ -24,14 +30,31 @@ export async function generateMetadata(): Promise<Metadata> {
   };
   const payload = await getDeviceCookie();
   if (!payload) {
-    // 未登録/失効: サロン世界の既定 manifest に退避（顧客 manifest には落とさない）。
-    return { manifest: "/manifest-staff.json", icons };
+    // 未登録/失効: salon が特定できない。顧客 <title>（"echo - 感謝と…"）に落とさないよう汎用名を出す。
+    return {
+      manifest: "/manifest-staff.json",
+      icons,
+      appleWebApp: { title: "echo 受付" },
+    };
   }
+
+  // アプリ名は manifest route と同じソース（salons.name）から引く＝ホーム名と manifest.name を一致させる。
+  const { data: salon } = await supabaseAdmin
+    .from("salons")
+    .select("name")
+    .eq("id", payload.salon_id)
+    .maybeSingle<{ name: string | null }>();
+  const salonName = salon?.name?.trim() || "サロン";
+
   const qs = new URLSearchParams({
     salon: payload.salon_id,
     device: payload.device_token,
   });
-  return { manifest: `/kiosk/manifest?${qs.toString()}`, icons };
+  return {
+    manifest: `/kiosk/manifest?${qs.toString()}`,
+    icons,
+    appleWebApp: { title: `${salonName} 受付` },
+  };
 }
 
 export default function KioskLayout({
