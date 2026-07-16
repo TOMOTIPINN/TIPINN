@@ -11,6 +11,12 @@ import type { Metadata } from "next";
  */
 export const metadata: Metadata = {
   manifest: "/manifest-staff.json",
+  // ホーム画面アイコン（業務側＝ミントバック×白）。manifest 指定はそのまま維持。
+  // icons を上書きするとfavicon linkが消えるため icon:favicon も併記して root と構造を揃える。
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/icons/echo-mint-180.png",
+  },
 };
 
 export default function ManagerLayout({

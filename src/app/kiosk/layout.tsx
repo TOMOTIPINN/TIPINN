@@ -16,16 +16,22 @@ import { getDeviceCookie } from "@/lib/device-session";
  * customer 側（root layout / public/manifest.json）・staff/manager 側は一切変更しない。pass-through。
  */
 export async function generateMetadata(): Promise<Metadata> {
+  // ホーム画面アイコン（業務側＝ミントバック×白）。受付端末は業務用なので root の light を継承させず mint を出す。
+  // icon:favicon も併記して root と構造を揃える（icons 上書きで favicon link が消えるのを防ぐ）。
+  const icons = {
+    icon: "/favicon.ico",
+    apple: "/icons/echo-mint-180.png",
+  };
   const payload = await getDeviceCookie();
   if (!payload) {
     // 未登録/失効: サロン世界の既定 manifest に退避（顧客 manifest には落とさない）。
-    return { manifest: "/manifest-staff.json" };
+    return { manifest: "/manifest-staff.json", icons };
   }
   const qs = new URLSearchParams({
     salon: payload.salon_id,
     device: payload.device_token,
   });
-  return { manifest: `/kiosk/manifest?${qs.toString()}` };
+  return { manifest: `/kiosk/manifest?${qs.toString()}`, icons };
 }
 
 export default function KioskLayout({

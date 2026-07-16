@@ -54,6 +54,8 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: "/favicon.ico",
+    // ホーム画面アイコン（顧客側＝白バック×ミント3円）。apple-touch-icon 本体。
+    apple: "/icons/echo-light-180.png",
   },
   openGraph: {
     title: "echo - 感謝と評価を、サロンへ",
