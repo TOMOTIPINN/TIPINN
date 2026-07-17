@@ -48,10 +48,14 @@
   -- 2行以上返ったら並存＝事故。古い方を drop function public.<関数名>(<旧引数型>) で除去する。
   ```
 - **migration の「作成」と「適用」は別物。** ローカルで `supabase/migrations/` に SQL ファイルを作っただけでは**本番 DB には一切反映されない**。必ず **Supabase SQL エディタで手動適用（＋ 列/index を変えたら `notify pgrst, 'reload schema';` でスキーマキャッシュをリロード）を先に実行**し、`REST` または `information_schema` でカラム/オブジェクトの**実在を確認してからコードを push** する。（実例: 0023 を「適用した」つもりがファイル作成だけで、本番に `staff.idempotency_key` が無く REST が `column ... does not exist` を返し続けた。2026-07-12。）
+- **「適用」≠「記録」。** 上の「作成≠適用」の裏返し。SQL エディタで本番に適用しただけでは**repo に一切残らない**。適用したら必ず `supabase/migrations/` に同じ SQL のファイルを置く（＝実物と一字一句一致・冒頭に「本番適用済み・再実行しない」ヘッダー）。残さないと、次に本番から `pg_get_functiondef`（関数）や `pg_indexes`＋テーブル定義（テーブル）で吸い直す羽目になる。（実例: 消費型特典の 0025/0027/0028/0029 が repo に無く、0025 は下書きの上書きで本文も消えていた。本番から吸い出して復元。2026-07-16〜17・44e2bb4 で解消。）
+- **SQL エディタのタブを作業場にしない。** Untitled のまま放置したタブは次の作業で上書きされ、書いた SQL が消える（＝上の「記録」が失われる主因）。**本質的な対策＝ローカルで `.sql` を先に作る → コピペして Run → ファイルはそのまま repo に**（これで「適用≠記録」も同時に解決）。エディタで直接書くときは毎回 `+` で新規タブを開き、Run が通ったらその場で名前を付ける。
+- **cycle 導出の式は 0027 と 0029 で二重化している（統合不可・変更時は必ず両方直す）。** 感想軸 `floor(earned_stamps.count / 3)` と 来店軸 `floor((実来店 + 移行delta) / visit_cycle_size)` を、`list_available_consumable_rewards`(0027) と `list_consumable_reward_states`(0029) が**各自に持つ**。問いが違う（0027=「今この来店で何を消せるか」＝本日来店ゲート有り／0029=「今 権利として残っているか」＝ゲート無し）ため関数を分ける必要があり、1本に統合できない。**片方だけ直すと mypage（0029）とスキャナ（0027）の表示が食い違う**。式を変えるときは必ず両方を同時に直すこと。
 - **表示制御の `disabled` を、送信が必要な `input`/`select`（特に `name` 等の必須フィールド）に付けてはいけない。** ネイティブ form POST では **`disabled` 要素は送信データから脱落**し（HTML 仕様）、サーバー側で必須欠落エラー（例: `invalid_name` 400）→ フォームがハングする。送信中に入力を止めたいなら `readonly` ＋ `pointer-events`、または **fetch 送信にして body を state から明示構築**する（DOM シリアライズに依存しない）。（実例: `AddStaffForm` で送信中に name input を disabled にし、name 欠落で 400・「作成中…」のまま復帰不能。2026-07-12・fetch 化で解消。）
 - **`position: fixed` のモーダル/オーバーレイは `createPortal(..., document.body)` で body 直下に出す。** 祖先要素に `transform`（`animate` 系の `translate` 等を含む・`translateY(0)` でも該当）があると、`position: fixed` の基準がビューポートでなくその祖先になり、中央配置のモーダルが画面外へ飛ぶ。（実例: `.animate-in` の `transform` に閉じ込められ、削除モーダルがオーバーレイだけ見えて中身が画面外。2026-07-12・portal 化で解消。）
 - **取り返しのつかない操作（hard delete 等）は「原因を1つ直す」のではなく「確認を経た状態でしか実行に到達できない」ガードで構造的に守る。** 実行関数の入口で、モーダルの open 状態と実行条件（対象の件数が 0 等）を検査し、満たさなければ即 `return` する。単一機序に依存せず、状態の完全初期化・毎回新しいモーダルDOM（`key`）等と合わせた多層防御にする。（実例: スタッフ連続削除の2回目で確認がスキップされた件を、`handleDelete` 入口ガード＋全リセット＋portal key で不能化。2026-07-12。）
 - **顧客の表示に関わる bool フラグ（`visit_axis_enabled` 等）は、新規サロン登録時に DB のカラムデフォルトで決まる。表示系フラグを追加・変更するときは、デフォルトが「顧客に見える側」になっているか必ず確認すること。**（実例: `visit_axis_enabled` が `default false` で作られており、新店の来店カードが全顧客に非表示になっていた。2026-07-11 発見・修正、0022 でデフォルト true 化。）
+- **タッチ端末の `:hover` は「タップ後に貼り付く」。** iPadOS（受付 iPad 等）には本物の hover が無く、タップした要素の `:hover` 状態がタップ後も残る。**同じ位置に別のボタンが出現すると、その新ボタンが直前の hover 塗りを引き継いで固定される**（例: `.btn-outline:hover` の黒面）。対策＝**hover 規則は必ず `@media (hover: hover)` で囲む**（本物のポインタ環境だけに hover を出す・タッチでは一切出さない／デスクトップは不変）。（実例: `/staff/visit` の done 画面で、直前に押した「来店を記録」の hover が、同位置に現れる「◯を使う」ボタンに貼り付いて黒塗り固定＝慎重に押すべき消込ボタンが最も押しやすそうに見える視覚重み逆転。2026-07-17・全 `.btn` の hover を `@media (hover: hover)` で囲って解消・5f3d7ba。）
 - セッション: `@/lib/session` の `getSession()` → `{ customer_id, line_user_id } | null`。Cookie名 `echo_session`。
 
 ---
@@ -234,6 +238,22 @@
   - **per-salon 不要＝静的 metadata で足りる**（`start_url` 固定・DBアクセスなし）。`/kiosk` の動的 manifest（device_token 突合）とは違い、`/dashboard` は同一オーナー配下の固定着地でよい
   - `icons` は既存どおり apple=mint（業務側）＋favicon 併記のまま（変更なし）。`appleWebApp` は付けない（上記アプリ名の知見どおり、新経路では manifest.name「echo dashboard」が使われる）
   - **無改変**: 顧客 `public/manifest.json`・`manifest-staff.json`・`/kiosk`・`/manager`・`/staff`（`/manager/staff` は既に `manifest-staff.json` で `/staff` 着地のため対象外）
+- 消費型/状態型の特典対応 … ✓（2026-07-16〜17・DB migration 0025/0027/0028/0029 ＋ app 5コミット）
+  - 概念: **消費型**（`rewards.is_consumable=true`・使ったら消える・例 ご褒美SPA）と**状態型**（=false・権利・消えない・例 VIPセール対象）を分離。`reward_type`（discount/service/priority）とは**直交**（「サービスだから消費型」ではない）。既存2件は 0025 で一律 false＝現状の挙動のまま。
+  - DB（本番適用済み・事後記録は 44e2bb4）:
+    - **0025** `reward_redemptions`（消込台帳・物理削除せず `voided_at` で取消／部分unique `active_uniq`＝同一サイクル同一特典1回・`one_per_visit`＝1来店1消費）＋ `rewards.is_consumable`（default false）。RLS deny-by-default
+    - **0027** `list_available_consumable_rewards`＝「今この来店で何を消せるか」（**本日来店ゲート有り**）。**cycle 導出の唯一の正**（軸順・FIFO・1来店1消費・is_consumable 判定を一元管理）
+    - **0028** `redeem_reward`＝消込。失敗は例外でなく **`ok=false`＋`reason`**（`no_visit_today`/`no_available_reward`/`already_redeemed_today`）で返す。候補判定は 0027 に委譲（唯一の正を二重化しない）
+    - **0029** `list_consumable_reward_states`＝「今 権利として残っているか」（**本日来店ゲート無し**）。mypage 用。per 特典 `earned_count`/`redeemed_count` を返し `available = earned > redeemed` で判定
+  - app: `rewards.ts` 型通し(a732cd8) → `/api/staff/visit` 候補提示＋消込(b9714cd) → `VisitScanner` 二択UI(a977b03) → `/mypage` 3状態表示(533a7c3) → `/manager/rewards` 使い方切替(092abf4)
+  - 実機確認（2026-07-17・CARTA iPad）: record 直後に必ず二択（「◯を使う」/「今日は使わない」）が出る。**`awarded=false`（本日2回目のスキャン）でも二択は出る**＝朝チェックイン→施術後にSPA提供が決まるケースを拾う（awarded と候補提示は独立）
+  - 確定した設計判断（詳細は各 migration のコメント参照）:
+    - 消費順は **感想軸 → 来店軸の固定**、各軸内は **FIFO**（未消込の最小 cycle_index）
+    - **軸はスタッフに選ばせない**＝軸は現実に対応物が無い帳簿上の概念（見えないものを選ばせると押下がランダムになる）
+    - **どの特典を使うかは UI が選ぶ**＝顧客との実在の会話なので RPC では絞らない
+    - **`redeemed_by` は端末（kiosk）経路で null**（個人特定不可・`stamp_adjustments.created_by` と同じ割り切り）
+    - **「今日は使わない」は記録しない**（declined を残すかは将来の判断・別テーブルで後から足せる）
+  - ⚠️ **残（「使う」を運用に出す前に必須）: 取消UI。** `voided_at`/`voided_by` 列はあるが**取消の RPC も画面も無い**＝一度消込むと現状は戻せない。運用投入前に取消導線を用意すること
 
 ---
 
