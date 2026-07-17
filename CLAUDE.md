@@ -215,9 +215,12 @@
     - `src/app/kiosk/page.tsx`: 受付スキャナ本体（start_url→303 の着地先）。**認可は device cookie のみ**（`getDeviceContext`・DB再照合）＝LINEに飛ばさない。`VisitScanner`＋`/api/staff/visit`（`getVisitContext`）を再利用
     - `src/app/kiosk/setup/route.ts`: 303 先を `/staff/visit`→**`/kiosk`**、失敗を `/kiosk?device=error` に変更（cookie 発行ロジックは不変）
   - **アイコン起動のたびに start_url=`/kiosk/setup` を通り cookie を張り直す**＝①standalone 別ジャー隔離 ②iOS ITP 失効 ③cookie 1年超え、を都度救う。**遷移は `/kiosk/setup`→`/kiosk` と全て scope `/kiosk` 内**に閉じ standalone を維持（scope の within はパス前方一致のため末尾スラッシュ無し必須。`/api/staff/visit` は fetch＝scope 対象外で問題なし）
-  - **ホーム画面アプリ名は manifest の `name` では決まらない（iOS の重要な落とし穴・2026-07-16 実機で判明）。** iOS Safari は「ホーム画面に追加」時のアプリ名を **`<meta name="apple-mobile-web-app-title">`（＝Next の `appleWebApp.title`）** から取り、無ければ **`<title>`** にフォールバックする（manifest の `name`/`short_name` は**見ない**）。Android/Chrome は逆に manifest の `name` を見る。
-    - 当初 `/kiosk` は appleWebApp 未指定だったため、iOS では顧客 root の `<title>`「echo - 感謝と評価を、サロンへ」がアプリ名になっていた（manifest.name「CARTA 受付」は無視）。**対策＝`kiosk/layout.tsx` の `generateMetadata` で per-salon の `appleWebApp.title` を明示**し、**manifest route と同一ソース（`salons.name`）・同一文字列（`` `${salonName} 受付` ``）**にして iOS 名と Android 名を一致させる。salon 特定不可（cookie 無/不正/失効）の分岐は汎用「echo 受付」で顧客 `<title>` 落ちを防ぐ
-    - **`appleWebApp` を付けるのは `/kiosk` のみ。** root/staff/manager/dashboard は現状の `<title>` 由来（echo / echo staff 等）で足りるため付けない（不要に付けると各画面のアプリ名を `<title>` から奪う）
+  - **ホーム画面アプリ名は「どの追加経路か」で決まるソースが変わる（iOS の重要な落とし穴・2026-07-16 → 2026-07-17 実機で更新）。** iOS には2経路あり、優先ソースが異なる:
+    - **新経路＝iOS 17.4+ の「Webアプリとして開く（standalone）」がON**（有効な manifest がある = `<link rel=manifest>` が読める）: **アプリ名は manifest の `name`/`short_name` が優先**され、**着地も manifest の `start_url`** になる。（実証・2026-07-17: `/dashboard` に `manifest-dashboard.json`（`name:"echo dashboard"` / `start_url:"/dashboard"`）を配り `appleWebApp` は未指定・`<title>` は「echo」だったが、iPhone のホーム追加でアプリ名は**「echo dashboard」＝manifest.name**、着地も **`/dashboard`** になった。）
+    - **旧経路／manifest が読めない・standalone 無効のとき**: アプリ名は **`<meta name="apple-mobile-web-app-title">`（＝Next の `appleWebApp.title`）** → 無ければ **`<title>`** の順にフォールバックする。（`/kiosk` で当初 appleWebApp 未指定だったため、iOS が顧客 root の `<title>`「echo - 感謝と評価を、サロンへ」を拾っていたのはこの経路。⚠️ 2026-07-16 に「iOS は常に apple-mobile-web-app-title から取り manifest.name は見ない」と記録したが、これは**旧経路のみ成立**で、新経路では manifest.name が勝つ＝当時の断定は誤り。）
+    - **Android/Chrome は経路によらず常に manifest の `name`。**
+    - **対策＝どちらの経路に落ちても同じ名前になるよう、`manifest.name`（/`short_name`）と `appleWebApp.title` を同一文字列にそろえる。** `/kiosk` は既にこの方針で、**manifest route と `appleWebApp.title` を同一ソース（`salons.name`）・同一文字列（`` `${salonName} 受付` ``）**にして両経路・iOS/Android を一致させている（salon 特定不可時は汎用「echo 受付」）。
+    - **`appleWebApp` を明示するのは、旧経路フォールバックで `<title>` に落ちてほしくない画面だけ**（現状は `/kiosk`）。専用 manifest を持つ `/dashboard`・`/staff` は新経路で manifest.name が使われるため、当面 appleWebApp は不要（`<title>` に落ちる旧経路の名前が「echo」等で許容できる範囲）。root は `<title>` 由来で足りる。
     - **iOS はアプリ名/アイコンを「追加時に確定・キャッシュ」する**＝名前やアイコンを変えても**既存のホーム画面アイコンには反映されない**。反映には**一度削除→再追加**が必要（実機検証時の必須手順）
   - `/staff/visit`（ログイン中スタッフ用・staff ホーム/`SalonNav` から被リンク）は**温存**＝端末経路だけ `/kiosk` に分離（既存導線に影響なし）
   - device_token は `salons` に1つ＝**iPad 3台で共有**。1台紛失で再発行すると全端末が失効し全台再スキャンが必要（3台規模では許容・端末別失効が要れば `device_tokens` テーブルへ分割）
@@ -225,6 +228,12 @@
     - ホーム画面 web clip 自体は iCloud 同期しない＝token はショートカット経由で伝播しない。漏れ口は **Safari 履歴/ブックマークの iCloud 同期**に限られる → 据え置き端末は**専用 Apple ID・Safari 同期OFF が推奨**
     - 既存 iPad が店長 Apple ID（同期ON）で運用開始する場合: 伝播先は**店長自身の端末＝すでに token に正当アクセスできる本人**なので実害は小さい。ただし**共用 Apple ID（店長以外も触れる）は不可**（本人前提が崩れる）。同期でコピー面が増える弱さは、**再発行＝全コピー即時失効**が担保する
     - token は**サロン単位の bearer**。被害範囲は当該サロンの来店記録に限定（他店越境不可・PII 非開放）。紛失時は `/manager/kiosk` で再発行
+- `/dashboard`（オーナー向け数字管理ダッシュボード）を独立 PWA 化: アイコン1タップで `/dashboard` に着地する … ✓ DB変更なし（2026-07-17・commit `c6a5ee1`）
+  - 症状: `/dashboard` は root layout を継承し顧客 `/manifest.json`（`start_url:"/"`）が配られていた（`curl` で `<link rel=manifest href=/manifest.json>` 確認）。iOS 17.4+ の「Webアプリとして開く」ON だとアイコン起動が manifest の `start_url` を使い、顧客トップ "/" に着地していた（実機再現）＝`/kiosk` と同型
+  - 対策＝**`public/manifest-dashboard.json` 新規**（`name/short_name:"echo dashboard"` / `start_url:"/dashboard"` / **`scope:"/dashboard"`（末尾スラッシュ無し必須・within はパス前方一致）** / display standalone / icons favicon.ico 48x48）を配り、**`src/app/dashboard/layout.tsx` の静的 `metadata.manifest` を `/manifest-dashboard.json` に上書き**（scalar 最深優先＝`<link rel=manifest>` 1本）
+  - **per-salon 不要＝静的 metadata で足りる**（`start_url` 固定・DBアクセスなし）。`/kiosk` の動的 manifest（device_token 突合）とは違い、`/dashboard` は同一オーナー配下の固定着地でよい
+  - `icons` は既存どおり apple=mint（業務側）＋favicon 併記のまま（変更なし）。`appleWebApp` は付けない（上記アプリ名の知見どおり、新経路では manifest.name「echo dashboard」が使われる）
+  - **無改変**: 顧客 `public/manifest.json`・`manifest-staff.json`・`/kiosk`・`/manager`・`/staff`（`/manager/staff` は既に `manifest-staff.json` で `/staff` 着地のため対象外）
 
 ---
 
