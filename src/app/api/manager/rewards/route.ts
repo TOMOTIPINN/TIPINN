@@ -27,14 +27,17 @@ export async function POST(req: Request) {
 
   let typeRaw: unknown;
   let titleRaw: unknown;
+  let consumableRaw: unknown;
   if (isJson) {
     const body = await req.json().catch(() => null);
     typeRaw = body?.reward_type;
     titleRaw = body?.title;
+    consumableRaw = body?.is_consumable;
   } else {
     const form = await req.formData().catch(() => null);
     typeRaw = form?.get("reward_type");
     titleRaw = form?.get("title");
+    consumableRaw = form?.get("is_consumable");
   }
 
   if (!REWARD_TYPE.includes(typeRaw as RewardType)) {
@@ -46,6 +49,10 @@ export async function POST(req: Request) {
   if (!title || title.length > TITLE_MAX) {
     return NextResponse.json({ error: "invalid_title" }, { status: 400 });
   }
+
+  // 特典の使い方 = is_consumable。フォームは "consumable"/"permanent"、JSON は boolean も許容。
+  // 未知値・欠落は false（＝ずっと使える／状態型）＝0025 の既定と一致（明示的に選んだときだけ1回きり）。
+  const is_consumable = consumableRaw === "consumable" || consumableRaw === true;
 
   // 上限チェック（自サロンのみ・件数のみ取得）。
   const { count, error: countError } = await supabaseAdmin
@@ -75,6 +82,7 @@ export async function POST(req: Request) {
       reward_type,
       title,
       required_count: CYCLE_SIZE, // サイクル固定3。発動個数は店長に触らせない。
+      is_consumable, // 既定 false（状態型）。店長が「1回きり」を選んだときだけ true。
     })
     .select("id")
     .single();

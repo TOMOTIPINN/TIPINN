@@ -139,6 +139,30 @@ export default async function ManagerRewardsPage({
                   placeholder="例：ご褒美SPA10分"
                 />
               </div>
+              {/* 使い方 = is_consumable。checkbox だと未チェックが form-data から脱落する（§3 と同種）ため
+                  常に値が飛ぶ select にする。既定は「ずっと使える」(permanent=false・現状の挙動を維持)。 */}
+              <div className="field-group">
+                <label className="field-label" htmlFor="is_consumable">
+                  特典の使い方
+                </label>
+                <select
+                  id="is_consumable"
+                  name="is_consumable"
+                  className="field"
+                  defaultValue="permanent"
+                  required
+                >
+                  <option value="consumable">
+                    1回きり（お使いになると、なくなります）
+                  </option>
+                  <option value="permanent">
+                    ずっと使える（何度でも・権利として残ります）
+                  </option>
+                </select>
+                <p className="field-note">
+                  変更すると、お客様のマイページでの見え方が変わります。
+                </p>
+              </div>
               <button type="submit" className="btn btn-outline btn-block">
                 特典を追加
               </button>
@@ -201,6 +225,34 @@ export default async function ManagerRewardsPage({
                       required
                       defaultValue={reward.title}
                     />
+                  </div>
+                  {/* 使い方 = is_consumable。現在値を defaultValue に反映（consumable/permanent）。 */}
+                  <div className="field-group">
+                    <label
+                      className="field-label"
+                      htmlFor={`is_consumable-${reward.id}`}
+                    >
+                      特典の使い方
+                    </label>
+                    <select
+                      id={`is_consumable-${reward.id}`}
+                      name="is_consumable"
+                      className="field"
+                      defaultValue={
+                        reward.is_consumable ? "consumable" : "permanent"
+                      }
+                      required
+                    >
+                      <option value="consumable">
+                        1回きり（お使いになると、なくなります）
+                      </option>
+                      <option value="permanent">
+                        ずっと使える（何度でも・権利として残ります）
+                      </option>
+                    </select>
+                    <p className="field-note">
+                      変更すると、お客様のマイページでの見え方が変わります。
+                    </p>
                   </div>
                   <button type="submit" className="btn btn-subtle btn-block">
                     更新する

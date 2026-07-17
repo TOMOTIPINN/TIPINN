@@ -25,16 +25,19 @@ export async function POST(req: Request) {
   let idRaw: unknown;
   let typeRaw: unknown;
   let titleRaw: unknown;
+  let consumableRaw: unknown;
   if (isJson) {
     const body = await req.json().catch(() => null);
     idRaw = body?.id;
     typeRaw = body?.reward_type;
     titleRaw = body?.title;
+    consumableRaw = body?.is_consumable;
   } else {
     const form = await req.formData().catch(() => null);
     idRaw = form?.get("id");
     typeRaw = form?.get("reward_type");
     titleRaw = form?.get("title");
+    consumableRaw = form?.get("is_consumable");
   }
 
   const id = typeof idRaw === "string" ? idRaw : "";
@@ -51,10 +54,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_title" }, { status: 400 });
   }
 
+  // 特典の使い方 = is_consumable。フォームは "consumable"/"permanent"、JSON は boolean も許容。
+  // 未知値・欠落は false（＝ずっと使える／状態型）に落とす＝既定挙動を保ち、事故で1回きりに転ばせない。
+  const is_consumable = consumableRaw === "consumable" || consumableRaw === true;
+
   // 自サロンの特典に限定して更新。返り行が無ければ越境/不存在として404。
   const { data, error } = await supabaseAdmin
     .from("rewards")
-    .update({ reward_type, title })
+    .update({ reward_type, title, is_consumable })
     .eq("id", id)
     .eq("salon_id", ctx.salon_id)
     .select("id")

@@ -421,6 +421,14 @@ fieldset.field-group {
   color: var(--ink-soft);
 }
 
+/* フィールド補足（設定変更の影響など・ラベルより控えめ・§5 grey・¥/鮮色なし）。 */
+.field-note {
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--g25);
+}
+
 .field {
   width: 100%;
   padding: 0.85rem 1rem;
