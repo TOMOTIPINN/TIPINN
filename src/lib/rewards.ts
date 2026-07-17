@@ -99,3 +99,68 @@ export async function getSalonRewardsMap(
   }
   return map;
 }
+
+/**
+ * 消費型特典の使用状態（is_consumable=true のみ・migration 0029 の RPC 経由）。
+ *  ・"available" … まだ使える（earned_count > redeemed_count）
+ *  ・"used"      … 獲得ぶんを使い切った（earned_count > 0 かつ earned == redeemed）
+ * 未獲得（earned_count == 0）はどちらでもない＝Map に入れない（mypage は基本の✓ゴール表示に落とす）。
+ * 状態型（is_consumable=false）はそもそも RPC が行を返さない＝常に不在＝常時✓。
+ *
+ * ⚠️ earned_count - redeemed_count（あと何回分か）は UI に出さない。RPC が count を返すのは
+ *    available 判定に必要だからで、回数表示のためではない（2026-07-16 決定）。ここでも boolean 判定にしか使わない。
+ */
+export type ConsumableRewardState = "available" | "used";
+
+/**
+ * 複数サロンの消費型特典の使用状態をまとめて取得（/mypage 用・N+1回避）。
+ * 返り値は salon_id → (reward_id → 状態)。状態が付く消費型が無い salon はキー自体が無い。
+ *
+ * RPC list_consumable_reward_states は (customer_id, salon_id) の1組しか取らないため、
+ * salonId をループして Promise.all で並列に叩く（全サロン一括版の SQL は作らない＝SQLは人間側管理）。
+ * service_role・サーバー側のみ（RLS deny-by-default・§8）。1サロン失敗は console.error で握り潰し、
+ * その salon は状態なし（基本の✓）に落とす＝特典表示の欠落は機会損失だが mypage 全体は壊さない。
+ */
+export async function getConsumableRewardStatesMap(
+  customerId: string,
+  salonIds: string[],
+): Promise<Map<string, Map<string, ConsumableRewardState>>> {
+  const map = new Map<string, Map<string, ConsumableRewardState>>();
+  const ids = Array.from(new Set(salonIds)).filter(Boolean);
+  if (ids.length === 0) return map;
+
+  const results = await Promise.all(
+    ids.map(async (salonId) => {
+      const { data, error } = await supabaseAdmin.rpc(
+        "list_consumable_reward_states",
+        { p_customer_id: customerId, p_salon_id: salonId },
+      );
+      if (error) {
+        console.error("list_consumable_reward_states failed:", error);
+        return { salonId, rows: [] as ConsumableStateRow[] };
+      }
+      return { salonId, rows: (data ?? []) as ConsumableStateRow[] };
+    }),
+  );
+
+  for (const { salonId, rows } of results) {
+    const inner = new Map<string, ConsumableRewardState>();
+    for (const row of rows) {
+      // 未獲得（earned==0）は状態を付けない＝基本の✓ゴール表示のまま（「使用済み」と誤表示しない）。
+      if (row.earned_count <= 0) continue;
+      inner.set(
+        row.reward_id,
+        row.earned_count > row.redeemed_count ? "available" : "used",
+      );
+    }
+    if (inner.size > 0) map.set(salonId, inner);
+  }
+  return map;
+}
+
+type ConsumableStateRow = {
+  reward_id: string;
+  title: string;
+  earned_count: number;
+  redeemed_count: number;
+};

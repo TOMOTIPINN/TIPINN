@@ -8,7 +8,7 @@ import { LogoCircle } from "@/components/LogoCircle";
 import CheckInCard from "@/components/CheckInCard";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { computeVisitProgress } from "@/lib/visit";
-import { getSalonRewardsMap } from "@/lib/rewards";
+import { getSalonRewardsMap, getConsumableRewardStatesMap } from "@/lib/rewards";
 import { getCustomerMigrationDeltas } from "@/lib/stamp-adjustments";
 import { getTier } from "@/lib/rating-tiers";
 
@@ -151,18 +151,20 @@ export default async function MyPage() {
     return 0;
   });
 
-  // 第2波: 和集合IDのサロンメタ(来店列込み) と rewards を一括取得（N+1回避）。
-  const [{ data: salonData }, rewardsMap] = await Promise.all([
-    orderedIds.length
-      ? supabaseAdmin
-          .from("salons")
-          .select(
-            "id, name, logo_url, logo_pos_x, logo_pos_y, logo_zoom, visit_axis_enabled, visit_cycle_size",
-          )
-          .in("id", orderedIds)
-      : Promise.resolve({ data: [] as SalonMeta[] }),
-    getSalonRewardsMap(orderedIds),
-  ]);
+  // 第2波: 和集合IDのサロンメタ(来店列込み) と rewards、消費型特典の使用状態を一括取得（N+1回避）。
+  const [{ data: salonData }, rewardsMap, consumableStatesMap] =
+    await Promise.all([
+      orderedIds.length
+        ? supabaseAdmin
+            .from("salons")
+            .select(
+              "id, name, logo_url, logo_pos_x, logo_pos_y, logo_zoom, visit_axis_enabled, visit_cycle_size",
+            )
+            .in("id", orderedIds)
+        : Promise.resolve({ data: [] as SalonMeta[] }),
+      getSalonRewardsMap(orderedIds),
+      getConsumableRewardStatesMap(session.customer_id, orderedIds),
+    ]);
 
   const salonMeta = new Map<string, SalonMeta>();
   for (const s of (salonData ?? []) as SalonMeta[]) salonMeta.set(s.id, s);
@@ -304,16 +306,37 @@ export default async function MyPage() {
                       </div>
                     )}
 
-                    {/* 特典（両軸共通・title のみ・金額/割引率は出さない）。0件なら出さない。 */}
+                    {/* 特典（両軸共通・title のみ・金額/割引率は出さない）。0件なら出さない。
+                        状態型（is_consumable=false）＝常時✓のみ（現状維持）。
+                        消費型＝状態を出し分け: available→「使えます」／used→「使用済み」(褪せグレー)。
+                        未獲得の消費型は状態なし（statesMap に不在）＝状態型と同じ✓ゴールに落ちる。 */}
                     {rewards.length > 0 && (
                       <div className="stack stack-sm">
                         <p className="perk-head">もらえる特典</p>
                         <ul className="perk-list">
-                          {rewards.map((reward) => (
-                            <li key={reward.id} className="perk-item">
-                              {reward.title}
-                            </li>
-                          ))}
+                          {rewards.map((reward) => {
+                            const state = reward.is_consumable
+                              ? consumableStatesMap.get(id)?.get(reward.id)
+                              : undefined;
+                            return (
+                              <li
+                                key={reward.id}
+                                className={`perk-item${state === "used" ? " is-used" : ""}`}
+                              >
+                                <span className="perk-title">
+                                  {reward.title}
+                                </span>
+                                {state === "available" && (
+                                  <span className="perk-status">使えます</span>
+                                )}
+                                {state === "used" && (
+                                  <span className="perk-status perk-status-used">
+                                    使用済み
+                                  </span>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}

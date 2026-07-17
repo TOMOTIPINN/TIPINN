@@ -763,6 +763,28 @@ textarea.field {
   font-weight: 700;
   flex: 0 0 auto;
 }
+/* 消費型特典の使用状態ラベル（title の右端に寄せる・§5 鮮色不可）。
+   「使えます」＝✓と同系のゴールド、「使用済み」＝褪せグレー。 */
+.perk-status {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--gold);
+}
+.perk-status-used {
+  color: var(--g25);
+}
+/* 使い切った消費型は特典チップ全体を褪せグレーに（✓・地色・罫線もトーンダウン）。 */
+.perk-item.is-used {
+  color: var(--g25);
+  background: var(--card);
+  border-color: var(--line);
+}
+.perk-item.is-used::before {
+  color: var(--g25-soft);
+}
 
 /* 来店ゲージ（来店軸・mypage）。感想3マスの円リングとは別物のドット列。ミント #1FB89E（§12 カスタマー唯一の例外）。
    1行最大10個・10ごと改行・各行は中央寄せ＝flex-wrap + justify-content:center で実現（15なら上10／下5中央）。
