@@ -295,16 +295,11 @@ a {
   opacity: 0.45;
 }
 
-/* 主アクション: 細枠ピル。hoverでほんのり墨色面 */
+/* 主アクション: 細枠ピル。hoverでほんのり墨色面（hoverは下の @media (hover:hover) 内） */
 .btn-outline {
   border: 1px solid var(--line-strong);
   color: var(--ink);
   background: var(--card);
-}
-.btn-outline:not(:disabled):hover {
-  border-color: var(--ink);
-  background: var(--ink);
-  color: var(--on-ink);
 }
 
 /* テキスト的ボタン（最も控えめ）— 例: はじめる / 今すぐ感想を送る */
@@ -312,7 +307,6 @@ a {
   color: var(--ink);
   padding: 0.5rem 0.75rem;
 }
-.btn-quiet:not(:disabled):hover { color: var(--g25); }
 /* 名前の下に置く控えめな変更リンク（mypage）。左寄せ＋左パディング0で見出しと頭を揃える。 */
 .name-edit-link {
   align-self: flex-start;
@@ -326,10 +320,6 @@ a {
   background: #FAF9F7;
   color: var(--ink-soft);
 }
-.btn-subtle:not(:disabled):hover {
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
 
 /* ミント塗りの主CTA。カスタマーUIで唯一許可のミント＝来店ゲージ用 --mint-visit(#1FB89E) を
    ポジティブアクセントとして流用（§12）。新しい色値はハードコードしない（hoverは color-mix で生成）。 */
@@ -338,9 +328,28 @@ a {
   background: var(--mint-visit);
   color: var(--card);
 }
-.btn-mint:not(:disabled):hover {
-  background: color-mix(in srgb, var(--mint-visit) 88%, var(--ink));
-  border-color: color-mix(in srgb, var(--mint-visit) 88%, var(--ink));
+
+/* hover 塗りは「本物のポインタ」環境だけに出す。タッチ端末（iPad受付）は :hover がタップ後に
+   貼り付いたまま残るため、btn-outline がタップ位置で黒面のまま固定される（例: 来店記録を押した直後、
+   同じ位置に現れる消込ボタン「◯◯ を使う」が黒塗りになり、最も押しやすそうに見える＝視覚重みが逆転・§5）。
+   (hover: hover) で囲えば、タッチではホバー塗りが一切出ず、全 btn がアウトライン/控えめのまま並ぶ。 */
+@media (hover: hover) {
+  .btn-outline:not(:disabled):hover {
+    border-color: var(--ink);
+    background: var(--ink);
+    color: var(--on-ink);
+  }
+  .btn-quiet:not(:disabled):hover {
+    color: var(--g25);
+  }
+  .btn-subtle:not(:disabled):hover {
+    border-color: var(--line-strong);
+    color: var(--ink);
+  }
+  .btn-mint:not(:disabled):hover {
+    background: color-mix(in srgb, var(--mint-visit) 88%, var(--ink));
+    border-color: color-mix(in srgb, var(--mint-visit) 88%, var(--ink));
+  }
 }
 
 /* LINE 等の外部認証導線（緑は使わず、控えめな枠で統一） */
