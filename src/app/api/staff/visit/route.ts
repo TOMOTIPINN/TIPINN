@@ -33,6 +33,60 @@ type Body = {
   reward_id?: unknown;
 };
 
+/**
+ * done 画面の消費型特典まわりの状態（record / redeem / void がこの同じ形を返す）。
+ *  ・availableRewards … 本日この来店で消せる候補（0027）
+ *  ・todaysRedemption … 本日この来店で消込済みの1件（0030・get_todays_redemption）／無ければ null
+ * この2つは排他（0027 は本日消込済みなら0行を返す）。TS側で排他を作り直さず、両RPCの結果をそのまま渡す。
+ * cycle_axis/cycle_index は帳簿上の概念でUIに出さないため、todaysRedemption は title だけに絞って返す。
+ */
+type ConsumableDoneState = {
+  availableRewards: { rewardId: string; title: string }[];
+  todaysRedemption: { title: string } | null;
+};
+
+/**
+ * 消費型特典の done 状態を読み直す。record 後・redeem 後・void 後の共通の返り値ソース。
+ * どちらのRPCが失敗しても done 画面自体は壊さない（来店/消込/取消は既に永続化済み・表示の欠落は機会損失止まり）。
+ */
+async function buildConsumableDoneState(
+  customerId: string,
+  salonId: string,
+): Promise<ConsumableDoneState> {
+  const [availRes, todayRes] = await Promise.all([
+    supabaseAdmin.rpc("list_available_consumable_rewards", {
+      p_customer_id: customerId,
+      p_salon_id: salonId,
+    }),
+    supabaseAdmin.rpc("get_todays_redemption", {
+      p_customer_id: customerId,
+      p_salon_id: salonId,
+    }),
+  ]);
+
+  let availableRewards: { rewardId: string; title: string }[] = [];
+  if (availRes.error) {
+    console.error("list_available_consumable_rewards failed:", availRes.error);
+  } else {
+    availableRewards = ((availRes.data ?? []) as {
+      reward_id: string;
+      title: string;
+    }[]).map((row) => ({ rewardId: row.reward_id, title: row.title }));
+  }
+
+  let todaysRedemption: { title: string } | null = null;
+  if (todayRes.error) {
+    console.error("get_todays_redemption failed:", todayRes.error);
+  } else {
+    const row = (
+      Array.isArray(todayRes.data) ? todayRes.data[0] : todayRes.data
+    ) as { title: string } | null | undefined;
+    todaysRedemption = row ? { title: row.title } : null;
+  }
+
+  return { availableRewards, todaysRedemption };
+}
+
 export async function POST(req: Request): Promise<NextResponse> {
   // ガード: スタッフ経路 or 端末経路のいずれかで salon スコープを解決（どちらも無ければ未認証）。
   const vctx = await getVisitContext();
@@ -147,31 +201,18 @@ export async function POST(req: Request): Promise<NextResponse> {
       stamp_awarded: boolean;
     } | null;
 
-    // 消費型特典の「本日消すべき候補」を提示（消し忘れ→別スタッフの再提供を防ぐ / 0027）。
-    // ⚠️ 来店は上で既に永続化済み。この候補取得が失敗しても record は成功として返す
-    // （特典が出ないのは機会損失だが、来店が記録されない方が遥かに重い）。失敗時は空配列。
+    // 消費型特典の done 状態（本日消せる候補＋本日消込済みの1件）を提示（消し忘れ→別スタッフの再提供を防ぐ）。
+    // ⚠️ 来店は上で既に永続化済み。この状態取得が失敗しても record は成功として返す
+    // （特典が出ないのは機会損失だが、来店が記録されない方が遥かに重い）。buildConsumableDoneState 内で吸収。
     // ⚠️ awarded（本日初回スタンプ）とは独立。awarded=false（本日2回目のスキャン＝朝チェックイン後の
-    // 施術後SPA提供など）でも候補は出うるため、if (awarded) で囲まない。cycle_axis/cycle_index は
-    // 帳簿上の概念でUIに出さない（消込RPCが再導出する＝0028）。
-    let availableRewards: { rewardId: string; title: string }[] = [];
-    const { data: rewardRows, error: rewardsError } = await supabaseAdmin.rpc(
-      "list_available_consumable_rewards",
-      { p_customer_id: customerId, p_salon_id: vctx.salon_id },
-    );
-    if (rewardsError) {
-      console.error("list_available_consumable_rewards failed:", rewardsError);
-    } else {
-      availableRewards = ((rewardRows ?? []) as {
-        reward_id: string;
-        title: string;
-      }[]).map((row) => ({ rewardId: row.reward_id, title: row.title }));
-    }
+    // 施術後SPA提供など）でも候補は出うるため、if (awarded) で囲まない。
+    const doneState = await buildConsumableDoneState(customerId, vctx.salon_id);
 
     return NextResponse.json({
       name: customer.display_name,
       awarded: r?.stamp_awarded === true,
       newCount: r?.new_count ?? 0,
-      availableRewards,
+      ...doneState,
     });
   }
 
@@ -213,8 +254,43 @@ export async function POST(req: Request): Promise<NextResponse> {
         { status: 409 },
       );
     }
-    // 成功。1来店1消費なので残りの候補は必ず空＝返す意味がない。
-    return NextResponse.json({ ok: true });
+    // 成功。done 状態を読み直して返す（クライアントは redeemedTitle 等の独自形を持たず、この状態で再描画）。
+    const doneState = await buildConsumableDoneState(customerId, vctx.salon_id);
+    return NextResponse.json({ ok: true, ...doneState });
+  }
+
+  if (action === "void") {
+    // 消込の取消（押し間違い・提供の取りやめ）。done 画面の「取り消す」から呼ぶ。
+    // 本日来店の有無・取消対象の有無は 0030 の RPC 側で判定（TS で軸/サイクルを再計算しない）。
+    // 操作者は redeem と同経路。端末（kiosk）経路は個人特定不可のため null（仕様どおり）。
+    const staffCtx = await getStaffContext();
+    const staffId = staffCtx?.staff_id ?? null;
+
+    const { data, error } = await supabaseAdmin.rpc("void_reward_redemption", {
+      p_customer_id: customerId,
+      p_salon_id: vctx.salon_id,
+      p_staff_id: staffId,
+    });
+    // DB障害等（RPC 例外）は 500。業務上の失敗は例外でなく ok=false で返る（下で 409）。
+    if (error) {
+      console.error("void_reward_redemption failed:", error);
+      return NextResponse.json({ error: "void_failed" }, { status: 500 });
+    }
+
+    const r = (Array.isArray(data) ? data[0] : data) as {
+      ok: boolean;
+      reason: string | null;
+    } | null;
+    // 業務上の失敗（no_visit_today / nothing_to_void）は reason をそのまま 409 で返す（UI で文言分岐）。
+    if (r?.ok !== true) {
+      return NextResponse.json(
+        { error: r?.reason ?? "nothing_to_void" },
+        { status: 409 },
+      );
+    }
+    // 成功。done 状態を読み直して返す（取消後は候補が復活し、自然に「使う」二択へ戻る）。
+    const doneState = await buildConsumableDoneState(customerId, vctx.salon_id);
+    return NextResponse.json({ ok: true, ...doneState });
   }
 
   if (action === "migrate") {

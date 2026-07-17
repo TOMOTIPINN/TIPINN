@@ -42,8 +42,17 @@ type Result = {
   name: string;
   awarded: boolean;
   newCount: number;
-  // 本日消すべき消費型特典（0027）。awarded とは独立＝本日2回目のスキャンでも出うる。
+  // 消費型特典の done 状態（サーバが唯一の正・排他）。availableRewards と todaysRedemption は
+  // 排他（0027 は本日消込済みなら0行）。TS側で排他を作り直さず、来た値でそのまま分岐する。
+  // awarded とは独立＝本日2回目のスキャンでも候補は出うる。
   availableRewards: { rewardId: string; title: string }[];
+  todaysRedemption: { title: string } | null;
+};
+
+// redeem / void の成功レスポンス（done 状態のみ。name/awarded/newCount は持たない＝既存 result に合成）。
+type DoneState = {
+  availableRewards: { rewardId: string; title: string }[];
+  todaysRedemption: { title: string } | null;
 };
 
 export default function VisitScanner() {
@@ -53,10 +62,10 @@ export default function VisitScanner() {
   const [target, setTarget] = useState<Target | null>(null);
   const [result, setResult] = useState<Result | null>(null);
 
-  // 消費型特典の消込（done 画面のみ）。redeemingId=消込通信中の特典id、
-  // redeemedTitle=消込成功後に「使いました」を出す特典名。
+  // 消費型特典の消込/取消（done 画面のみ）。表示状態は result.todaysRedemption / availableRewards
+  // （サーバが唯一の正）で決まる。ここは通信中フラグだけ: redeemingId=消込中の特典id、voiding=取消中。
   const [redeemingId, setRedeemingId] = useState<string | null>(null);
-  const [redeemedTitle, setRedeemedTitle] = useState<string | null>(null);
+  const [voiding, setVoiding] = useState(false);
 
   // 移行入力（未移行時）と訂正入力（既移行時）。migrating は migrate 通信中フラグ。
   const [migrateValue, setMigrateValue] = useState("");
@@ -296,7 +305,7 @@ export default function VisitScanner() {
   // 消費型特典の消込（done 画面で「{title} を使う」）。target は done でも保持済み（reset まで不変）。
   // 失敗してもスキャナには戻さず done に留め、スタッフに判断させる（消し忘れ対策の要）。
   const redeem = useCallback(
-    async (rewardId: string, title: string) => {
+    async (rewardId: string) => {
       if (!target) return;
       setRedeemingId(rewardId);
       setError(null);
@@ -328,8 +337,18 @@ export default function VisitScanner() {
           setRedeemingId(null);
           return;
         }
-        // 成功。1来店1消費なので残りの候補は必ず空＝ボタン群を「続けて読み取る」1つに差し替える。
-        setRedeemedTitle(title);
+        // 成功。サーバから返った done 状態で再描画（redeemedTitle 等の独自形は持たない）。
+        // name/awarded/newCount は既存 result を保ち、消費型まわりだけ差し替える＝上の来店メッセージは不変。
+        const data = (await res.json()) as DoneState;
+        setResult((prev) =>
+          prev
+            ? {
+                ...prev,
+                availableRewards: data.availableRewards,
+                todaysRedemption: data.todaysRedemption,
+              }
+            : prev,
+        );
         setRedeemingId(null);
       } catch {
         setError("保存に失敗しました。もう一度お試しください。");
@@ -338,6 +357,55 @@ export default function VisitScanner() {
     },
     [target],
   );
+
+  // 消込の取消（done 画面で「取り消す」）。押し間違い・提供の取りやめをその場で戻す。
+  // 取消対象（本日の消込）は 0030 の RPC が判定する＝クライアントは redemption_id 等を渡さない。
+  // 成功後はサーバの done 状態で再描画＝候補が復活し、自然に「使う」二択へ戻る。
+  const voidRedemption = useCallback(async () => {
+    if (!target) return;
+    setVoiding(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/staff/visit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "void",
+          customer_id: target.customerId,
+        }),
+      });
+      if (!res.ok) {
+        // 業務上の失敗(409)は reason で文言分岐。DB障害(500)・その他は汎用文言。
+        const j = (await res.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        const reason = j?.error;
+        setError(
+          reason === "nothing_to_void"
+            ? "取り消せる特典がありません。読み取り直してください。"
+            : reason === "no_visit_today"
+              ? "先に来店を記録してください。"
+              : "取り消しに失敗しました。もう一度お試しください。",
+        );
+        setVoiding(false);
+        return;
+      }
+      const data = (await res.json()) as DoneState;
+      setResult((prev) =>
+        prev
+          ? {
+              ...prev,
+              availableRewards: data.availableRewards,
+              todaysRedemption: data.todaysRedemption,
+            }
+          : prev,
+      );
+      setVoiding(false);
+    } catch {
+      setError("取り消しに失敗しました。もう一度お試しください。");
+      setVoiding(false);
+    }
+  }, [target]);
 
   // 主ボタン: 未移行かつ残数入力ありなら「移行して記録」（migrate→record）、それ以外は record のみ。
   const wantMigrate =
@@ -366,11 +434,12 @@ export default function VisitScanner() {
     setEditingMigration(false);
     setMigrating(false);
     setRedeemingId(null);
-    setRedeemedTitle(null);
+    setVoiding(false);
     setPhase("scanning");
   }, []);
 
-  const busy = phase === "recording" || migrating || redeemingId !== null;
+  const busy =
+    phase === "recording" || migrating || redeemingId !== null || voiding;
 
   return (
     <div className="stack">
@@ -559,13 +628,27 @@ export default function VisitScanner() {
                   </p>
                 )}
 
-                {redeemedTitle ? (
-                  // 消込成功: 1来店1消費で残り候補は必ず空＝「続けて読み取る」1つに戻す。
+                {/* 分岐はサーバから来た状態（result.todaysRedemption / availableRewards）だけで決める。
+                    2つは排他（0027 は本日消込済みなら0行）＝TS で排他を作り直さない。 */}
+                {result.todaysRedemption ? (
+                  // 本日この来店で消込済み: 使用済み表示＋取消。取消すると候補が復活し分岐2へ戻る
+                  // （押した直後の押し間違いもそのまま取り消せる＝意図した設計）。
                   <>
-                    <p className="body">{redeemedTitle} を使いました</p>
+                    <p className="body">
+                      {result.todaysRedemption.title} を使用済み
+                    </p>
                     <button
                       type="button"
                       className="btn btn-outline btn-block"
+                      disabled={busy}
+                      onClick={voidRedemption}
+                    >
+                      {voiding ? "取り消しています…" : "取り消す"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-quiet btn-block"
+                      disabled={busy}
                       onClick={reset}
                     >
                       続けて読み取る
@@ -583,7 +666,7 @@ export default function VisitScanner() {
                         type="button"
                         className="btn btn-outline btn-block"
                         disabled={busy}
-                        onClick={() => redeem(r.rewardId, r.title)}
+                        onClick={() => redeem(r.rewardId)}
                       >
                         {redeemingId === r.rewardId
                           ? "保存しています…"
