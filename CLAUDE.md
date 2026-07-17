@@ -238,14 +238,15 @@
   - **per-salon 不要＝静的 metadata で足りる**（`start_url` 固定・DBアクセスなし）。`/kiosk` の動的 manifest（device_token 突合）とは違い、`/dashboard` は同一オーナー配下の固定着地でよい
   - `icons` は既存どおり apple=mint（業務側）＋favicon 併記のまま（変更なし）。`appleWebApp` は付けない（上記アプリ名の知見どおり、新経路では manifest.name「echo dashboard」が使われる）
   - **無改変**: 顧客 `public/manifest.json`・`manifest-staff.json`・`/kiosk`・`/manager`・`/staff`（`/manager/staff` は既に `manifest-staff.json` で `/staff` 着地のため対象外）
-- 消費型/状態型の特典対応 … ✓（2026-07-16〜17・DB migration 0025/0027/0028/0029 ＋ app 5コミット）
+- 消費型/状態型の特典対応 … ✓（2026-07-16〜17・DB migration 0025/0027/0028/0029/0030 ＋ app 6コミット。取消UI まで込みで一周）
   - 概念: **消費型**（`rewards.is_consumable=true`・使ったら消える・例 ご褒美SPA）と**状態型**（=false・権利・消えない・例 VIPセール対象）を分離。`reward_type`（discount/service/priority）とは**直交**（「サービスだから消費型」ではない）。既存2件は 0025 で一律 false＝現状の挙動のまま。
   - DB（本番適用済み・事後記録は 44e2bb4）:
     - **0025** `reward_redemptions`（消込台帳・物理削除せず `voided_at` で取消／部分unique `active_uniq`＝同一サイクル同一特典1回・`one_per_visit`＝1来店1消費）＋ `rewards.is_consumable`（default false）。RLS deny-by-default
     - **0027** `list_available_consumable_rewards`＝「今この来店で何を消せるか」（**本日来店ゲート有り**）。**cycle 導出の唯一の正**（軸順・FIFO・1来店1消費・is_consumable 判定を一元管理）
     - **0028** `redeem_reward`＝消込。失敗は例外でなく **`ok=false`＋`reason`**（`no_visit_today`/`no_available_reward`/`already_redeemed_today`）で返す。候補判定は 0027 に委譲（唯一の正を二重化しない）
     - **0029** `list_consumable_reward_states`＝「今 権利として残っているか」（**本日来店ゲート無し**）。mypage 用。per 特典 `earned_count`/`redeemed_count` を返し `available = earned > redeemed` で判定
-  - app: `rewards.ts` 型通し(a732cd8) → `/api/staff/visit` 候補提示＋消込(b9714cd) → `VisitScanner` 二択UI(a977b03) → `/mypage` 3状態表示(533a7c3) → `/manager/rewards` 使い方切替(092abf4)
+    - **0030** `get_todays_redemption`（本日この来店で消込済みの最大1件を返す・done 表示用）＋ `void_reward_redemption`（消込の取消＝`voided_at`/`voided_by` を立てる。失敗は `ok=false`＋`reason`＝`no_visit_today`/`nothing_to_void`）
+  - app: `rewards.ts` 型通し(a732cd8) → `/api/staff/visit` 候補提示＋消込(b9714cd) → `VisitScanner` 二択UI(a977b03) → `/mypage` 3状態表示(533a7c3) → `/manager/rewards` 使い方切替(092abf4) → 消込の取消UI(bd049d7)
   - 実機確認（2026-07-17・CARTA iPad）: record 直後に必ず二択（「◯を使う」/「今日は使わない」）が出る。**`awarded=false`（本日2回目のスキャン）でも二択は出る**＝朝チェックイン→施術後にSPA提供が決まるケースを拾う（awarded と候補提示は独立）
   - 確定した設計判断（詳細は各 migration のコメント参照）:
     - 消費順は **感想軸 → 来店軸の固定**、各軸内は **FIFO**（未消込の最小 cycle_index）
@@ -253,7 +254,8 @@
     - **どの特典を使うかは UI が選ぶ**＝顧客との実在の会話なので RPC では絞らない
     - **`redeemed_by` は端末（kiosk）経路で null**（個人特定不可・`stamp_adjustments.created_by` と同じ割り切り）
     - **「今日は使わない」は記録しない**（declined を残すかは将来の判断・別テーブルで後から足せる）
-  - ⚠️ **残（「使う」を運用に出す前に必須）: 取消UI。** `voided_at`/`voided_by` 列はあるが**取消の RPC も画面も無い**＝一度消込むと現状は戻せない。運用投入前に取消導線を用意すること
+  - **取消UI**（旧・運用前の必須残タスク → ✓ 解消・bd049d7）: done 画面に「取り消す」を追加。`record`/`redeem`/`void` が**同じ done 状態 `{ availableRewards, todaysRedemption }` を返す**よう共通ヘルパー `buildConsumableDoneState`（0027 候補＋0030 現況）に集約し、**画面はサーバ状態だけで3分岐**（`todaysRedemption`≠null＝使用済み＋取消／候補あり＝使う二択／無し＝続けて読み取る）。**排他は 0027/0030 が担保＝TS で作り直さない**。取消も消込も返り状態で再描画するため、押した直後の押し間違いもその場で戻せる（意図した設計）。取消対象は `void_reward_redemption` が判定＝クライアントは `redemption_id` 等を渡さない
+  - ⚠️ 現時点の割り切り（今回スコープ外・要れば後日）: 取消は**現場で素で押せる**（確認ダイアログ無し・現場で要ると判った時点で足す）／manager 画面・消込履歴一覧は無し
 
 ---
 
