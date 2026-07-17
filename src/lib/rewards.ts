@@ -33,6 +33,7 @@ export type SalonReward = {
   reward_type: RewardType;
   title: string;
   required_count: number;
+  is_consumable: boolean;
 };
 
 /** 不正な型混入に備えてガード（DB CHECK 済みだが純粋に正規化する）。 */
@@ -48,6 +49,7 @@ function normalize(row: {
   reward_type: string;
   title: string;
   required_count: number;
+  is_consumable: boolean;
 }): SalonReward {
   return {
     id: row.id,
@@ -55,6 +57,7 @@ function normalize(row: {
     reward_type: toRewardType(row.reward_type),
     title: row.title,
     required_count: row.required_count,
+    is_consumable: row.is_consumable === true,
   };
 }
 
@@ -64,7 +67,7 @@ function normalize(row: {
 export async function getSalonRewards(salonId: string): Promise<SalonReward[]> {
   const { data } = await supabaseAdmin
     .from("rewards")
-    .select("id, salon_id, reward_type, title, required_count")
+    .select("id, salon_id, reward_type, title, required_count, is_consumable")
     .eq("salon_id", salonId)
     .order("created_at", { ascending: true });
 
@@ -84,7 +87,7 @@ export async function getSalonRewardsMap(
 
   const { data } = await supabaseAdmin
     .from("rewards")
-    .select("id, salon_id, reward_type, title, required_count")
+    .select("id, salon_id, reward_type, title, required_count, is_consumable")
     .in("salon_id", ids)
     .order("created_at", { ascending: true });
 
