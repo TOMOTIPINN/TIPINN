@@ -26,7 +26,12 @@ export const runtime = "nodejs";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Body = { action?: unknown; customer_id?: unknown; delta?: unknown };
+type Body = {
+  action?: unknown;
+  customer_id?: unknown;
+  delta?: unknown;
+  reward_id?: unknown;
+};
 
 export async function POST(req: Request): Promise<NextResponse> {
   // ガード: スタッフ経路 or 端末経路のいずれかで salon スコープを解決（どちらも無ければ未認証）。
@@ -141,11 +146,75 @@ export async function POST(req: Request): Promise<NextResponse> {
       new_count: number;
       stamp_awarded: boolean;
     } | null;
+
+    // 消費型特典の「本日消すべき候補」を提示（消し忘れ→別スタッフの再提供を防ぐ / 0027）。
+    // ⚠️ 来店は上で既に永続化済み。この候補取得が失敗しても record は成功として返す
+    // （特典が出ないのは機会損失だが、来店が記録されない方が遥かに重い）。失敗時は空配列。
+    // ⚠️ awarded（本日初回スタンプ）とは独立。awarded=false（本日2回目のスキャン＝朝チェックイン後の
+    // 施術後SPA提供など）でも候補は出うるため、if (awarded) で囲まない。cycle_axis/cycle_index は
+    // 帳簿上の概念でUIに出さない（消込RPCが再導出する＝0028）。
+    let availableRewards: { rewardId: string; title: string }[] = [];
+    const { data: rewardRows, error: rewardsError } = await supabaseAdmin.rpc(
+      "list_available_consumable_rewards",
+      { p_customer_id: customerId, p_salon_id: vctx.salon_id },
+    );
+    if (rewardsError) {
+      console.error("list_available_consumable_rewards failed:", rewardsError);
+    } else {
+      availableRewards = ((rewardRows ?? []) as {
+        reward_id: string;
+        title: string;
+      }[]).map((row) => ({ rewardId: row.reward_id, title: row.title }));
+    }
+
     return NextResponse.json({
       name: customer.display_name,
       awarded: r?.stamp_awarded === true,
       newCount: r?.new_count ?? 0,
+      availableRewards,
     });
+  }
+
+  if (action === "redeem") {
+    // 消費型特典の消込（record 後、スタッフが「ご褒美SPA」等を実際に提供したときにチェックを外す）。
+    // 消込は record 後にしか起こらない＝confirm/lookup では判定できないため、この action で単独処理する。
+    const rewardId =
+      typeof body?.reward_id === "string" ? body.reward_id.trim() : "";
+    if (!UUID_RE.test(rewardId)) {
+      return NextResponse.json({ error: "invalid_reward" }, { status: 400 });
+    }
+
+    // 操作者（在籍staff）。端末経路は個人特定不可のため null（stamp_adjustments.created_by と同じ割り切り）。
+    const staffCtx = await getStaffContext();
+    const staffId = staffCtx?.staff_id ?? null;
+
+    // 消込は 0028 に一元化（本日来店の有無・二重消込・サイクル導出を RPC 側で原子的に判定）。
+    const { data, error } = await supabaseAdmin.rpc("redeem_reward", {
+      p_customer_id: customerId,
+      p_salon_id: vctx.salon_id,
+      p_reward_id: rewardId,
+      p_staff_id: staffId,
+    });
+    // DB障害等（RPC 例外）は 500。業務上の失敗は例外でなく ok=false で返る（下で 409）。
+    if (error) {
+      console.error("redeem_reward failed:", error);
+      return NextResponse.json({ error: "redeem_failed" }, { status: 500 });
+    }
+
+    const r = (Array.isArray(data) ? data[0] : data) as {
+      ok: boolean;
+      reason: string | null;
+    } | null;
+    // 業務上の失敗（no_visit_today / no_available_reward / already_redeemed_today）は
+    // reason をそのまま 409 で返す（客/端末を責めず、UI 側で文言分岐する）。
+    if (r?.ok !== true) {
+      return NextResponse.json(
+        { error: r?.reason ?? "no_available_reward" },
+        { status: 409 },
+      );
+    }
+    // 成功。1来店1消費なので残りの候補は必ず空＝返す意味がない。
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "migrate") {
