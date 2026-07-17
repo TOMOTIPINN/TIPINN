@@ -38,7 +38,13 @@ type Target = {
   cycleSize: number; // 移行入力の上限（salons.visit_cycle_size）
 };
 
-type Result = { name: string; awarded: boolean; newCount: number };
+type Result = {
+  name: string;
+  awarded: boolean;
+  newCount: number;
+  // 本日消すべき消費型特典（0027）。awarded とは独立＝本日2回目のスキャンでも出うる。
+  availableRewards: { rewardId: string; title: string }[];
+};
 
 export default function VisitScanner() {
   const [phase, setPhase] = useState<Phase>("scanning");
@@ -46,6 +52,11 @@ export default function VisitScanner() {
   const [cameraOff, setCameraOff] = useState(false);
   const [target, setTarget] = useState<Target | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+
+  // 消費型特典の消込（done 画面のみ）。redeemingId=消込通信中の特典id、
+  // redeemedTitle=消込成功後に「使いました」を出す特典名。
+  const [redeemingId, setRedeemingId] = useState<string | null>(null);
+  const [redeemedTitle, setRedeemedTitle] = useState<string | null>(null);
 
   // 移行入力（未移行時）と訂正入力（既移行時）。migrating は migrate 通信中フラグ。
   const [migrateValue, setMigrateValue] = useState("");
@@ -282,6 +293,52 @@ export default function VisitScanner() {
     }
   }, [target]);
 
+  // 消費型特典の消込（done 画面で「{title} を使う」）。target は done でも保持済み（reset まで不変）。
+  // 失敗してもスキャナには戻さず done に留め、スタッフに判断させる（消し忘れ対策の要）。
+  const redeem = useCallback(
+    async (rewardId: string, title: string) => {
+      if (!target) return;
+      setRedeemingId(rewardId);
+      setError(null);
+      try {
+        const res = await fetch("/api/staff/visit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "redeem",
+            customer_id: target.customerId,
+            reward_id: rewardId,
+          }),
+        });
+        if (!res.ok) {
+          // 業務上の失敗(409)は reason で文言分岐。DB障害(500)・その他は汎用文言。
+          const j = (await res.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          const reason = j?.error;
+          setError(
+            reason === "no_available_reward"
+              ? "この特典は今はお使いいただけません。読み取り直してください。"
+              : reason === "already_redeemed_today"
+                ? "本日はすでに特典をお使いです。"
+                : reason === "no_visit_today"
+                  ? "先に来店を記録してください。"
+                  : "保存に失敗しました。もう一度お試しください。",
+          );
+          setRedeemingId(null);
+          return;
+        }
+        // 成功。1来店1消費なので残りの候補は必ず空＝ボタン群を「続けて読み取る」1つに差し替える。
+        setRedeemedTitle(title);
+        setRedeemingId(null);
+      } catch {
+        setError("保存に失敗しました。もう一度お試しください。");
+        setRedeemingId(null);
+      }
+    },
+    [target],
+  );
+
   // 主ボタン: 未移行かつ残数入力ありなら「移行して記録」（migrate→record）、それ以外は record のみ。
   const wantMigrate =
     !!target && !target.migrated && migrateValue.trim() !== "";
@@ -308,10 +365,12 @@ export default function VisitScanner() {
     setEditValue("");
     setEditingMigration(false);
     setMigrating(false);
+    setRedeemingId(null);
+    setRedeemedTitle(null);
     setPhase("scanning");
   }, []);
 
-  const busy = phase === "recording" || migrating;
+  const busy = phase === "recording" || migrating || redeemingId !== null;
 
   return (
     <div className="stack">
@@ -499,13 +558,59 @@ export default function VisitScanner() {
                     本日は記録済みです（累計 {result.newCount} 回）
                   </p>
                 )}
-                <button
-                  type="button"
-                  className="btn btn-outline btn-block"
-                  onClick={reset}
-                >
-                  続けて読み取る
-                </button>
+
+                {redeemedTitle ? (
+                  // 消込成功: 1来店1消費で残り候補は必ず空＝「続けて読み取る」1つに戻す。
+                  <>
+                    <p className="body">{redeemedTitle} を使いました</p>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-block"
+                      onClick={reset}
+                    >
+                      続けて読み取る
+                    </button>
+                  </>
+                ) : result.availableRewards.length > 0 ? (
+                  // 消し忘れ対策の本体: 提供済みの消費型特典をその場で消込む二択。
+                  // 候補ありのときは「続けて読み取る」を出さない＝二択に答えず立ち去れる導線を残すと
+                  // 消し忘れ対策そのものが成立しないため（次回、別スタッフが再提供してしまう）。
+                  <>
+                    <p className="muted">ご提供した特典があればお選びください。</p>
+                    {result.availableRewards.map((r) => (
+                      <button
+                        key={r.rewardId}
+                        type="button"
+                        className="btn btn-outline btn-block"
+                        disabled={busy}
+                        onClick={() => redeem(r.rewardId, r.title)}
+                      >
+                        {redeemingId === r.rewardId
+                          ? "保存しています…"
+                          : `${r.title} を使う`}
+                      </button>
+                    ))}
+                    {/* 「今日は使わない」は記録しない＝何も送らず reset するだけ。
+                        declined を残すかは将来の判断（別テーブルで後から足せる・2026-07-16 決定）。 */}
+                    <button
+                      type="button"
+                      className="btn btn-quiet btn-block"
+                      disabled={busy}
+                      onClick={reset}
+                    >
+                      今日は使わない
+                    </button>
+                  </>
+                ) : (
+                  // 消費型の候補なし: 従来どおり「続けて読み取る」のみ。
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-block"
+                    onClick={reset}
+                  >
+                    続けて読み取る
+                  </button>
+                )}
               </>
             )}
           </div>
