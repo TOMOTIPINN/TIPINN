@@ -7,8 +7,8 @@ import { getSession } from "@/lib/session";
  * 指定サロンのスタッフ一覧を返す（感想フォームのプルダウン用）。
  * RLS は deny-by-default のためクライアント直叩き不可。ログイン済みの顧客に対し
  * service role で取得し、必ず salon_id でスコープする（原則4: マルチテナント起点）。
- * 個人情報は返さない（id / name / photo_url / job_title ＋ 写真の位置/ズームのみ。
- * job_title=職種で権限roleとは別物）。
+ * 個人情報は返さない（id / name / photo_url / job_title / bio ＋ 写真の位置/ズームのみ。
+ * job_title=職種で権限roleとは別物。bio=店長が編集する「ひとこと」で顧客に見せてよい）。
  */
 export async function GET(req: Request) {
   const session = await getSession();
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const { data, error } = await supabaseAdmin
     .from("staff")
     .select(
-      "id, name, photo_url, job_title, photo_pos_x, photo_pos_y, photo_zoom",
+      "id, name, photo_url, job_title, bio, photo_pos_x, photo_pos_y, photo_zoom",
     )
     .eq("salon_id", salonId)
     .is("archived_at", null)

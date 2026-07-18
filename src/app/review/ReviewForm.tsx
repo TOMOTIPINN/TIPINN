@@ -19,6 +19,7 @@ type Staff = {
   name: string;
   photo_url: string | null;
   job_title: string | null;
+  bio: string | null;
   photo_pos_x: number;
   photo_pos_y: number;
   photo_zoom: number;
@@ -157,8 +158,12 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
                 <span className="staff-photo" aria-hidden="true">
                   <LogoCircle logoUrl={null} fallback="店" />
                 </span>
-                <span className="staff-pick-name">お店のみんなへ</span>
-                <span className="staff-pick-jobtitle">サロン全体</span>
+                <span className="staff-pick-text">
+                  <span className="staff-pick-line1">
+                    <span className="staff-pick-name">お店のみんなへ</span>
+                    <span className="staff-pick-jobtitle">サロン全体</span>
+                  </span>
+                </span>
               </button>
               {staff.map((s) => {
                 const active = !toSalon && staffId === s.id;
@@ -184,10 +189,17 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
                         fallback={s.name.slice(0, 3)}
                       />
                     </span>
-                    <span className="staff-pick-name">{s.name}</span>
-                    {s.job_title && (
-                      <span className="staff-pick-jobtitle">{s.job_title}</span>
-                    )}
+                    <span className="staff-pick-text">
+                      <span className="staff-pick-line1">
+                        <span className="staff-pick-name">{s.name}</span>
+                        {s.job_title && (
+                          <span className="staff-pick-jobtitle">
+                            {s.job_title}
+                          </span>
+                        )}
+                      </span>
+                      {s.bio && <span className="staff-pick-bio">{s.bio}</span>}
+                    </span>
                   </button>
                 );
               })}
