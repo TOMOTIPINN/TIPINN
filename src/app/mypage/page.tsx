@@ -273,11 +273,7 @@ export default async function MyPage() {
                           logoY={meta.logo_pos_y}
                           logoZoom={meta.logo_zoom}
                         />
-                        <p className="muted">
-                          次の特典まであと {vip.toNextPerk} 個
-                          {vip.cyclesCompleted > 0 &&
-                            `（特典 ${vip.cyclesCompleted} 回獲得・累計 ${reviewCount} 個）`}
-                        </p>
+                        <p className="muted">感想あと {vip.toNextPerk} 回で特典</p>
                       </>
                     )}
 
