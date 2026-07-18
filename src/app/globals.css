@@ -1910,14 +1910,18 @@ textarea.field {
   text-overflow: ellipsis;
   min-width: 0;
 }
-/* 2行目: ひとこと（グレー・さらに小さめ）。1行に収め溢れは省略・折り返さない。 */
+/* 2行目: ひとこと（グレー・さらに小さめ）。2行まで表示し、超えたら ellipsis。
+   1行 nowrap だと大半が読めず切れるため line-clamp:2 に変更（はみ出しは
+   fieldset min-width:0＋min-width:0 チェーンで担保済み・再発しない）。 */
 .staff-pick-bio {
   font-family: var(--font-sans);
   font-size: 0.78rem;
+  line-height: 1.45;
   color: var(--g25);
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   overflow: hidden;
-  text-overflow: ellipsis;
   min-width: 0;
 }
 
