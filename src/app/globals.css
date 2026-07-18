@@ -414,11 +414,18 @@ a {
    ブラウザ標準の groove ボーダーを §5 の線（--line）＋角丸（--radius）に置換し、
    内側パディングを16pxに揃える。display:flex により legend は通常の子として
    上に並び、枠は閉じたカードになる。
-   .field-group は select/textarea の <div> とも共有するため fieldset のみに限定。 */
+   .field-group は select/textarea の <div> とも共有するため fieldset のみに限定。
+   min-width:0 は必須: <fieldset> は既定で min-inline-size:min-content を持ち、
+   親（.card/.stack）より横に広がろうとする。スタッフ選択の横1列リストは bio が
+   white-space:nowrap のため min-content が親カード幅を超え、fieldset ごと画面外に
+   はみ出して ellipsis も効かなくなる。min-width:0 で親幅まで縮められるようにし、
+   内側の min-width:0 チェーン（.staff-pick-text 等）で bio を省略表示させる。
+   他の fieldset（評価/タグ/共有）は元々収まっており無影響。fieldset は本フォーム専用。 */
 fieldset.field-group {
   padding: var(--space-md);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  min-width: 0;
 }
 
 /* 入力ラベル（ゴシック・小・G2.5寄り） */
