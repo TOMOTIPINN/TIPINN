@@ -5,13 +5,13 @@ import { ImageAdjuster } from "@/components/ImageAdjuster";
 
 /**
  * スタッフ プロフィール編集フォーム（A2 / client）。
- * 写真（ドラッグ＆ズーム位置調整・@/components/ImageAdjuster）／職種（プリセット＋自由入力hybrid）／一言（100字）。
+ * 写真（ドラッグ＆ズーム位置調整・@/components/ImageAdjuster）／職種（プリセット＋自由入力hybrid）／一言（25字）。
  *
  * ネイティブの multipart フォームPOST（/api/manager/staff/update）。JSでの送信制御はしない。
  * 写真の調整UI（ロゴと共通の汎用 ImageAdjuster）が photo / photo_pos_x/y / photo_zoom を出力する。
  */
 const NAME_MAX = 50;
-const BIO_MAX = 100;
+const BIO_MAX = 25;
 const JOB_TITLE_MAX = 30;
 
 // 職種プリセット（datalist 候補）。自由入力も可。権限 role とは無関係。

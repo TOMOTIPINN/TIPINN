@@ -24,7 +24,7 @@ export const runtime = "nodejs";
 
 const NAME_MAX = 50;
 const JOB_TITLE_MAX = 30;
-const BIO_MAX = 100;
+const BIO_MAX = 25;
 
 /** form 値を数値化し min..max にクランプ（不正値は fallback）。DBの CHECK と同じ値域を使う。 */
 function clampNumber(

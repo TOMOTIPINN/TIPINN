@@ -1887,7 +1887,9 @@ textarea.field {
   flex: 1;
   min-width: 0;
 }
-/* 1行目: 名前（強調）+ 役職（グレー・小さめ）。役職は溢れたら省略し折り返さない。 */
+/* 1行目: 名前（強調・黒）+ 役職（ゴールド・小さめ）。役職は溢れたら省略し折り返さない。
+   §12: カスタマーUIの正規アクセントは --gold（VIP等で既出）。役職を --gold にして
+   名前(黒)＞役職(gold)＞ひとこと(grey) の階層を作る。サイズ小＋非太字で名前より弱く保つ。 */
 .staff-pick-line1 {
   display: flex;
   align-items: baseline;
@@ -1904,7 +1906,7 @@ textarea.field {
   font-family: var(--font-sans);
   font-size: 0.72rem;
   letter-spacing: 0.04em;
-  color: var(--g25);
+  color: var(--gold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
