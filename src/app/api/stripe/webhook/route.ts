@@ -12,7 +12,10 @@ import { getTier } from "@/lib/rating-tiers";
  *   署名シークレット STRIPE_CONNECT_WEBHOOK_SECRET を使う。
  *
  * やること: session.metadata を読み rating_purchases に INSERT するだけ。
- *   - 冪等: stripe_payment_id(= payment_intent) の unique で二重記録を防ぐ（ON CONFLICT DO NOTHING）。
+ *   - 冪等（第一層・0032 stripe_events）: 署名検証直後にイベントを (id, type, payload) で
+ *     記録し、処理済み(processed_at NOT NULL)の再送は実処理を丸ごとスキップする。
+ *     二重配信で消込・課金が二重に走らないための最上位ガード。
+ *   - 冪等（第二層）: stripe_payment_id(= payment_intent) の unique で二重記録を防ぐ（ON CONFLICT DO NOTHING）。
  *   - 価格はサーバーの tier 定義のみ信用（原則8）。
  *   - 記録のみ。賞与・残高ロジックは一切入れない（原則5・6）。echo は資金を持たない（原則1）。
  */
@@ -37,23 +40,89 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_signature" }, { status: 400 });
   }
 
-  if (event.type !== "checkout.session.completed") {
-    // 対象外イベントは確認応答のみ（Stripeの再送を止める）
-    return NextResponse.json({ received: true });
+  // 冪等の第一層（0032 stripe_events）: 署名検証が通った直後にイベントを記録し、
+  // 処理済みの再送は実処理へ入れない。二重配信での二重課金・二重消込を最上位で止める。
+  let claim: EventClaim;
+  try {
+    claim = await claimStripeEvent(event);
+  } catch (e) {
+    // イベント記録自体に失敗 → まだ何も処理していない。500 で Stripe に再送させる。
+    console.error("[stripe-webhook] event dedup failed (will retry):", e);
+    return NextResponse.json({ error: "dedup_failed" }, { status: 500 });
   }
-
-  const session = event.data.object as Stripe.Checkout.Session;
-  // Direct Charge: 連結アカウント上のイベント。account に連結アカウントIDが入る（ログ用）。
-  const connectedAccount = event.account ?? "(none)";
+  if (claim === "already_processed") {
+    // 二重配信。実処理をスキップして確認応答のみ（Stripeの再送を止める）。
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+  // claim === "claimed"（新規受信）/ "retry"（受信済みだが前回処理が途中失敗＝未処理）→ 実処理へ。
 
   try {
-    const outcome = await recordRatingPurchase(session, connectedAccount);
+    let outcome:
+      | "recorded"
+      | "skipped_unpaid"
+      | "skipped_bad_metadata"
+      | "ignored_event_type" = "ignored_event_type";
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      // Direct Charge: 連結アカウント上のイベント。account に連結アカウントIDが入る（ログ用）。
+      const connectedAccount = event.account ?? "(none)";
+      outcome = await recordRatingPurchase(session, connectedAccount);
+    }
+
+    // 実処理が正常終了 → processed_at を打つ（以後この event は再送でも弾かれる）。
+    await markStripeEventProcessed(event.id);
     return NextResponse.json({ received: true, outcome });
   } catch (e) {
-    // DB等の一時的失敗 → 500 を返して Stripe に再送させる（冪等なので二重記録しない）
+    // DB等の一時的失敗 → 500 を返して Stripe に再送させる。processed_at は打たれないので
+    //   次回は "retry" として実処理をやり直せる（rating_purchases は冪等なので二重記録しない）。
     console.error("[stripe-webhook] record failed (will retry):", e);
     return NextResponse.json({ error: "record_failed" }, { status: 500 });
   }
+}
+
+type EventClaim = "claimed" | "retry" | "already_processed";
+
+/**
+ * 冪等の第一層（0032 stripe_events）。署名検証済みイベントを (id, type, payload) で記録する。
+ *   - 新規挿入できた → "claimed"
+ *   - 衝突（既受信）かつ処理完了(processed_at NOT NULL) → "already_processed"（実処理を弾く）
+ *   - 衝突（既受信）だが未処理(processed_at IS NULL・前回の途中失敗) → "retry"（実処理を再実行）
+ * INSERT/SELECT が失敗したら throw（呼び出し側が 500 で Stripe に再送させる）。
+ */
+async function claimStripeEvent(event: Stripe.Event): Promise<EventClaim> {
+  // ON CONFLICT (id) DO NOTHING 相当。挿入できた行だけ返る（衝突時は空）。
+  const { data: inserted, error: insErr } = await supabaseAdmin
+    .from("stripe_events")
+    .upsert(
+      {
+        id: event.id,
+        type: event.type,
+        payload: event as unknown as Record<string, unknown>,
+      },
+      { onConflict: "id", ignoreDuplicates: true },
+    )
+    .select("id");
+  if (insErr) throw insErr;
+  if ((inserted?.length ?? 0) > 0) return "claimed"; // 新規受信
+
+  // 衝突＝既受信。処理済みかどうかで実処理をやり直すか弾くかを決める。
+  const { data: existing, error: selErr } = await supabaseAdmin
+    .from("stripe_events")
+    .select("processed_at")
+    .eq("id", event.id)
+    .single();
+  if (selErr) throw selErr;
+  return existing?.processed_at ? "already_processed" : "retry";
+}
+
+/** 実処理の正常終了を stripe_events.processed_at に刻む（以後の再送を弾く印）。 */
+async function markStripeEventProcessed(eventId: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from("stripe_events")
+    .update({ processed_at: new Date().toISOString() })
+    .eq("id", eventId);
+  if (error) throw error;
 }
 
 async function recordRatingPurchase(
