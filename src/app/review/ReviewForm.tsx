@@ -121,8 +121,16 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
       router.push(
         `/review/complete?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}&awarded=${awarded}`,
       );
-    } catch {
-      setError("送信に失敗しました。時間をおいて再度お試しください。");
+    } catch (err) {
+      // !res.ok のとき throw new Error(data.error) 済＝ここに API の error コードが載る。
+      // 来店裏付けチェック（0032）で弾かれたときだけ専用文言。
+      // それ以外（汎用エラー・ネットワーク断・JSON 破損）は従来どおりの文言。
+      const code = err instanceof Error ? err.message : "";
+      setError(
+        code === "no_visit_today"
+          ? "本日のご来店が確認できませんでした。ご来店当日にお試しください。"
+          : "送信に失敗しました。時間をおいて再度お試しください。",
+      );
       setSubmitting(false);
     }
   }

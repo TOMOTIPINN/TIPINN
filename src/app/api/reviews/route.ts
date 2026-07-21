@@ -91,6 +91,13 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error("submit_review_and_earn_stamp failed:", error);
+    // 来店裏付けチェック（0032）で弾かれたケースだけ専用コードで返す。
+    // RPC は `raise exception 'no_visit_today'` で弾く＝ error.message が完全一致する
+    // （他の raise は 'invalid rating: %' 等の書式付きでこの語を含まない）。
+    // 業務上の失敗＝ 409（/api/staff/visit の no_visit_today と同じ扱い）。それ以外は従来の 500。
+    if (error.message === "no_visit_today") {
+      return NextResponse.json({ error: "no_visit_today" }, { status: 409 });
+    }
     return NextResponse.json({ error: "server_error" }, { status: 500 });
   }
 
