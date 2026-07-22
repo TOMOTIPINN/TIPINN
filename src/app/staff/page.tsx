@@ -6,6 +6,7 @@ import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import RoleBar from "@/components/RoleBar";
+import AddFriendCard from "@/components/AddFriendCard";
 import { resolveSalonRole } from "@/lib/display-role";
 import {
   GREETING_LABEL,
@@ -228,6 +229,12 @@ export default async function StaffHomePage() {
         </header>
 
         <hr className="rule" />
+
+        {/* LINE 公式アカウント 友だち追加（控えめ・dismissible）。PWA アイコンを失っても入口を残す導線。
+            env 未設定なら出さない（安全側）。友だち状態は判別不可のため全員に薄く表示し「あとで」で閉じられる。 */}
+        {process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL && (
+          <AddFriendCard url={process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL} />
+        )}
 
         {/* 店頭の来店受付（お客様QRを読み取って来店記録）。日々の主動線なので上部に置く。 */}
         <Link href="/staff/visit" className="btn btn-outline btn-block">
