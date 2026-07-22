@@ -63,7 +63,7 @@
 
 ---
 
-## 4. データモデル（7テーブル / RLS deny-by-default・service_role のみアクセス）
+## 4. データモデル（13テーブル / RLS deny-by-default・service_role のみアクセス）
 - `customers`(id, line_user_id, …) — 中央台帳
 - `salons`(id, **name必須**, logo_url, stripe_account_id, created_at)
 - `staff`(id, **salon_id必須**, **name必須**, photo_url, created_at)
@@ -75,6 +75,16 @@
 - `rating_purchases`(id, …, tier, amount, stripe_payment_id, …) — 有償・お金の台帳（**残高カラム無し**）
 - `earned_stamps`(id, customer_id, salon_id, count, updated_at) — 無償・countのみ。`unique(customer_id, salon_id)`
 - `rewards`(id, required_count, title, …)
+
+  ↑ 以上7つが初期スキーマ（migration 0001）。以下は後続 migration で追加（同じく RLS deny-by-default・service_role のみ）:
+- `visits`(id, customer_id, salon_id, **visited_on**（JST暦日）, created_at) — 来店記録。`unique(customer_id, salon_id, visited_on)`＝1日1来店。来店軸スタンプの母数。migration 0009
+- `notification_outbox`(id, customer_id, salon_id, kind, visited_on, notify_at, status, sent_at, …) — 来店リマインド通知のキュー。cron `/api/cron/line-push` が notify_at 到達後に push。`unique(customer_id, salon_id, visited_on, kind)`。migration 0014（skip_reason は 0024）
+- `stamp_adjustments`(id, customer_id, salon_id, delta, source='migration', note, created_by, updated_by, …) — 旧LINEショップカード残高を来店軸へ引き継ぐ移行オフセット。`unique(customer_id, salon_id, source)`＝顧客×サロン×sourceで1回（冪等）。migration 0019
+- `reward_redemptions`(id, customer_id, salon_id, reward_id, visit_id, cycle_axis[`review`|`visit`], cycle_index, redeemed_by, redeemed_at, voided_at, voided_by) — 消費型特典の消込台帳（物理削除せず `voided_at` で取消）。migration 0025（付随RPC 0026–0030）
+- `stripe_events`(id, type, salon_id, payload, received_at, processed_at) — Stripe webhook の冪等記録（イベント単位・二重配信を最上位で止める）。migration 0032
+- `audit_log`(id, salon_id, customer_id, actor_type, actor_id, action, table_name, record_id, old_data, new_data, created_at) — スタンプ・特典・消込の監査ログ（追記専用・トリガー `fn_audit_log` が自動記録）。RLS 有効＋ポリシー0件で完全deny。migration 0034
+
+**監査ログ（audit_log）の付与ルール**: スタンプ・特典・消込など、**お金や顧客の権利に関わるテーブルを新設・変更する場合は、audit_log トリガー（`fn_audit_log`）の付与要否を必ず検討する**。対象は migration 0034 を参照。
 
 **貯まるスタンプ付与ルール**: **1個 / 顧客 / サロン / 日（JST・Asia/Tokyo基準）**。
 その日その(顧客,サロン)で最初の感想送信のときだけ +1。2回目以降は感想は記録されるがスタンプは増えない。
@@ -306,7 +316,7 @@
 ## 変更時セキュリティ・チェック（2026-07-14 棚卸しで確定した不変条件。機能追加・変更のたびに確認）
 
 - **テナント分離は RLS ではなく `salon_id` スコープで担保する。** 全テーブルは RLS 有効・deny-by-default（直アクセスは全拒否）で、実分離は `supabaseAdmin` を使うサーバーコードが `ctx.salon_id`／`vctx.salon_id` で必ず絞ることで成立している。この salon_id は**必ずセッション由来**（`getStaffContext()` → `line_user_id` から `staff` を引いた DB 上の値）であり、**リクエストの body／query の salon_id は絶対に信用しない**。新しく `supabaseAdmin` で読み書きするクエリ・RPC を書くときは、`.eq("salon_id", vctx.salon_id)` 相当のスコープ（RPC なら `p_salon_id: vctx.salon_id`）を必ず付ける。（確認済: `staff-session.ts` が salon_id を DB 由来に固定＝越境不能。`api/staff/visit` 等の書き込みは全て自店スコープ。）
-- **新テーブルを追加したら、必ず RLS を有効化して deny-by-default に乗せる。** 有効化を忘れた1テーブルが全テナント漏洩の穴になる。追加後に `select tablename, rowsecurity from pg_tables where schemaname='public'` で `rowsecurity=true` を確認する。（確認済: 現行10テーブルすべて有効。ポリシーは0件＝全拒否で正常。）
+- **新テーブルを追加したら、必ず RLS を有効化して deny-by-default に乗せる。** 有効化を忘れた1テーブルが全テナント漏洩の穴になる。追加後に `select tablename, rowsecurity from pg_tables where schemaname='public'` で `rowsecurity=true` を確認する。（確認済: 現行13テーブル（2026-07-22 棚卸し時点）すべて有効。ポリシーは0件＝全拒否で正常。）
   - 補足（§3 の鉄則「`create table` すると RLS が自動で有効化される」＝`ensure_rls`/`rls_auto_enable` を参照）: **有効化そのものは ensure_rls が `ddl_command_end` で自動でやるので「忘れる」ことは起きない。** 残る仕事は**ポリシーを書くか／完全deny を意図的に選ぶか**の判断のほう。上の `rowsecurity=true` 確認に加え、**新テーブルごとに「読む導線が要るか」を決め、要るならポリシーを書き、要らないなら完全deny を意図として明記する**（気づかぬ完全deny で REST が読めない穴を避ける）。
 - **secret を `NEXT_PUBLIC_` に置かない。** `SUPABASE_SECRET_KEY`（service_role・RLSバイパス）は `@/lib/supabase-admin` 経由のサーバー側のみで使う。env を追加するとき、秘密値に `NEXT_PUBLIC_` prefix を付けない（バンドルに焼き込まれ全公開になる）。`.env`／`.env.local` は git 追跡しない（追跡は値の無い `.env.example` のみ）。（確認済: secret は `supabase-admin.ts` 1ファイルに隔離、クライアントは publishable key のみ、`.env` は check-ignore 済。）
 - **積み残し（いつか閉じる・優先度低）:** ①`api/staff/visit` の `customers.display_name` 取得が salon_id 非スコープ（UUID 既知なら他店顧客の表示名のみ取得可・機微データは漏れない）。②`submit_visit_and_earn_stamp` RPC 内の customer↔salon 所属チェック（上流で salon_id が固定されるため越境は不能・念のためレベル）。
