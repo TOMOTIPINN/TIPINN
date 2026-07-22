@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
+import { supabaseAdmin } from "@/lib/supabase-admin";
 import { resolveSalonRole } from "@/lib/display-role";
 import { getDashboardData } from "./dashboard-data";
 import { resolvePeriod } from "./period";
-import DashboardClient from "./DashboardClient";
+import DashboardClient, { type StripeStatus } from "./DashboardClient";
 
 /**
  * 数字管理ダッシュボード（画面マップ14系）— 店長(manager)専用の認証ガード。
@@ -47,11 +48,24 @@ export default async function DashboardPage({
   );
   const displayRole = await resolveSalonRole(ctx);
 
+  // Stripe 連携状態（Phase 2）: 未連携 / 審査中（details_submitted=true & charges_enabled=false）/ 決済可。
+  const { data: salonStripe } = await supabaseAdmin
+    .from("salons")
+    .select("stripe_details_submitted, stripe_charges_enabled")
+    .eq("id", ctx.salon_id)
+    .single();
+  const stripeStatus: StripeStatus = salonStripe?.stripe_charges_enabled
+    ? "enabled"
+    : salonStripe?.stripe_details_submitted
+      ? "pending"
+      : "none";
+
   return (
     <DashboardClient
       data={data}
       role={displayRole}
       period={{ key: period.key, from: period.from, to: period.to }}
+      stripeStatus={stripeStatus}
     />
   );
 }

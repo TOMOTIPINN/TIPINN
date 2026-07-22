@@ -41,14 +41,52 @@ function DeltaPct({ prev, cur }: { prev: number; cur: number }) {
   return <span className={up ? "trend-up" : undefined}>{pct(prev, cur)}</span>;
 }
 
+// Stripe 連携状態の表示（Phase 2）。決済可＝控えめな1行／未連携・審査中＝導線カード。
+// 導線は /api/manager/stripe/onboard への native form POST（連結アカウント再利用→Account Link 生成→303）。
+function StripeStatusCard({ status }: { status: StripeStatus }) {
+  if (status === "enabled") {
+    return (
+      <p className="note-fine">
+        Stripe 連携済み（評価スタンプの決済を受け付けています）。
+      </p>
+    );
+  }
+  const isPending = status === "pending";
+  return (
+    <Card>
+      <div className="stack-sm">
+        <Eyebrow className="eyebrow-mint">Stripe connect</Eyebrow>
+        <h2 className="headline-sm">
+          {isPending ? "決済連携は審査中です" : "決済連携が未設定です"}
+        </h2>
+        <p className="muted text-balance">
+          {isPending
+            ? "Stripe の確認が完了すると、お客様の評価スタンプ決済を受け付けられます。未入力があれば続きから登録してください。"
+            : "お客様が評価スタンプを購入するには、Stripe の連携（本人確認・入金設定）が必要です。"}
+        </p>
+        <form action="/api/manager/stripe/onboard" method="post">
+          <button type="submit" className="btn btn-outline btn-block">
+            {isPending ? "連携を続ける" : "Stripe連携をはじめる"}
+          </button>
+        </form>
+      </div>
+    </Card>
+  );
+}
+
+// Stripe 連携状態（Phase 2）: none=未連携 / pending=審査中 / enabled=決済可。
+export type StripeStatus = "none" | "pending" | "enabled";
+
 export default function DashboardClient({
   data,
   role,
   period,
+  stripeStatus,
 }: {
   data: DashboardData;
   role: SalonRole;
   period: { key: PeriodKey; from?: string; to?: string };
+  stripeStatus: StripeStatus;
 }) {
   // ビュー切替: 日次（今の状態）/ HR月次（echo flow トレンド）。§12 の2タブ構成。
   const [view, setView] = useState<"daily" | "hr">("daily");
@@ -73,6 +111,9 @@ export default function DashboardClient({
             <p className="muted">対象期間：{label}</p>
           </div>
         </header>
+
+        {/* Stripe 連携状態（Phase 2）。未連携・審査中のときだけ導線を出す。決済可なら控えめな1行。 */}
+        <StripeStatusCard status={stripeStatus} />
 
         {/* 集計期間の選択（プリセット＋カスタム暦区間）。URL遷移で server 再フェッチ。 */}
         <PeriodSelector periodKey={period.key} from={period.from} to={period.to} />

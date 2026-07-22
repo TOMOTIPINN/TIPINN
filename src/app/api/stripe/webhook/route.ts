@@ -61,6 +61,8 @@ export async function POST(req: Request) {
       | "recorded"
       | "skipped_unpaid"
       | "skipped_bad_metadata"
+      | "account_synced"
+      | "account_not_found"
       | "ignored_event_type" = "ignored_event_type";
 
     if (event.type === "checkout.session.completed") {
@@ -68,6 +70,11 @@ export async function POST(req: Request) {
       // Direct Charge: 連結アカウント上のイベント。account に連結アカウントIDが入る（ログ用）。
       const connectedAccount = event.account ?? "(none)";
       outcome = await recordRatingPurchase(session, connectedAccount);
+    } else if (event.type === "account.updated") {
+      // Connect イベント（オンボーディング Phase 2）。連結アカウントの審査状態を salons に同期。
+      // 既存の stripe_events 冪等化（claim/markProcessed）にそのまま乗る。
+      const account = event.data.object as Stripe.Account;
+      outcome = await syncAccountFromStripe(account);
     }
 
     // 実処理が正常終了 → processed_at を打つ（以後この event は再送でも弾かれる）。
@@ -123,6 +130,29 @@ async function markStripeEventProcessed(eventId: string): Promise<void> {
     .update({ processed_at: new Date().toISOString() })
     .eq("id", eventId);
   if (error) throw error;
+}
+
+/**
+ * account.updated（Phase 2）→ salons の審査状態フラグを同期する。
+ *   details_submitted / charges_enabled / payouts_enabled のみ更新（記録・金額には触れない・原則5/6）。
+ *   stripe_connected_at は onboard 時（アカウント作成時）に刻む唯一のソースなのでここでは触らない。
+ * 該当サロンが無い（他プラットフォームのアカウント等）→ "account_not_found"（200で受け流す）。
+ */
+async function syncAccountFromStripe(
+  account: Stripe.Account,
+): Promise<"account_synced" | "account_not_found"> {
+  const { data, error } = await supabaseAdmin
+    .from("salons")
+    .update({
+      stripe_details_submitted: account.details_submitted ?? false,
+      stripe_charges_enabled: account.charges_enabled ?? false,
+      stripe_payouts_enabled: account.payouts_enabled ?? false,
+    })
+    .eq("stripe_account_id", account.id)
+    .select("id");
+
+  if (error) throw error;
+  return (data?.length ?? 0) > 0 ? "account_synced" : "account_not_found";
 }
 
 async function recordRatingPurchase(

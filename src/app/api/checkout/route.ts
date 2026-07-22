@@ -42,10 +42,12 @@ export async function POST(req: Request) {
   // サロンの連結アカウント（Direct Charge 先）を取得
   const { data: salon } = await supabaseAdmin
     .from("salons")
-    .select("name, stripe_account_id")
+    .select("name, stripe_account_id, stripe_charges_enabled")
     .eq("id", salonId)
     .single();
-  if (!salon?.stripe_account_id) {
+  // ★オンボーディング未完了ガード（Phase 2）: stripe_account_id は accounts.create 直後から存在するため、
+  //   それだけで通すと審査未完了＝決済不可の状態で checkout が作れてしまう。charges_enabled を基準にする。
+  if (!salon?.stripe_account_id || !salon.stripe_charges_enabled) {
     return NextResponse.json({ error: "salon_not_onboarded" }, { status: 409 });
   }
 

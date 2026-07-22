@@ -65,7 +65,8 @@
 
 ## 4. データモデル（13テーブル / RLS deny-by-default・service_role のみアクセス）
 - `customers`(id, line_user_id, …) — 中央台帳
-- `salons`(id, **name必須**, logo_url, stripe_account_id, created_at)
+- `salons`(id, **name必須**, logo_url, stripe_account_id, created_at, …)
+  - Stripe Connect Onboarding 状態（migration 0035・Phase 2）: `stripe_details_submitted` / `stripe_charges_enabled` / `stripe_payouts_enabled`（いずれも `boolean not null default false`）＋ `stripe_connected_at`(timestamptz)。連携判定は **`stripe_charges_enabled` 基準**（`stripe_account_id` は accounts.create 直後から存在＝審査未完了でも入るため、決済可否の判定には使わない）。`account.updated` webhook と `/api/manager/stripe/return` の retrieve で同期。`stripe_connected_at` は連結アカウント作成時に一度だけ刻む。
 - `staff`(id, **salon_id必須**, **name必須**, photo_url, created_at)
 - `reviews`(id, customer_id, salon_id, staff_id, body, **rating**, **tags**, **share_scope**, created_at) — 無償レビュー
   - `rating` int 1..4（4=最高 / 3=よい / 2=普通 / 1=改善）
