@@ -15,7 +15,8 @@
  *  - reviews / rating_purchases は created_at（timestamptz）。JST境界の ISO で範囲比較する
  *    （periodStart/periodEnd は jstPeriodStartISO 由来の UTC-ISO を想定）。
  *  - echo flow は periodEnd を含む JST 暦月から遡る直近3ヶ月でバケット化する。
- *  - 現在の期間は「今月」固定運用だが、引数で任意期間に対応できる形にしてある（期間UIは後日配線）。
+ *    ⚠️ echo flow は periodStart（選択期間）に連動しない＝常に「直近3ヶ月」（トレンド判定の設計・§12）。
+ *  - 集計期間は呼び出し側（period.ts / URL の searchParams）が決める。任意の periodStart/End・label を受ける。
  */
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { RATING_TIERS } from "@/lib/rating-tiers";
@@ -108,6 +109,8 @@ export async function getDashboardData(
   salonId: string,
   periodStart: string,
   periodEnd: string,
+  // 表示ラベルは呼び出し側（period.ts）が期間から導出したものを渡す（唯一の正はそちら）。
+  label: string = "今月",
 ): Promise<DashboardData> {
   const nowMs = Date.now();
   const curStartMs = Date.parse(periodStart);
@@ -314,7 +317,7 @@ export async function getDashboardData(
 
   return {
     salonName: (salonRes.data?.name as string | undefined) ?? "サロン",
-    label: "今月",
+    label,
     staffNames,
     staffRole,
     staffArchived,

@@ -1534,6 +1534,126 @@ textarea.field {
 }
 
 /* ============================================================
+   Month picker（カスタム期間の自前月ピッカー・ネイティブ input[type=month] 置換）
+   既存トークン準拠（角丸・余白・フォント・mint active）。インラインstyle無し（§8）。
+   ============================================================ */
+.month-field {
+  position: relative;
+  display: inline-block;
+}
+/* トリガーは .field 準拠（.date-range .field の auto 幅・小 padding を継承）＋左寄せ・nowrap。 */
+.month-trigger {
+  display: inline-flex;
+  align-items: center;
+  min-width: 6.5rem;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.month-trigger.is-empty {
+  color: var(--g25-soft);
+}
+
+/* ポップオーバー。トリガー直下に絶対配置（祖先 transform に依存しない＝portal 不要）。 */
+.month-pop {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  left: 0;
+  z-index: 50;
+  width: 15rem;
+  max-width: 80vw;
+  padding: var(--space-md);
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  animation: fadeIn 0.15s ease both;
+}
+.month-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-md);
+}
+.month-year {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.month-nav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--card);
+  color: var(--ink-soft);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.month-nav:disabled {
+  color: var(--g25-soft);
+  cursor: not-allowed;
+}
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-sm);
+}
+.month-cell {
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  padding: var(--space-sm) 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  cursor: pointer;
+  transition: var(--transition);
+}
+/* 選択中＝ミントの淡い面＋細枠（プリセット is-active と同じ言語・§12）。 */
+.month-cell.is-active {
+  border-color: var(--mint);
+  background: var(--mint-tint);
+  color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
+}
+/* 範囲外（開始>終了・未来月）＝褪せグレーで非選択（赤は使わない・§12）。 */
+.month-cell.is-disabled {
+  color: var(--g25-soft);
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+/* キーボード可視化のフォーカスリング（ミント）。 */
+.month-trigger:focus-visible,
+.month-nav:focus-visible,
+.month-cell:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 1px;
+}
+/* hover はポインタ環境のみ（タッチ端末の hover 貼り付き回避・CLAUDE.md 鉄則(d)）。 */
+@media (hover: hover) {
+  .month-trigger:hover {
+    border-color: var(--line-strong);
+  }
+  .month-nav:not(:disabled):hover {
+    border-color: var(--line-strong);
+    color: var(--ink);
+  }
+  .month-cell:not(.is-disabled):not(.is-active):hover {
+    border-color: var(--line-strong);
+    color: var(--ink);
+  }
+}
+
+/* ============================================================
    スタッフ別の評価（期間集計・Phase 5-a）
    ⚠️ スタッフ単位は件数・ポイントのみ。¥金額・賞与額は出さない（原則5・6）。
    ============================================================ */

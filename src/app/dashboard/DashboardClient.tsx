@@ -7,14 +7,17 @@ import type { SalonRole } from "@/components/RoleBar";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import StaffPeriodView from "./StaffPeriodView";
 import HrFlowView from "./HrFlowView";
+import PeriodSelector from "./PeriodSelector";
 import { trendDir, yen } from "./eval-data";
 import type { DashboardData } from "./dashboard-data";
+import type { PeriodKey } from "./period";
 
 /**
  * 評価ダッシュボード（画面マップ14系・白世界）— 表示のみの client。
  *
  * データは server（page.tsx → dashboard-data.ts）が salon_id スコープで集計し props で注入する。
- *   期間フィルタの状態は持たない（今回は「今月」固定・期間UIは後日配線）。view(日次/HR)切替だけ client。
+ *   集計期間は URL 由来（server が resolvePeriod で決定）。期間の選択は PeriodSelector（URL遷移で
+ *   server 再フェッチ）。view(日次/HR)切替は client の局所 state。
  *
  * 配色（§12）: 暖色モノクロ＋ゴールド（VIP）。ミントはサロンUIのポイント使い＝前期間比の上昇
  *   （.trend-up）とアクティブタブのみ。¥は色を付けず中立の明朝。赤は使わない。
@@ -41,9 +44,11 @@ function DeltaPct({ prev, cur }: { prev: number; cur: number }) {
 export default function DashboardClient({
   data,
   role,
+  period,
 }: {
   data: DashboardData;
   role: SalonRole;
+  period: { key: PeriodKey; from?: string; to?: string };
 }) {
   // ビュー切替: 日次（今の状態）/ HR月次（echo flow トレンド）。§12 の2タブ構成。
   const [view, setView] = useState<"daily" | "hr">("daily");
@@ -68,6 +73,9 @@ export default function DashboardClient({
             <p className="muted">対象期間：{label}</p>
           </div>
         </header>
+
+        {/* 集計期間の選択（プリセット＋カスタム暦区間）。URL遷移で server 再フェッチ。 */}
+        <PeriodSelector periodKey={period.key} from={period.from} to={period.to} />
 
         {/* ビュー切替タブ（日次 / HR月次）。アクティブ＝ミント（§12 アクティブタブ） */}
         <div className="seg" role="tablist" aria-label="ダッシュボードの表示切替">

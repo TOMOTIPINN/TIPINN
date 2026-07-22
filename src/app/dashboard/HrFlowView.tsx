@@ -62,6 +62,11 @@ export default function HrFlowView({
 
   return (
     <div className="stack">
+      {/* HR（月次）は選択中の集計期間に連動しない＝常に直近3ヶ月（トレンド判定の設計・§12）。 */}
+      <p className="note-fine">
+        ※HR（月次）は上部で選択した集計期間に関わらず、常に直近3ヶ月で表示します。
+      </p>
+
       {/* 1. サマリー3枚 */}
       <div className="metric-grid">
         <div className="metric-card">
