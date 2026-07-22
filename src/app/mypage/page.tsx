@@ -56,7 +56,9 @@ type SalonMeta = {
 export default async function MyPage() {
   const session = await getSession();
   if (!session) {
-    redirect("/api/auth/line/login");
+    // 未ログインはログインへ。returnTo=/mypage を付け、ログイン後に /mypage へ戻す
+    //   （LINE 公式アカウントのリッチメニューから開いたときに顧客ホーム "/" へ落とさない）。
+    redirect(`/api/auth/line/login?returnTo=${encodeURIComponent("/mypage")}`);
   }
 
   // 表示名ゲート（初回チェックイン直前・[[auth-method-line-b]]）: name_confirmed_at 未設定なら
