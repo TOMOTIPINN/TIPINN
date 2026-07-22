@@ -45,10 +45,15 @@ export async function GET(request: Request) {
   authorizeUrl.searchParams.set("scope", "openid profile");
   authorizeUrl.searchParams.set("nonce", nonce);
 
-  // 店頭オンボーディング（returnTo=/onboard…）経由のログインでは、同意画面で echo 公式アカウントの
-  // 友だち追加を促す（follow は /api/line/webhook が拾い customers.line_is_friend を同期）。
-  // bot_prompt は authorize 時のみ効くパラメータで callback は無関与。他導線のログインには付けない。
-  if (returnTo.startsWith("/onboard")) {
+  // 同意画面で echo 公式アカウントの友だち追加を促す導線:
+  //   ・店頭オンボーディング（returnTo=/onboard…）＝顧客（follow は /api/line/webhook が
+  //     customers.line_is_friend へ同期）。
+  //   ・スタッフ招待（returnTo=/staff/join…）＝スタッフ。PWA アイコンを失っても公式アカウントを
+  //     恒久的な入口として残すため、招待→ログイン時にも友だち追加を促す。
+  // いずれも「促す」だけで必須化しない（未追加でもスタッフ登録・利用は成立）。bot_prompt は authorize
+  // 時のみ効くパラメータで callback は無関与。scope は openid profile のまま（bot_prompt に追加 scope 不要）。
+  // 他導線（returnTo が上記以外）のログインには付けない＝既存挙動を変えない。
+  if (returnTo.startsWith("/onboard") || returnTo.startsWith("/staff/join")) {
     authorizeUrl.searchParams.set("bot_prompt", "aggressive");
   }
 
