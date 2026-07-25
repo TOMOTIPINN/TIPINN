@@ -19,6 +19,7 @@
  *  - 集計期間は呼び出し側（period.ts / URL の searchParams）が決める。任意の periodStart/End・label を受ける。
  */
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { RATING_TIERS } from "@/lib/rating-tiers";
 import { computeVipProgress } from "@/lib/vip";
 import {
@@ -127,33 +128,55 @@ export async function getDashboardData(
   const spanStartISO = new Date(Math.min(flowStartMs, prevStartMs)).toISOString();
 
   // ---- wave 1: salon 名 / staff / スパン内 reviews・ratings / earned_stamps ----
-  const [salonRes, staffRes, reviewRes, ratingRes, stampRes] = await Promise.all([
+  // reviews / rating_purchases / earned_stamps は PostgREST の 1000 行上限で静かに切られ得るため
+  // fetchAllRows（.range ページング）で全行取得する。フィルタ（.eq/.gte）は不変。
+  // ページ間の並びを安定させるため order は (時刻, id) の複合キー（id 一意で境界の重複/欠落を防ぐ）。
+  const [salonRes, staffRes, reviews, ratings, stamps] = await Promise.all([
     supabaseAdmin.from("salons").select("name").eq("id", salonId).single(),
     supabaseAdmin
       .from("staff")
       .select("id, name, role, job_title, archived_at")
       .eq("salon_id", salonId)
       .order("created_at", { ascending: true }),
-    supabaseAdmin
-      .from("reviews")
-      .select("staff_id, customer_id, body, share_scope, created_at")
-      .eq("salon_id", salonId)
-      .gte("created_at", spanStartISO),
-    supabaseAdmin
-      .from("rating_purchases")
-      .select("staff_id, tier, amount, created_at")
-      .eq("salon_id", salonId)
-      .gte("created_at", spanStartISO),
-    supabaseAdmin
-      .from("earned_stamps")
-      .select("customer_id, count")
-      .eq("salon_id", salonId),
+    fetchAllRows<ReviewRow>(
+      (from, to) =>
+        supabaseAdmin
+          .from("reviews")
+          .select("staff_id, customer_id, body, share_scope, created_at")
+          .eq("salon_id", salonId)
+          .gte("created_at", spanStartISO)
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      { label: "reviews" },
+    ),
+    fetchAllRows<RatingRow>(
+      (from, to) =>
+        supabaseAdmin
+          .from("rating_purchases")
+          .select("staff_id, tier, amount, created_at")
+          .eq("salon_id", salonId)
+          .gte("created_at", spanStartISO)
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      { label: "rating_purchases" },
+    ),
+    // earned_stamps は created_at 列が無い（時刻列は updated_at）。日付フィルタは元々無し。
+    fetchAllRows<StampRow>(
+      (from, to) =>
+        supabaseAdmin
+          .from("earned_stamps")
+          .select("customer_id, count")
+          .eq("salon_id", salonId)
+          .order("updated_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      { label: "earned_stamps" },
+    ),
   ]);
 
   const staff = (staffRes.data ?? []) as StaffRow[];
-  const reviews = (reviewRes.data ?? []) as ReviewRow[];
-  const ratings = (ratingRes.data ?? []) as RatingRow[];
-  const stamps = (stampRes.data ?? []) as StampRow[];
 
   const staffNames = staff.map((s) => s.name);
   const staffRole: Record<string, string> = {};
