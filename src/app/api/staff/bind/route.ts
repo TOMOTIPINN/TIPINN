@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { resolveInvite } from "@/lib/staff-invite";
+import { isThrottled, recordAttempt } from "@/lib/login-attempts";
 
 /**
  * POST /api/staff/bind  （認証方式B / [[auth-method-line-b]]）
@@ -20,6 +21,11 @@ function redirect(baseUrl: string, path: string) {
 export async function POST(req: Request) {
   const baseUrl = process.env.APP_BASE_URL!;
 
+  // レート制限（0037）: 同一IPの招待トークン総当たりを止める。既存の認証判定には触れない。
+  if (await isThrottled(req, "staff_bind")) {
+    return NextResponse.json({ error: "too_many_attempts" }, { status: 429 });
+  }
+
   const session = await getSession();
   // 未ログインなら、戻り先を join に固定して LINE ログインへ。
   const form = await req.formData().catch(() => null);
@@ -35,6 +41,8 @@ export async function POST(req: Request) {
 
   const result = await resolveInvite(token, session.line_user_id);
   if (!result.ok) {
+    // reason は missing/not_found/expired/already_used/line_taken の分類語（token は入れない）。
+    await recordAttempt(req, "staff_bind", false, result.reason);
     const q = token ? `?token=${encodeURIComponent(token)}&` : "?";
     return redirect(baseUrl, `/staff/join${q}error=${result.reason}`);
   }
@@ -55,9 +63,11 @@ export async function POST(req: Request) {
 
   if (error || !updated) {
     console.error("staff bind failed:", error);
+    await recordAttempt(req, "staff_bind", false, "bind_conflict");
     const q = token ? `?token=${encodeURIComponent(token)}&` : "?";
     return redirect(baseUrl, `/staff/join${q}error=not_found`);
   }
 
+  await recordAttempt(req, "staff_bind", true);
   return redirect(baseUrl, "/staff");
 }

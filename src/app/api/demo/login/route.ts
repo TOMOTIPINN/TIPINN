@@ -13,6 +13,7 @@ import {
   verifyDemoKey,
   type DemoPersonaKey,
 } from "@/lib/demo";
+import { isThrottled, recordAttempt } from "@/lib/login-attempts";
 
 /**
  * POST /api/demo/login — 営業デモ用ログインバイパス（本番Prodでは無効・Previewのみ）。
@@ -36,6 +37,11 @@ export async function POST(req: Request): Promise<NextResponse> {
     // ゲート1: env 二重ゲート（本番Prod は未設定＝ここで必ず 404）。
     if (!isDemoLoginEnabled()) return notFound();
 
+    // レート制限（0037）: 共有鍵の総当たりを止める。失敗も既存4ゲートと同じ 404 に統一。
+    // ★ゲート1の後に置く: 本番Prod は env 未設定で必ずここに来ないため、無効な環境で
+    //   未認証リクエストごとに DB を引かせない（しかも記録が無い＝しきい値に永遠に達しない）。
+    if (await isThrottled(req, "demo_login")) return notFound();
+
     // body 取得（HTMLフォームの x-www-form-urlencoded / multipart 両対応）。
     let as: string | null = null;
     let key: string | null = null;
@@ -50,7 +56,11 @@ export async function POST(req: Request): Promise<NextResponse> {
     }
 
     // ゲート2: シークレット（定数時間比較）。不一致は 404。
-    if (!verifyDemoKey(key)) return notFound();
+    if (!verifyDemoKey(key)) {
+      // 鍵そのものは絶対に残さない（分類語のみ）。
+      await recordAttempt(req, "demo_login", false, "key_mismatch");
+      return notFound();
+    }
 
     // ゲート3: as は enum のみ。persona はサーバー定数から引く（入力IDは受けない）。
     if (as !== "customer" && as !== "staff" && as !== "manager") {
@@ -83,6 +93,8 @@ export async function POST(req: Request): Promise<NextResponse> {
         return notFound();
       }
     }
+
+    await recordAttempt(req, "demo_login", true);
 
     // セッション発行（LINE成功時と同一の作法を再利用）。
     const token = await createSessionToken({

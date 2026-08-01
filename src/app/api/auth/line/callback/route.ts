@@ -8,6 +8,7 @@ import {
 } from "@/lib/session";
 import { verifyOAuthState } from "@/lib/oauth-state";
 import { resolveStaffByLineUserId } from "@/lib/staff-session";
+import { isThrottled, recordAttempt } from "@/lib/login-attempts";
 
 /**
  * GET /api/auth/line/callback
@@ -46,6 +47,13 @@ function clearHandshake(res: NextResponse) {
 
 export async function GET(request: Request) {
   const baseUrl = process.env.APP_BASE_URL!;
+
+  // レート制限（0037）: 同一IPからの state/code 総当たりを止める。既存の検証手順には触れない。
+  // 失敗の畳み方は他の経路と同じ fail()＝/?login=too_many へリダイレクト（素のJSONを客に見せない）。
+  if (await isThrottled(request, "line_callback")) {
+    return fail(baseUrl, "too_many");
+  }
+
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -63,6 +71,7 @@ export async function GET(request: Request) {
   // state を検証（署名＋exp）。cookie 非依存に returnTo/nonce を取り出す。
   const parsed = await verifyOAuthState(state);
   if (!code || !parsed) {
+    await recordAttempt(request, "line_callback", false, "state_invalid");
     const res = fail(baseUrl, "error", {
       step: "state",
       hasCode: !!code,
@@ -79,6 +88,7 @@ export async function GET(request: Request) {
   const store = await cookies();
   const cookieState = store.get("line_oauth_state")?.value;
   if (cookieState && cookieState !== state) {
+    await recordAttempt(request, "line_callback", false, "state_mismatch");
     const res = fail(baseUrl, "error", { step: "state_binding" }, returnTo);
     clearHandshake(res);
     return res;
@@ -102,6 +112,7 @@ export async function GET(request: Request) {
   });
   if (!tokenRes.ok) {
     const body = await tokenRes.text();
+    await recordAttempt(request, "line_callback", false, "token_exchange_failed");
     const res = fail(
       baseUrl,
       "error",
@@ -130,6 +141,7 @@ export async function GET(request: Request) {
   });
   if (!verifyRes.ok) {
     const body = await verifyRes.text();
+    await recordAttempt(request, "line_callback", false, "id_token_invalid");
     const res = fail(
       baseUrl,
       "error",
@@ -170,6 +182,8 @@ export async function GET(request: Request) {
     clearHandshake(res);
     return res;
   }
+
+  await recordAttempt(request, "line_callback", true);
 
   // 4. セッションCookie発行 → 着地先へ
   const token = await createSessionToken({
