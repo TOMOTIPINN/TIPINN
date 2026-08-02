@@ -12,7 +12,7 @@
     "@supabase/supabase-js": "^2.105.1",
     "jose": "^6.2.3",
     "jsqr": "^1.4.0",
-    "next": "16.2.4",
+    "next": "16.2.12",
     "qrcode": "^1.5.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
