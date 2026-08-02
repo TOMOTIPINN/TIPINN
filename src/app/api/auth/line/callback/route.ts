@@ -9,6 +9,7 @@ import {
 import { verifyOAuthState } from "@/lib/oauth-state";
 import { resolveStaffByLineUserId } from "@/lib/staff-session";
 import { isThrottled, recordAttempt } from "@/lib/login-attempts";
+import { notifyRateLimitHit } from "@/lib/security-alert";
 
 /**
  * GET /api/auth/line/callback
@@ -51,6 +52,8 @@ export async function GET(request: Request) {
   // レート制限（0037）: 同一IPからの state/code 総当たりを止める。既存の検証手順には触れない。
   // 失敗の畳み方は他の経路と同じ fail()＝/?login=too_many へリダイレクト（素のJSONを客に見せない）。
   if (await isThrottled(request, "line_callback")) {
+    // 運営者へ通知（設問6・不正アクセス検知）。例外を投げない実装なので fail() は不変。
+    await notifyRateLimitHit(request, "line_callback");
     return fail(baseUrl, "too_many");
   }
 

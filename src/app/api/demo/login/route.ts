@@ -14,6 +14,7 @@ import {
   type DemoPersonaKey,
 } from "@/lib/demo";
 import { isThrottled, recordAttempt } from "@/lib/login-attempts";
+import { notifyRateLimitHit } from "@/lib/security-alert";
 
 /**
  * POST /api/demo/login — 営業デモ用ログインバイパス（本番Prodでは無効・Previewのみ）。
@@ -40,7 +41,12 @@ export async function POST(req: Request): Promise<NextResponse> {
     // レート制限（0037）: 共有鍵の総当たりを止める。失敗も既存4ゲートと同じ 404 に統一。
     // ★ゲート1の後に置く: 本番Prod は env 未設定で必ずここに来ないため、無効な環境で
     //   未認証リクエストごとに DB を引かせない（しかも記録が無い＝しきい値に永遠に達しない）。
-    if (await isThrottled(req, "demo_login")) return notFound();
+    if (await isThrottled(req, "demo_login")) {
+      // 運営者へ通知（設問6・不正アクセス検知）。例外を投げない実装なので 404 は不変
+      // （仮に throw しても外側 catch が notFound() に畳むため、フェイルクローズも不変）。
+      await notifyRateLimitHit(req, "demo_login");
+      return notFound();
+    }
 
     // body 取得（HTMLフォームの x-www-form-urlencoded / multipart 両対応）。
     let as: string | null = null;

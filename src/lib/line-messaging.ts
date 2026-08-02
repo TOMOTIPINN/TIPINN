@@ -3,7 +3,11 @@
  *
  * ・Messaging チャネル（2010599784）の長期アクセストークンで送る。
  *   env: LINE_MESSAGING_CHANNEL_ACCESS_TOKEN（ログイン用 LINE_CHANNEL_* とは別チャネル）。
- * ・cron（/api/cron/line-push）からのみ呼ぶ想定。¥・賞与には一切触れない（原則5/6）。
+ * ・呼び出し元は現在2つ（サーバー側のみ・クライアントからは呼ばない）:
+ *     1. cron（/api/cron/line-push）… 顧客への来店リマインド（buildVisitReviewText）
+ *     2. @/lib/security-alert … 運営者へのレート制限通知（不正アクセス検知）
+ *   顧客宛と運営者宛が混在するため、**送信先の line_user_id は必ず呼び出し側が決める**
+ *   （このモジュールは宛先を推測しない）。¥・賞与には一切触れない（原則5/6）。
  * ・友だち(line_is_friend=true)判定は呼び出し側で済ませてから呼ぶこと。
  */
 const PUSH_URL = "https://api.line.me/v2/bot/message/push";

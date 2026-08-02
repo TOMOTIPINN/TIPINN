@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { resolveInvite } from "@/lib/staff-invite";
 import { isThrottled, recordAttempt } from "@/lib/login-attempts";
+import { notifyRateLimitHit } from "@/lib/security-alert";
 
 /**
  * POST /api/staff/bind  （認証方式B / [[auth-method-line-b]]）
@@ -23,6 +24,8 @@ export async function POST(req: Request) {
 
   // レート制限（0037）: 同一IPの招待トークン総当たりを止める。既存の認証判定には触れない。
   if (await isThrottled(req, "staff_bind")) {
+    // 運営者へ通知（設問6・不正アクセス検知）。例外を投げない実装なので 429 は不変。
+    await notifyRateLimitHit(req, "staff_bind");
     return NextResponse.json({ error: "too_many_attempts" }, { status: 429 });
   }
 

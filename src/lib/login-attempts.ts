@@ -14,11 +14,18 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
  */
 export type Scope = "line_callback" | "staff_bind" | "demo_login";
 
-/** 集計窓＝直近1時間。 */
-const WINDOW_MS = 60 * 60 * 1000;
+/**
+ * 集計窓＝直近1時間。
+ * 通知本文（@/lib/security-alert）が「直近◯時間」を書くためにも読む＝ここが唯一の正。
+ */
+export const WINDOW_MS = 60 * 60 * 1000;
 
-/** scope ごとの失敗回数しきい値（この件数**以上**でブロック）。 */
-const FAILURE_LIMIT: Record<Scope, number> = {
+/**
+ * scope ごとの失敗回数しきい値（この件数**以上**でブロック）。
+ * 通知本文（@/lib/security-alert）が閾値を書くためにも読む＝ここが唯一の正。
+ * 値を変えると通知文も自動で追従する（数字を2箇所に持たない）。
+ */
+export const FAILURE_LIMIT: Record<Scope, number> = {
   staff_bind: 20,
   demo_login: 10,
   line_callback: 30,
@@ -58,6 +65,17 @@ function clientIp(req: Request): string {
   if (bracketed) first = bracketed[1];
   else if (/^\d{1,3}(\.\d{1,3}){3}:\d+$/.test(first)) first = first.split(":")[0];
   return isIpLike(first) ? first : UNKNOWN_IP;
+}
+
+/**
+ * 通知本文（@/lib/security-alert）に載せる IP を解決する。
+ *
+ * clientIp 自体は **private のまま**にする（IP の正規化・inet 検証はこのモジュールの
+ * 責務で、外に配ると各所で独自の取り方が生えて記録と通知で値がズレる）。
+ * 「通知に載せる IP は記録した IP と必ず同一」を保つための、用途を限定した唯一の窓口。
+ */
+export function attemptClientIp(req: Request): string {
+  return clientIp(req);
 }
 
 /**
