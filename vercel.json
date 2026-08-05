@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/line-push",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/purge",
+      "schedule": "0 18 * * *"
     }
   ]
 }
