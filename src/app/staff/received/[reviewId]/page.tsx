@@ -19,7 +19,7 @@ import {
  * 13 スタッフ通知（画面マップ13・確定UI＝デッキ v6 P8）。
  * 評価/感想の着信を1件表示する。ルート: /staff/received/[reviewId]
  *
- * 構造（デッキP8厳守・docs/phase5b_staff_screens.md §6）:
+ * 構造（デッキP8厳守・docs/archive/phase5b_staff_screens.md §6）:
  *   ヘッダー → hero（Your work echoes./評価が届きました/from 〇〇様）
  *   → あなたへの評価 ＋N件 → Review（タグ＋本文カード）→ 累計／ランク
  *

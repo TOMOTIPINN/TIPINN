@@ -1,7 +1,7 @@
 /**
  * スタッフ向け画面（Phase 5-b・画面12/13）の集計ヘルパー（単一ソース）。
  *
- * 原則（docs/phase5b_staff_screens.md §2 / CLAUDE.md §12）:
+ * 原則（docs/archive/phase5b_staff_screens.md §2 / docs/30_design.md）:
  *  - echo flow はカウント単位のみ。**¥金額をここに持ち込まない**（賞与非連動・原則6）。
  *  - 集計の軸は staff_id（将来のポータブル評価グラフのフック・§8）。
  *  - 期間境界は JST（Asia/Tokyo）で切る。スタンプ付与の「1日1個」と同じ基準。

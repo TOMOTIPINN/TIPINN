@@ -1,0 +1,98 @@
+# echo — 実装履歴（CHANGELOG・アーカイブ）
+
+> 旧 `CLAUDE.md` §11「現在の進捗」を全文移設したもの（2026-08-11）。
+> **これは履歴であって仕様の正ではない。** 現行仕様は `docs/10_domain.md` / `20_product.md` / `30_design.md` / `40_decisions.md` / `50_security.md` を見ること。
+> 記述された内容はその時点のスナップショットであり、以降の変更が反映されていない可能性がある。
+
+---
+
+## 進捗（旧 CLAUDE.md §11・2026-07-17 時点）
+- フェーズ1 DBスキーマ … ✓
+- フェーズ2 LINEログイン … ✓
+- フェーズ3 感想送信＋貯まるスタンプ … ✓（画面03/06まで一周）
+  - RPC `submit_review_and_earn_stamp`（rating/tags/share_scope対応・stamp_awarded返却・1日1個ルール）✓ migration 0004
+  - `POST /api/reviews`（rating/tags/share_scope検証＋RPC連携）✓ / `GET /api/staff?salonId=` ✓
+  - `/review` フォーム ✓ 絵文字評価4段階/体験タグ複数可/共有範囲/コメント15〜300字（§5準拠・`@/components/ui`・インラインstyle無し）
+  - `/review/complete` 送信完了画面 ✓ stamp_awardedで分岐・円スタンプ点灯・マイページ/ホーム導線（再送ループ無し）
+  - `/mypage`（画面10）✓ サロンごとのスタンプカード（円形ロゴ＋スタンプリング＋次の特典までの進捗 / rewards未設定でも壊れない）。`StampRing` を `@/components/ui` に共通化
+  - 体験タグは当面ハードコード（将来 A4 タグ設定で可変化）
+  - 感想の重複投稿制限（1顧客/1サロン/JST日 につき1回）… ✓ migration 0020
+    - RPC `submit_review_and_earn_stamp` を 0020 で再定義（戻り値に `already_submitted` 追加）。advisory lock 内で INSERT 前に当日(JST) review の存在を確認し、既存なら**挿入せず** `already_submitted=true` を返す。判定単位はスタンプの「1個/顧客/サロン/日(JST)」と同一＝**staff 非依存**（ALL staff も個別も「その日の1回」／個別複数送信は不可）。本日初回分岐は定義上 `stamp_awarded=true` 固定
+    - reviews に UNIQUE は張らない（`(created_at AT TIME ZONE 'Asia/Tokyo')::date` は STABLE で関数一意index不可・既存重複行で作成失敗のリスク）。0004/0009/0019 と同じ advisory lock + RPC内判定で担保
+    - `POST /api/reviews` は `already_submitted` を**エラーでなく 200 `{ alreadySubmitted: true }`** で返す（客を責めない）。`ReviewForm` は既送信時 `/review?salon=` へ `router.replace`
+    - `/review`（server）は `@/lib/review-server` の `hasReviewedToday()`（当日既送信判定・supabaseAdmin をクライアントに巻き込まないサーバー専用モジュール）で、既送信ならフォームを出さず**インライン既送信カード**（「本日分の感想は送信済みです／またのご来店をお待ちしています」＋マイページ/ホーム導線）。URL直打ち・リロードでも同一画面＝サーバー側で守る（UI非表示だけに依存しない）
+    - 感想スタンプの 1個/日 farming 対策（0004）は不変。今回は review 投稿そのものの重複制限を追加しただけ
+- フェーズ4 評価スタンプ購入（Stripe Connect / Direct Charge）… 🚧 実装中
+  - 4.0 Stripe下準備 … ✓ テストモード（platform名 echo）/ 連結アカウント `acct_1TjCCY50hwlsDBtH`（Standard・Direct Charge＝連結が手数料負担）→ テストサロン `682336ef-997e-4b07-876e-b71fb032b71b` の `salons.stripe_account_id` に紐付け済 / env: `STRIPE_SECRET_KEY` `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` `APP_BASE_URL` / `stripe@22` 導入済
+  - 4.1 購入フロー（顧客側）… ✓
+    - tier定義 `@/lib/rating-tiers`（価格の唯一の正・原則8。§6/CHECK制約と一致）/ Stripeクライアント `@/lib/stripe`
+    - `POST /api/checkout` … Checkout Session を**連結アカウント上で作成**（`{ stripeAccount }`・Direct Charge）。mode=payment / application_fee無し（=0）/ customer_idはセッション由来 / amountはサーバーtier定義のみ採用 / metadataに customer/salon/staff/tier/amount(+review_id)
+    - `/rating?salon=&staff=`（画面04）… tier選択→/api/checkout→Stripe遷移。「感想だけ送る」導線あり（§5準拠・インラインstyle無し）
+  - 4.2 Webhook（冪等記録: checkout完了→rating_purchases insert）… ✓
+    - `POST /api/stripe/webhook`（runtime=nodejs）。生body=`req.text()`→`stripe.webhooks.constructEvent`で署名検証
+    - ★Direct Chargeのため `checkout.session.completed` は**Connectイベント**（`event.account`=連結acct）。署名は**Connect専用シークレット** `STRIPE_CONNECT_WEBHOOK_SECRET`（.env.localに追加・要 whsec_ 設定）
+    - `payment_status==='paid'` のみ記録 / 価格はサーバーtier定義が正（metadataのamountは不採用・原則8）
+    - 冪等: `stripe_payment_id`(= payment_intent, DBで unique)に `upsert(onConflict, ignoreDuplicates)` ＝ ON CONFLICT DO NOTHING。記録のみ・賞与/残高ロジック無し（原則5・6）
+    - tier CHECK は slug 一致のため migration 不要（0001/0003で確認済）
+    - ⚠️ Stripeダッシュボードで **Connect用** webhookエンドポイント（`{APP_BASE_URL}/api/stripe/webhook`・checkout.session.completed）を作成し whsec_ を `.env.local` に設定すること
+  - 4.3 完了画面 `/rating/complete?session_id=...`（success_urlの遷移先）… ✓ 静的な温かいサンキュー画面（DB書き込みなし＝記録はwebhook / 二重記録防止）。マイページ/ホーム導線。tier/金額表示はDirect Charge都合でMVP省略（§5準拠・インラインstyle無し）
+- 来店スタンプ移行（旧LINEショップカード引き継ぎ・来店軸 / Phase 7 の上に追加）… ✓ migration 0019
+  - `stamp_adjustments`(customer_id, salon_id, delta, source='migration', note, created_by, updated_by, …) 追加。`unique(customer_id, salon_id, source)`＝顧客×サロン×sourceで1回（冪等・訂正は既存行UPDATE）。RLS deny-by-default（service_roleのみ）
+  - 累計来店の定義を **COUNT(visits) + COALESCE(SUM(stamp_adjustments.delta),0)** の1式に一本化。SQL側は RPC `submit_visit_and_earn_stamp` を 0019 で再定義（`new_count` に加算・`stamp_awarded` は不変＝当日初回来店の成否のみ）／app側は `@/lib/stamp-adjustments`（`getMigrationEntry` / `getCustomerMigrationDeltas`）が同式のミラー
+  - 入力導線＝来店受付スキャナ `/staff/visit`（VisitScanner）。未移行時に残数入力欄（0〜`salons.visit_cycle_size`）→ 1タップ「移行して記録」で migrate→record を連続実行。既移行は移行済み表示＋「訂正」
+  - `POST /api/staff/visit` に action `migrate`（未移行→INSERT / 既移行→UPDATE・0〜cycleSizeに正クランプ）。**入力・訂正は在籍staff/端末いずれも可＝ロール判定なし**。`created_by`/`updated_by` は「誰が入力・訂正したか」の追跡用に保持するだけ（操作は止めない・端末経路は個人特定不可で null）
+  - `/mypage` は移行deltaを合算し、移行のみ（実来店ゼロ）のサロンもカード対象に含める。特典は count 純粋関数由来のため、移行でハードル到達→即発火（表示に自動反映）。感想軸（`earned_stamps`・3固定）は移行対象外＝不介入
+  - ⚠️ 運用前提（コードでは強制しない・カットオーバー規律）: echo来店チェックインはカットオーバー時点から開始／delta＝カットオーバー時点の旧カード残高。移行時 COUNT(visits)≈0 のため実来店と重複しない（遡及バックフィルの除外ロジックは持たない）
+- 不具合修正: staff/manager がホーム保存した PWA を起動すると顧客ホーム "/" 経由で /mypage に流れ、staff世界に入れなかった件 … ✓ DB変更なし
+  - 主因＝PWA start_url。root layout が全ページ共通で customer 用 `/manifest.json`（start_url:"/"）を配るため、iOS16.4+ は保存パス /staff を無視して "/" から冷起動していた。**`/staff`・`/manager` 配下にセグメント layout を新設し `metadata.manifest` を `/manifest-staff.json`（start_url:"/staff"）に上書き**（ネスト metadata は scalar を最深セグメント優先で上書き＝`<link rel="manifest">` は1本）。manager も staff世界の住人＝専用manifestは別立てせず /staff に集約
+  - 再発防止＝LINE callback の着地先にロール分岐を追加。**returnTo が明示ターゲット（/staff・/staff/join?token=…・/onboard…）なら尊重（署名付きstate往復＝#1は不変）／既定 "/" のときだけ `line_user_id` で在籍staff判定 → staff は /staff・非staff は "/"（顧客着地を維持）**。staff 解決は `@/lib/staff-session` の `resolveStaffByLineUserId`（session cookie 非依存・callback は cookie 発行前のため）に単一ソース化し `getStaffContext` もこれ経由
+  - 顧客側（`public/manifest.json`・root `layout.tsx`・`page.tsx`・`@/lib/return-to`・login route）は**一切無改変**＝顧客ログイン（returnToなし→"/"着地）に回帰なし
+- 受付端末（kiosk）を独立 PWA 化: 常設 iPad のアイコン1タップで来店受付カメラを開く（LINE不要・setup QR 再読み込み不要）… ✓ DB変更なし（2026-07-16）
+  - 症状: `/staff/visit` を表示中でもホーム追加時に staff manifest（start_url:`/staff`）が使われ、アイコン起動が `/staff`→LINEログイン要求になっていた。加えて iOS の standalone PWA は Safari と**別 cookie ジャー**で、QR（Safari）で入れた `echo_device` がアイコン起動時に無く、start_url を変えるだけでは救えない
+  - 対策＝**`/kiosk` 独立セグメント**を新設し per-salon 動的 manifest を配る:
+    - `src/app/kiosk/manifest/route.ts`（動的・per-salon）: `?salon=&device=` を DB 突合（device_token 一致・非null / 不一致は 404）し、`name`＝「{サロン名} 受付」、**`start_url`＝`/kiosk/setup?salon=&device=`**、**`scope`＝`/kiosk`（末尾スラッシュ無し）**、`id`＝`/kiosk` を返す（`Cache-Control: no-store`）
+    - `src/app/kiosk/layout.tsx`: `generateMetadata` が `echo_device` cookie を署名検証（`getDeviceCookie`・DB突合はしない）→ `manifest` を `/kiosk/manifest?salon=&device=` に上書き（scalar 最深優先＝`<link rel=manifest>` 1本 / cookie 無しは `/manifest-staff.json` へ退避）。あわせて `salons.name` を引いて `appleWebApp.title`＝「{サロン名} 受付」を出す（下記アプリ名の知見）／業務側 `icons`（apple=mint・favicon 併記）も同層で指定
+    - `src/app/kiosk/page.tsx`: 受付スキャナ本体（start_url→303 の着地先）。**認可は device cookie のみ**（`getDeviceContext`・DB再照合）＝LINEに飛ばさない。`VisitScanner`＋`/api/staff/visit`（`getVisitContext`）を再利用
+    - `src/app/kiosk/setup/route.ts`: 303 先を `/staff/visit`→**`/kiosk`**、失敗を `/kiosk?device=error` に変更（cookie 発行ロジックは不変）
+  - **アイコン起動のたびに start_url=`/kiosk/setup` を通り cookie を張り直す**＝①standalone 別ジャー隔離 ②iOS ITP 失効 ③cookie 1年超え、を都度救う。**遷移は `/kiosk/setup`→`/kiosk` と全て scope `/kiosk` 内**に閉じ standalone を維持（scope の within はパス前方一致のため末尾スラッシュ無し必須。`/api/staff/visit` は fetch＝scope 対象外で問題なし）
+  - **ホーム画面アプリ名は「どの追加経路か」で決まるソースが変わる（iOS の重要な落とし穴・2026-07-16 → 2026-07-17 実機で更新）。** iOS には2経路あり、優先ソースが異なる:
+    - **新経路＝iOS 17.4+ の「Webアプリとして開く（standalone）」がON**（有効な manifest がある = `<link rel=manifest>` が読める）: **アプリ名は manifest の `name`/`short_name` が優先**され、**着地も manifest の `start_url`** になる。（実証・2026-07-17: `/dashboard` に `manifest-dashboard.json`（`name:"echo dashboard"` / `start_url:"/dashboard"`）を配り `appleWebApp` は未指定・`<title>` は「echo」だったが、iPhone のホーム追加でアプリ名は**「echo dashboard」＝manifest.name**、着地も **`/dashboard`** になった。）
+    - **旧経路／manifest が読めない・standalone 無効のとき**: アプリ名は **`<meta name="apple-mobile-web-app-title">`（＝Next の `appleWebApp.title`）** → 無ければ **`<title>`** の順にフォールバックする。（`/kiosk` で当初 appleWebApp 未指定だったため、iOS が顧客 root の `<title>`「echo - 感謝と評価を、サロンへ」を拾っていたのはこの経路。⚠️ 2026-07-16 に「iOS は常に apple-mobile-web-app-title から取り manifest.name は見ない」と記録したが、これは**旧経路のみ成立**で、新経路では manifest.name が勝つ＝当時の断定は誤り。）
+    - **Android/Chrome は経路によらず常に manifest の `name`。**
+    - **対策＝どちらの経路に落ちても同じ名前になるよう、`manifest.name`（/`short_name`）と `appleWebApp.title` を同一文字列にそろえる。** `/kiosk` は既にこの方針で、**manifest route と `appleWebApp.title` を同一ソース（`salons.name`）・同一文字列（`` `${salonName} 受付` ``）**にして両経路・iOS/Android を一致させている（salon 特定不可時は汎用「echo 受付」）。
+    - **`appleWebApp` を明示するのは、旧経路フォールバックで `<title>` に落ちてほしくない画面だけ**（現状は `/kiosk`）。専用 manifest を持つ `/dashboard`・`/staff` は新経路で manifest.name が使われるため、当面 appleWebApp は不要（`<title>` に落ちる旧経路の名前が「echo」等で許容できる範囲）。root は `<title>` 由来で足りる。
+    - **iOS はアプリ名/アイコンを「追加時に確定・キャッシュ」する**＝名前やアイコンを変えても**既存のホーム画面アイコンには反映されない**。反映には**一度削除→再追加**が必要（実機検証時の必須手順）
+  - `/staff/visit`（ログイン中スタッフ用・staff ホーム/`SalonNav` から被リンク）は**温存**＝端末経路だけ `/kiosk` に分離（既存導線に影響なし）
+  - device_token は `salons` に1つ＝**iPad 3台で共有**。1台紛失で再発行すると全端末が失効し全台再スキャンが必要（3台規模では許容・端末別失効が要れば `device_tokens` テーブルへ分割）
+  - ⚠️ **設計判断（token 露出）: per-salon manifest の start_url に device_token が載る**。据え置き受付端末を standalone で自己プロビジョニングさせるための対価で、**httpOnly cookie ほどは隠れない**ことを承知の上で採用する
+    - ホーム画面 web clip 自体は iCloud 同期しない＝token はショートカット経由で伝播しない。漏れ口は **Safari 履歴/ブックマークの iCloud 同期**に限られる → 据え置き端末は**専用 Apple ID・Safari 同期OFF が推奨**
+    - 既存 iPad が店長 Apple ID（同期ON）で運用開始する場合: 伝播先は**店長自身の端末＝すでに token に正当アクセスできる本人**なので実害は小さい。ただし**共用 Apple ID（店長以外も触れる）は不可**（本人前提が崩れる）。同期でコピー面が増える弱さは、**再発行＝全コピー即時失効**が担保する
+    - token は**サロン単位の bearer**。被害範囲は当該サロンの来店記録に限定（他店越境不可・PII 非開放）。紛失時は `/manager/kiosk` で再発行
+- `/dashboard`（オーナー向け数字管理ダッシュボード）を独立 PWA 化: アイコン1タップで `/dashboard` に着地する … ✓ DB変更なし（2026-07-17・commit `c6a5ee1`）
+  - 症状: `/dashboard` は root layout を継承し顧客 `/manifest.json`（`start_url:"/"`）が配られていた（`curl` で `<link rel=manifest href=/manifest.json>` 確認）。iOS 17.4+ の「Webアプリとして開く」ON だとアイコン起動が manifest の `start_url` を使い、顧客トップ "/" に着地していた（実機再現）＝`/kiosk` と同型
+  - 対策＝**`public/manifest-dashboard.json` 新規**（`name/short_name:"echo dashboard"` / `start_url:"/dashboard"` / **`scope:"/dashboard"`（末尾スラッシュ無し必須・within はパス前方一致）** / display standalone / icons favicon.ico 48x48）を配り、**`src/app/dashboard/layout.tsx` の静的 `metadata.manifest` を `/manifest-dashboard.json` に上書き**（scalar 最深優先＝`<link rel=manifest>` 1本）
+  - **per-salon 不要＝静的 metadata で足りる**（`start_url` 固定・DBアクセスなし）。`/kiosk` の動的 manifest（device_token 突合）とは違い、`/dashboard` は同一オーナー配下の固定着地でよい
+  - `icons` は既存どおり apple=mint（業務側）＋favicon 併記のまま（変更なし）。`appleWebApp` は付けない（上記アプリ名の知見どおり、新経路では manifest.name「echo dashboard」が使われる）
+  - **無改変**: 顧客 `public/manifest.json`・`manifest-staff.json`・`/kiosk`・`/manager`・`/staff`（`/manager/staff` は既に `manifest-staff.json` で `/staff` 着地のため対象外）
+- 消費型/状態型の特典対応 … ✓（2026-07-16〜17・DB migration 0025/0027/0028/0029/0030 ＋ app 6コミット。取消UI まで込みで一周）
+  - 概念: **消費型**（`rewards.is_consumable=true`・使ったら消える・例 ご褒美SPA）と**状態型**（=false・権利・消えない・例 VIPセール対象）を分離。`reward_type`（discount/service/priority）とは**直交**（「サービスだから消費型」ではない）。既存2件は 0025 で一律 false＝現状の挙動のまま。
+  - DB（本番適用済み・事後記録は 44e2bb4）:
+    - **0025** `reward_redemptions`（消込台帳・物理削除せず `voided_at` で取消／部分unique `active_uniq`＝同一サイクル同一特典1回・`one_per_visit`＝1来店1消費）＋ `rewards.is_consumable`（default false）。RLS deny-by-default
+    - **0027** `list_available_consumable_rewards`＝「今この来店で何を消せるか」（**本日来店ゲート有り**）。**cycle 導出の唯一の正**（軸順・FIFO・1来店1消費・is_consumable 判定を一元管理）
+    - **0028** `redeem_reward`＝消込。失敗は例外でなく **`ok=false`＋`reason`**（`no_visit_today`/`no_available_reward`/`already_redeemed_today`）で返す。候補判定は 0027 に委譲（唯一の正を二重化しない）
+    - **0029** `list_consumable_reward_states`＝「今 権利として残っているか」（**本日来店ゲート無し**）。mypage 用。per 特典 `earned_count`/`redeemed_count` を返し `available = earned > redeemed` で判定
+    - **0030** `get_todays_redemption`（本日この来店で消込済みの最大1件を返す・done 表示用）＋ `void_reward_redemption`（消込の取消＝`voided_at`/`voided_by` を立てる。失敗は `ok=false`＋`reason`＝`no_visit_today`/`nothing_to_void`）
+  - app: `rewards.ts` 型通し(a732cd8) → `/api/staff/visit` 候補提示＋消込(b9714cd) → `VisitScanner` 二択UI(a977b03) → `/mypage` 3状態表示(533a7c3) → `/manager/rewards` 使い方切替(092abf4) → 消込の取消UI(bd049d7)
+  - 実機確認（2026-07-17・CARTA iPad）: record 直後に必ず二択（「◯を使う」/「今日は使わない」）が出る。**`awarded=false`（本日2回目のスキャン）でも二択は出る**＝朝チェックイン→施術後にSPA提供が決まるケースを拾う（awarded と候補提示は独立）
+  - 確定した設計判断（詳細は各 migration のコメント参照）:
+    - 消費順は **感想軸 → 来店軸の固定**、各軸内は **FIFO**（未消込の最小 cycle_index）
+    - **軸はスタッフに選ばせない**＝軸は現実に対応物が無い帳簿上の概念（見えないものを選ばせると押下がランダムになる）
+    - **どの特典を使うかは UI が選ぶ**＝顧客との実在の会話なので RPC では絞らない
+    - **`redeemed_by` は端末（kiosk）経路で null**（個人特定不可・`stamp_adjustments.created_by` と同じ割り切り）
+    - **「今日は使わない」は記録しない**（declined を残すかは将来の判断・別テーブルで後から足せる）
+  - **取消UI**（旧・運用前の必須残タスク「`voided_at` 列はあるが RPC も画面も無い」→ ✓ 完了・0030 ＋ bd049d7）: done 画面に「取り消す」を追加。`record`/`redeem`/`void` が**同じ done 状態 `{ availableRewards, todaysRedemption }` を返す**よう共通ヘルパー `buildConsumableDoneState`（0027 候補＋0030 現況）に集約。取消対象は `void_reward_redemption`(0030) が判定＝クライアントは `redemption_id` 等を渡さない。
+    確定した設計判断（3点）:
+    - **(1) 取消は店側なら誰でも**（在籍staff も端末も可）。`redeemed_by` が端末（kiosk）経路で null ＝**そもそも操作者を権限で縛れない**ため、消込と同じく誰でも可とする（`void_reward_redemption` にロール判定を持たせない）。
+    - **(2) 取消は当日のみ・再スキャンして done 画面から**。`void_reward_redemption` は**本日の来店に紐づく消込1件**だけを対象にする（`no_visit_today`/`nothing_to_void`）。前日以前ぶんの取消導線は当面持たず、必要時は SQL Editor で対応。
+    - **(3) done 画面はサーバから来た状態だけで分岐する**（`todaysRedemption`≠null＝使用済み＋取消／候補あり＝使う二択／無し＝続けて読み取る）。`availableRewards` と `todaysRedemption` の**排他は 0027 が保証**（本日消込済みなら候補0行）しており、**TS 側で排他を作り直さない**＝鉄則(c) の「導出ロジックの多重化（三重化）」を防ぐ。取消も消込も返り状態で再描画するため、押した直後の押し間違いもその場で戻せる（意図した設計）。
+  - ⚠️ 現時点の割り切り（今回スコープ外・要れば後日）: 取消は**現場で素で押せる**（確認ダイアログ無し・現場で要ると判った時点で足す）／manager 画面・消込履歴一覧は無し
