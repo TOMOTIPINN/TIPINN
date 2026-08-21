@@ -8,6 +8,7 @@ import { Eyebrow, Card } from "@/components/ui";
 import RoleBar from "@/components/RoleBar";
 import AddFriendCard from "@/components/AddFriendCard";
 import { resolveSalonRole } from "@/lib/display-role";
+import { REVIEW_RATINGS } from "@/lib/review";
 import {
   GREETING_LABEL,
   jstGreeting,
@@ -20,8 +21,14 @@ import {
 /**
  * 12 スタッフホーム（画面マップ12・サロンUI世界）。ルート: /staff
  *
- * 蓄積（件数）＋ Team voices を表示する。トーン: 暖色＋ミント・ゴシック・**¥なし**（§2/§4）。
+ * 蓄積（件数）＋「あなたに届いた声」＋ Team voices を表示する。
+ *   トーン: 暖色＋ミント・ゴシック・**¥なし**（§2/§4）。
  *   集計は staff_id 軸（感想＋有料評価の件数のみ）。金額列は select しない。
+ *
+ * 13 スタッフ通知（/staff/received/[reviewId]）への導線はこの画面が持つ:
+ *   ・「あなたに届いた声」… 自分宛ての新着5件（全行リンク）
+ *   ・Team voices        … 開ける行だけリンク（canOpen が detail の canView と同条件）
+ *   どちらも絞り込みは share_scope='everyone' かつ rating>=3（staff 経路）で不変。
  *
  * 認証（方式B / [[auth-method-line-b]]）: ログイン中の LINE から getStaffContext() で
  *   staff_id/salon_id を解決。?staff= は受け取らない（自分のデータのみ）。
@@ -34,7 +41,17 @@ type VoiceRow = {
   rating: number | null;
   created_at: string;
   share_scope: string | null;
+  /** 宛先スタッフ（null＝サロン全体宛）。リンク可否の判定にのみ使う。 */
+  staff_id: string | null;
   staff: { name: string } | { name: string }[] | null;
+};
+
+/** 「あなたに届いた声」の1行（自分宛て・件数ではなく中身を出す）。 */
+type MyVoiceRow = {
+  id: string;
+  body: string;
+  rating: number | null;
+  created_at: string;
 };
 
 /** 集計スコープ: あなたへ（staff_id 一致）／お店全体（salon_id のみ・staff_id 不問＝あなた宛も含む全レビュー）。 */
@@ -156,26 +173,53 @@ export default async function StaffHomePage() {
   //                  （rating 1,2 は要対応の声で店長が受け止める）。
   //  ・manager/owner: 従来どおり manager_only 以外・rating 制限なし。
   const displayRole = await resolveSalonRole(ctx);
+  // staff_id は「その行を /staff/received/[id] で開けるか」の判定にだけ使う（絞り込み条件は不変）。
   const voicesBase = supabaseAdmin
     .from("reviews")
-    .select("id, body, rating, created_at, share_scope, staff(name)")
+    .select("id, body, rating, created_at, share_scope, staff_id, staff(name)")
     .eq("salon_id", ctx.salon_id);
   const voicesQuery =
     displayRole === "staff"
       ? voicesBase.eq("share_scope", "everyone").gte("rating", 3)
       : voicesBase.neq("share_scope", "manager_only");
 
+  /**
+   * 「あなたに届いた声」= 自分宛て（staff_id 一致）の感想。
+   * 絞り込みは Team voices の staff 経路と同一条件（share_scope='everyone' かつ rating>=3）。
+   * 自分宛てだからといって manager_only や rating<=2（気づきの声）を本人に直接見せない
+   * ＝「低評価は店長が受け止める」設計（docs/00_philosophy.md）を導線側でも守る。
+   * salon_id は staff_id から一意に決まるが、越境の保険として二重スコープにする。
+   */
+  const myVoicesQuery = supabaseAdmin
+    .from("reviews")
+    .select("id, body, rating, created_at")
+    .eq("salon_id", ctx.salon_id)
+    .eq("staff_id", ctx.staff_id)
+    .eq("share_scope", "everyone")
+    .gte("rating", 3)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
   // 感想（reviews）: あなたへ／お店への各グループ×今週/今月/今期 ＋ Team voices。
-  const [youRvW, youRvM, youRvQ, shopRvW, shopRvM, shopRvQ, voicesRes] =
-    await Promise.all([
-      countRows("reviews", youScope, weekStart),
-      countRows("reviews", youScope, monthStart),
-      countRows("reviews", youScope, quarterStart),
-      countRows("reviews", salonScope, weekStart),
-      countRows("reviews", salonScope, monthStart),
-      countRows("reviews", salonScope, quarterStart),
-      voicesQuery.order("created_at", { ascending: false }).limit(5),
-    ]);
+  const [
+    youRvW,
+    youRvM,
+    youRvQ,
+    shopRvW,
+    shopRvM,
+    shopRvQ,
+    voicesRes,
+    myVoicesRes,
+  ] = await Promise.all([
+    countRows("reviews", youScope, weekStart),
+    countRows("reviews", youScope, monthStart),
+    countRows("reviews", youScope, quarterStart),
+    countRows("reviews", salonScope, weekStart),
+    countRows("reviews", salonScope, monthStart),
+    countRows("reviews", salonScope, quarterStart),
+    voicesQuery.order("created_at", { ascending: false }).limit(5),
+    myVoicesQuery,
+  ]);
 
   const youReviews: PeriodCounts = {
     week: youRvW,
@@ -216,6 +260,16 @@ export default async function StaffHomePage() {
   }
 
   const voices = (voicesRes.data ?? []) as VoiceRow[];
+  const myVoices = (myVoicesRes.data ?? []) as MyVoiceRow[];
+
+  /**
+   * その行を /staff/received/[id] で開けるか。
+   * detail 側の canView（本人宛て or 同サロンの manager）と**厳密に同じ条件**にする。
+   * ここを緩めるとリンク先が 404 になり、締めると開けるはずの声に辿り着けない。
+   * salon_id はクエリで既に ctx.salon_id に固定済みのため、ここでは見なくてよい。
+   */
+  const canOpen = (staffId: string | null): boolean =>
+    staffId === ctx.staff_id || ctx.role === "manager";
 
   const greeting = GREETING_LABEL[jstGreeting()];
 
@@ -264,6 +318,56 @@ export default async function StaffHomePage() {
           </p>
         </section>
 
+        {/* あなたに届いた声（自分宛て・新着5件）。各行が 13 スタッフ通知（/staff/received/[id]）へ。
+            絞り込みは Team voices の staff 経路と同一条件のため、上のマトリクスの件数より
+            少なく見えることがある（manager_only / rating<=2 は出さない）。 */}
+        <Card>
+          <div className="stack-md">
+            <h2 className="headline-sm">あなたに届いた声</h2>
+            {myVoices.length === 0 ? (
+              <p className="muted">まだ届いた声はありません。</p>
+            ) : (
+              <div>
+                {myVoices.map((v) => {
+                  const mood =
+                    REVIEW_RATINGS.find((r) => r.value === v.rating) ?? null;
+                  return (
+                    <Link
+                      key={v.id}
+                      href={`/staff/received/${v.id}`}
+                      className="team-voice"
+                    >
+                      <div className="team-voice-head">
+                        <span className="team-voice-name">
+                          {mood ? (
+                            <>
+                              <span aria-hidden="true">{mood.emoji}</span>{" "}
+                              {mood.label}
+                            </>
+                          ) : (
+                            "感想"
+                          )}
+                        </span>
+                        <span className="team-voice-time">
+                          {jstDate.format(new Date(v.created_at))}
+                        </span>
+                      </div>
+                      <p className="team-voice-body">「{v.body}」</p>
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 上のマトリクス（絞り込み無しの件数）とこの一覧（everyone かつ rating>=3）は
+                母集団が違うため数が合わない。責めない・理由を伏せない・赤を使わない書き方で
+                先に断っておく（§5 トーン / note-fine＝淡いイタリック）。 */}
+            <p className="note-fine">
+              ※上の件数と一致しないことがあります。お客様が店長にだけ届けたいと選んだ声などは、ここには表示されません。
+            </p>
+          </div>
+        </Card>
+
         {/* Team voices（同サロンの新着・気づきの声は褪せグレー） */}
         <Card>
           <div className="stack-md">
@@ -275,8 +379,8 @@ export default async function StaffHomePage() {
                 {voices.map((v) => {
                   const vstaff = one(v.staff);
                   const care = (v.rating ?? 4) <= 2; // 低評価＝気づきの声
-                  return (
-                    <div key={v.id} className="team-voice">
+                  const inner = (
+                    <>
                       <div className="team-voice-head">
                         <span className="team-voice-name">
                           {vstaff?.name ?? "サロン全体"}
@@ -287,6 +391,21 @@ export default async function StaffHomePage() {
                         </span>
                       </div>
                       <p className="team-voice-body">「{v.body}」</p>
+                    </>
+                  );
+                  // 開ける行だけリンクにする。開けない行（他人宛て・staff 視点）は
+                  // 従来どおり div のまま＝リンク先が 404 になる導線を作らない。
+                  return canOpen(v.staff_id) ? (
+                    <Link
+                      key={v.id}
+                      href={`/staff/received/${v.id}`}
+                      className="team-voice"
+                    >
+                      {inner}
+                    </Link>
+                  ) : (
+                    <div key={v.id} className="team-voice">
+                      {inner}
                     </div>
                   );
                 })}

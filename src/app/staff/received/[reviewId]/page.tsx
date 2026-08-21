@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
@@ -28,8 +28,14 @@ import {
  *
  * 認証（方式B / [[auth-method-line-b]]）: ログイン中の LINE から getStaffContext() を解決。
  *   未ログイン → returnTo付きで LINE ログインへ。閲覧できるのは
- *   「本人宛の評価（review.staff_id===自分）」または「同サロンの店長（manager）」のみ。
- *   それ以外は存在を伏せて not-found 扱い（他人の評価は見せない）。
+ *   ・staff  : 本人宛て（staff_id===自分）かつ share_scope='everyone' かつ rating>=3
+ *   ・manager: 同サロンの声すべて（従来どおり絞らない）
+ *   それ以外は存在を伏せて notFound()＝**HTTP 404**（他人の評価は見せない）。
+ *   「存在しない」と「権限が無い」を区別しない（403 を返さない）のは意図的で、
+ *   区別するとレビューIDの総当たりで実在を判別できるオラクルになるため。
+ *
+ * 到達導線: /staff の Team voices の各行（自分宛て or 同サロンの manager のみリンク化）と、
+ *   /staff の「あなたに届いた声」セクション。リンク可否は下の canView と厳密に一致させる。
  */
 
 type ReviewRow = {
@@ -40,6 +46,8 @@ type ReviewRow = {
   created_at: string;
   staff_id: string | null;
   salon_id: string;
+  /** お客様が選んだ共有範囲。staff 経路の可視判定に使う（manager は見ない）。 */
+  share_scope: string | null;
   customers: { display_name: string } | { display_name: string }[] | null;
 };
 
@@ -93,26 +101,39 @@ export default async function StaffReceivedPage({
   const { data } = await supabaseAdmin
     .from("reviews")
     .select(
-      "id, body, tags, rating, created_at, staff_id, salon_id, customers(display_name)",
+      "id, body, tags, rating, created_at, staff_id, salon_id, share_scope, customers(display_name)",
     )
     .eq("id", reviewId)
     .single();
 
   const review = data as ReviewRow | null;
 
-  // 本人宛、または同サロンの店長のみ閲覧可。それ以外は存在を伏せる（not-found 扱い）。
-  // サロン全体宛（staff_id null）も manager 経路（同サロン）でのみ閲覧できる。
+  /**
+   * 閲覧可否。ロールで条件が違う。
+   *
+   *  ・manager: 自分宛て、または同サロンの声すべて（サロン全体宛 staff_id=null を含む）。
+   *      店長は /manager/inbox で全件を受け止める役割なので、ここは絞らない。
+   *  ・staff  : 自分宛て（staff_id 一致）**かつ** /staff の Team voices と同じ可視条件
+   *      （share_scope='everyone' かつ rating>=3）。
+   *      share_scope='manager_only' は「店長にだけ伝えたい」というお客様の選択であり、
+   *      本人が直URLで読めるならその選択肢が意味を失う。rating<=2（気づきの声）も
+   *      店長が受け止める設計（docs/00_philosophy.md）のため本人には直接見せない。
+   *      → SQL 側の .eq/.gte と揃えるため null は不可視に倒す（NULL>=3 は偽）。
+   *
+   * 弾いた場合は存在を伏せて 404（下の notFound()）。403 とは区別しない。
+   */
   const canView =
     !!review &&
-    (review.staff_id === ctx.staff_id ||
-      (ctx.role === "manager" && review.salon_id === ctx.salon_id));
+    (ctx.role === "manager"
+      ? review.staff_id === ctx.staff_id || review.salon_id === ctx.salon_id
+      : review.staff_id === ctx.staff_id &&
+        review.share_scope === "everyone" &&
+        (review.rating ?? 0) >= 3);
 
+  // 「存在しない」と「権限が無い」を **同じ 404** に畳む（not-found.tsx が文言を持つ）。
+  // 403 で出し分けると、レビューIDの総当たりで実在を判別できるオラクルになるため区別しない。
   if (!review || !canView) {
-    return (
-      <main className="page">
-        <p className="muted center-text">この評価は見つかりませんでした。</p>
-      </main>
-    );
+    notFound();
   }
 
   const customer = one(review.customers);
