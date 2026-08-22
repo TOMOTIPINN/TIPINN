@@ -320,3 +320,46 @@ hard delete 等は「原因を1つ直す」のではなく、**確認を経た�
 ### 6.2 DB 書き込みは全て `@/lib/supabase-admin` の共有 `supabaseAdmin`。独自に `createClient` しない
 ### 6.3 SQL は Claude Code に書かせず、チャットで書いて SQL エディタで実行する
 ### 6.4 一度に一つの変更を実機で確認してから次へ進む
+
+---
+
+## 7. Stripe / 決済に関する判断
+
+### 7.1 複数サロンでの Stripe アカウント共有は**保留**（2026-08-22 調査・未着手）
+
+**要望**: cartaLLC の suco と nun は同一法人・同一口座で、Stripe アカウントを分ける必要がない。
+`salons.stripe_account_id` の UNIQUE（`salons_stripe_account_id_key`）を外して共有したい。
+他社の多店舗オーナーからも同じ要望が出ると想定される。
+
+**結論: 9月パイロット前にはやらない。** 理由:
+
+1. **パイロットは UNIQUE を外さなくても回る。** Stripe アカウントを2つ作れば今日のコードで動く
+   （同一法人・同一口座でも Standard アカウントは複数持てる）。パイロットの目的は
+   「評価が届く体験」の検証であって多店舗課金の検証ではない。
+2. **本当のコストは UNIQUE ではなく導線の新規実装**（下表 #2）。制約を外すだけでは何も共有できない。
+3. **決済経路の変更は最も戻しにくい。** パイロット中に踏むと、原因の切り分けが
+   「echo の体験の問題」と混ざって検証そのものが濁る。
+
+**パイロット前にやること**: cartaLLC と「suco / nun は当面 Stripe アカウント2つで運用する」を合意する。
+**着手の判断材料**: 多店舗オーナーからの要望が実際に2件目・3件目と出た時点。
+**着手時の順序**: #2 → #3 → #1 → #5。
+
+#### 調査結果（2026-08-22 時点。着手時はまず現状と一致するか確認すること）
+
+`stripe_account_id` を**絞り込みキー**に使っているのは webhook の2箇所だけ。
+他は全て `.eq("id", …)`＝PK 引きで値を読むだけなので UNIQUE の有無に影響されない。
+`salons` に対する `.single()`/`.maybeSingle()` は14箇所あるが、**全て PK 引き**で無関係。
+
+| # | 箇所 | 共有時に何が起きるか | 改修案 |
+|---|---|---|---|
+| 1 | `webhook/connect` `resolveSalonIdByAccount` | `.maybeSingle()` が2行以上でエラー → 握り潰して null → **`stripe_events.salon_id` が常に NULL**。監査が劣化する。決済記録自体は `session.metadata.salon_id` 由来なので無事 | `checkout.session.completed` は metadata から取る。`account.*` は一意に決まらないので `stripe_events` に `account_id` 列を足し salon_id は NULL 許容のまま |
+| 2 | `api/manager/stripe/onboard` | **本丸。** 2つ目のサロンは `stripe_account_id` が null なので「接続」を押すと**新しいアカウントを作ってしまう**。既存アカウントを共有する導線が存在しない | 同一オーナーの既存アカウントを選ぶ UI。オーナーの他サロンから `stripe_account_id` を継承する形が最小 |
+| 3 | `api/manager/stripe/return` | 同期経路が2つあり**キーが違う**。webhook は `stripe_account_id`（＝共有する全サロンを更新・正しい）、return は `ctx.salon_id`（＝操作した本人だけ）。兄弟サロンのフラグが stale になり、その間 checkout が **409 `salon_not_onboarded`** で落ちる | 両経路を「`stripe_account_id` で全行更新」の1関数に統一する |
+| 4 | UNIQUE 撤去そのもの | 「同じアカウントを二重接続した事故」を検出する唯一のガードが消える。`onboard` の競合ガード `.is("stripe_account_id", null)` は自分の行しか見ていない | 意図的な共有と誤接続は DB では区別できない。同一 account を持つ salon 数を監視するビュー／アラートで代替 |
+| 5 | **インデックス** | `salons_stripe_account_id_key` を drop すると**裏のインデックスも消える**。webhook の2クエリが seq scan になる | drop と同時に `create index … on salons(stripe_account_id) where stripe_account_id is not null` を張る。**必ず同一トランザクション**で |
+| 6 | Stripe 側（コード外） | 領収書・明細の事業者名は connected account 単位で1つ。suco / nun で分けられない | line_item 名には `salon.name` が入る（`api/checkout`）ので明細行では区別可。事業者名の扱いは §9 の税理士確認事項 |
+| 7 | テナント分離 | **影響なし。** 集計・可視性は全て `salon_id` スコープで、アカウント共有でデータが混ざる経路は無い | — |
+
+> ⚠️ `syncAccountFromStripe` が複数行更新に耐えるのは偶然ではなく、`.select("id")` の
+> **配列長**で成否を判定しているため（`.single()` にすると壊れる）。ここを「1件のはずだから」と
+> `.single()` に書き換えないこと。
