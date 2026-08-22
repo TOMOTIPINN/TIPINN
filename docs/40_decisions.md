@@ -85,6 +85,77 @@ Untitled のまま放置したタブは次の作業で上書きされ、書い�
 採番時に飛ばしただけ。2026-07-17 に本番 DB・repo・git 履歴のいずれにも存在しないことを確認済み。
 番号を詰め直すと各所の番号参照が全部ズレて履歴を追えなくなるため、**欠番はそのまま残す**。
 
+### 1.9 SQL エディタで「ちょっと緩めた」制約は、その場で追いつき migration を書く
+1.4 の変種で、**より見つかりにくい**。テーブルや関数が丸ごと欠けていれば REST が即エラーを返すが、
+制約を緩めただけの差分は**本番が正常に動き続ける**。壊れるのは新環境を作り直したときだけなので、
+何ヶ月でも気づかないまま残る。しかも repo に残った古い migration は、単に不足しているのではなく
+**現実と違う値を書いた「嘘の記録」**になっていて、読んだ人を積極的に誤らせる。
+
+**対策**:
+- 制約を SQL エディタで直接変えたら、**その場で**追いつき migration を書く。「あとで」は来ない。
+- 適用済み migration の DDL は書き換えない（履歴が壊れる）。代わりに**その行の直前に
+  「これは古い・正は 00NN」というコメントだけ**足して、単体で読んだ人が信じないようにする。
+
+> **実例**: `salons.notify_after_minutes` の CHECK を、通知遅延UIを10分刻みにした際に
+> SQL エディタで直接 `10〜360 かつ 10の倍数` へ張り替えたが、0014 は `between 30 and 360` のまま。
+> 本番は正常に動き続けていたため発覚せず、2026-08-22 のスキーマ突き合わせでようやく発見。
+> 0042 として事後記録し、0014 には注意コメントのみ追加。
+
+### 1.10 「実DBを正とする」なら、制約は**全文**を写す。表示は黙って切れる
+Supabase SQL エディタの結果セルは横に切れる。`pg_get_constraintdef` の途中までを見て
+「一致している」と判断すると、**存在しない条件の欠けた制約を repo に記録してしまう**。
+
+**対策**: 制約定義はセルを展開して全文を確認する。追いつき migration 側では、期待値との比較を
+`regexp_replace(def, '\s+', ' ', 'g')` で**空白を潰してから**行う（括弧・空白の入り方は
+PostgreSQL のバージョンで変わるため、生の文字列等価は誤検知する）。
+
+> **実例**: 上の 0042 で、切れた表示から `>= 10 AND <= 360` の2条件と読み、第3項
+> `(notify_after_minutes % 10) = 0` を落として記録しかけた。範囲だけ合わせても等価ではなく、
+> `between 10 and 360` では 15分・37分が通り、10分刻みUIの前提が DB 側から外れる。
+> 適用前に全文を取り直して発見。2026-08-22。
+
+### 1.11 記録が正しいかの唯一の実効テストは「migrations だけで作り直せるか」
+本番が動いていることは、migrations が揃っている証拠に**一切ならない**（1.9）。
+差分は「新環境を migrations から再構築したときだけ壊れる」形で溜まる。
+
+**対策**: スキーマに関わる作業をしたら、`information_schema.columns` と `pg_indexes` の全件を
+migrations の DDL と突き合わせる。アプリコードが触るカラムだけを見る方法では、
+**コードが使っていないカラム・インデックス・制約は原理的に検出できない**。
+
+> **実例**: 認証方式B（[[auth-method-line-b]]）の根幹である `staff.line_user_id` /
+> `invite_token` / `invite_expires_at` / `bound_at` の4カラムと、部分 unique index
+> `uq_staff_line_user_id` / `uq_staff_invite_token` が、本番にはあるのに migration に無かった。
+> 特に `uq_staff_line_user_id` は「1 LINE = 最大1 staff」の**唯一の強制点**で、
+> `resolveStaffByLineUserId` が1行に解決できる前提そのもの。
+> migrations から再構築した環境ではスタッフ招待とスタッフログインが丸ごと動かない状態だった。
+> 2026-08-22・0041 として事後記録。
+
+### 1.12 `raise notice` を検証手段に選ばない。Supabase の SQL エディタでは読めない
+Supabase の SQL エディタには psql の Messages タブに相当する表示が無く、
+`raise notice` / `raise warning` の出力が**どこにも出ない**。しかも `Success` とだけ返るため、
+**検証が通ったのか、そもそも検証結果が見えていないだけなのか区別できない**のが最悪の性質。
+「警告が出ていないから OK」と読んでしまう。
+
+**対策**: migration に検証を埋めるなら、`do $$ … raise notice … $$` ではなく
+**最後に `select` を置いて結果セットとして返す**。エディタは結果セットなら必ず表示する。
+
+```sql
+-- ✅ こう書く（結果セットとして必ず見える）
+select
+  (select count(*) from information_schema.columns
+    where table_schema='public' and table_name='staff'
+      and column_name in ('line_user_id','invite_token','invite_expires_at','bound_at')) as staff_cols,
+  (select indexdef from pg_indexes
+    where schemaname='public' and indexname='uq_staff_line_user_id') as uq_line;
+```
+
+`raise exception`（＝失敗させる）だけは有効。エラーは必ず画面に出るので、
+「満たされなければ止めたい」条件はこちらで書く。
+
+> **実例**: 0041 / 0042 の検証を全て `raise notice` で書いたため、適用時に何も表示されなかった。
+> 同等の内容を `select` で取り直して確認する羽目になった。2026-08-22。
+> 適用済みの 0041 / 0042 はそのまま残す（1.9 の原則どおり、適用済み migration の DDL は書き換えない）。
+
 ---
 
 ## 2. 導出ロジックの多重化に関する決定

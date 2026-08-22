@@ -21,6 +21,9 @@
 alter table public.salons
   add column if not exists notify_after_minutes integer not null default 180;
 
+-- ⚠️ 2026-08-22 追記: **下の 30〜360 は古い。本番の正は「10〜360 かつ 10の倍数」**（→ 0042）。
+--    通知遅延UIを10分刻みにした際に SQL エディタで直接緩めた。この行は当時の記録として残す
+--    （適用済み migration は書き換えない）。新環境を作り直したときは 0042 の手当てが要る。
 alter table public.salons
   drop constraint if exists salons_notify_after_minutes_check;
 alter table public.salons
