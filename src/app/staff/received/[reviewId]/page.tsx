@@ -242,7 +242,9 @@ export default async function StaffReceivedPage({
         <hr className="rule" />
 
         {/* 累計（今週件数）／ランク。個人指標のためサロン全体宛では丸ごと非表示。
-            ランクはさらに RANK_ENABLED のときのみ（件数は出すがランクは伏せる）。 */}
+            ランク（A/B/C/D）はさらに RANK_ENABLED のときのみ＝現在は常に非表示。
+            ⚠️ この RANK_ENABLED は**ティア（👍☕🍰💐👑）とは無関係**。ティアは上の
+            hero と「あなたへの評価」で無条件に表示している（→ docs/40_decisions.md §4.5）。 */}
         {!isSalonWide && (
           <div className="received-foot">
             <span>

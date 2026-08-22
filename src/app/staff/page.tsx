@@ -249,7 +249,9 @@ export default async function StaffHomePage() {
     shopStamps = { week: shopPvW, month: shopPvM, quarter: shopPvQ };
   }
 
-  // ランクは RANK_ENABLED のときだけ（PAID_STAMPS_ENABLED とは独立）。あなたへ通算（感想＋評価スタンプ）基準。
+  // ランク（A/B/C/D）は RANK_ENABLED のときだけ（PAID_STAMPS_ENABLED とは独立）。
+  // あなたへ通算（感想＋評価スタンプ）基準＝累積指標のため現在は常に非表示（→ docs/40_decisions.md §4.5）。
+  // ⚠️ ティア（👍☕🍰💐👑）別の内訳はこの画面には**そもそも無い**（件数のみ）。ランクとは別物。
   let rank: "A" | "B" | "C" | "D" | null = null;
   if (RANK_ENABLED) {
     const [youRvTotal, youPvTotal] = await Promise.all([

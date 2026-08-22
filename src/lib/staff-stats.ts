@@ -68,8 +68,19 @@ export const GREETING_LABEL: Record<ReturnType<typeof jstGreeting>, string> = {
 export const PAID_STAMPS_ENABLED: boolean = true;
 
 /**
- * ランク（A/B/C/D）表示のスイッチ（唯一の正・§8）。
- * 現状は仮閾値で誤解を招くため false＝ランクは伏せる（PAID_STAMPS_ENABLED とは独立）。
+ * 「ランク」（A/B/C/D）表示のスイッチ（唯一の正・§8）。**恒久的に false**。
+ *
+ * ⚠️ ここでいう **ランク ≠ ティア**（→ docs/40_decisions.md §4.5）。
+ *   ・ランク（ここ）= 通算件数から `rankForCount()` で導く echo 独自の A/B/C/D。
+ *   ・ティア        = お客様が選んだ評価スタンプの種類（👍☕🍰💐👑 / `@/lib/rating-tiers`）。
+ *     ティアはこのフラグと無関係で、/staff/received/[reviewId] では無条件に表示している。
+ *     「ティアが出ない」と感じたときに、ここを true にしても何も解決しない。
+ *
+ * false の理由（2026-08-22 に再確認して据え置き）:
+ *   ・通算基準の**累積指標**であり「届いた瞬間の体験」ではない。スタッフ間の比較・
+ *     ランキング化を招き、ES 向上という echo の目的（docs/00_philosophy.md）に反する。
+ *   ・閾値が仮置き（下記）のため、若手が構造的に D 固定になる。
+ * true にしたくなったら先に docs/40_decisions.md §4.5 を読むこと。
  */
 export const RANK_ENABLED: boolean = false;
 
