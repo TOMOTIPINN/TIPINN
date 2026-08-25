@@ -1,4 +1,5 @@
--- ⚠️ 未適用。Supabase SQL エディタで手動適用すること（CLAUDE.md §3 / docs/40_decisions.md §1）。
+-- ⚠️ 本番適用済み（2026-08-25・SQL Editor 手動）・再実行しない
+-- 適用後の確認済み: salon_invites 9列 / RLS = true / ポリシー0件。
 -- 0043_salon_invites.sql
 -- サロン作成を招待制にする。/manager/salon/new は LINE ログインさえ通れば
 -- 誰でもサロンを作れる状態だった（docs/access-control-audit.md §54 で「意図的」と

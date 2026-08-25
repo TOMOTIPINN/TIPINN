@@ -1,4 +1,6 @@
--- ⚠️ 未適用。Supabase SQL エディタで手動適用すること（CLAUDE.md §3 / docs/40_decisions.md §1）。
+-- ⚠️ 本番適用済み（2026-08-25・SQL Editor 手動）・再実行しない
+-- 適用後の確認済み: notification_outbox.attempt_count（integer / NOT NULL / default 0・
+-- 既存49行はすべて 0）／ skip_reason の CHECK に invalid_user_id が入っていること。
 -- 0044_outbox_attempt_count.sql
 -- cron の送信ゲート反転（profile 事前確認方式）に伴う2点の追加。
 --
