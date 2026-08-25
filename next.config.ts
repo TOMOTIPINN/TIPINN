@@ -10,6 +10,20 @@ const nextConfig: NextConfig = {
         source: "/company",
         destination: "/company/index.html",
       },
+      // 特定商取引法に基づく表記（店舗ごと）。上と同じ理由で拡張子なしURLを明示する。
+      // 店舗が増えたらここに1行足す（到達可能なURLをこのファイルだけで把握できる状態を保つ）。
+      {
+        source: "/company/tokushoho-carta",
+        destination: "/company/tokushoho-carta.html",
+      },
+      {
+        source: "/company/tokushoho-niii",
+        destination: "/company/tokushoho-niii.html",
+      },
+      {
+        source: "/company/tokushoho-nun",
+        destination: "/company/tokushoho-nun.html",
+      },
     ];
   },
 };

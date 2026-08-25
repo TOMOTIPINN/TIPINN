@@ -162,6 +162,21 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--mint-1);outline-off
 .closing p{margin:0;font-size:14px;letter-spacing:.3em;color:var(--g25)}
 .foot{border-top:1px solid var(--line);margin-top:clamp(48px,7vw,80px);padding:28px 0;font-size:12.5px;color:var(--g25);letter-spacing:.08em}
 .foot .wrap{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px}
+/* 法定表記リンク。.foot .wrap が flex-wrap のため、width:100% で独立した1段目になる
+   （既存の2つの span は2段目に残る＝上のルールを書き換えずに1行足せる） */
+.foot-legal{
+  width:100%;display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 16px;
+  padding-bottom:16px;border-bottom:1px solid var(--line);
+}
+.foot-legal-label{letter-spacing:.12em}
+/* 店名リンク群は塊で折り返す。個々に折り返させると行末に "/" が取り残される */
+.foot-legal-shops{display:inline-flex;align-items:baseline;gap:16px;white-space:nowrap}
+.foot-legal a{
+  color:var(--g25);text-decoration:none;
+  border-bottom:1px solid transparent;transition:color .2s,border-color .2s;
+}
+.foot-legal a:hover{color:var(--mint-1);border-bottom-color:var(--mint-1)}
+.foot-legal .sep{color:var(--line);user-select:none}
 
 @media (max-width:860px){
   .cards,.screens{grid-template-columns:1fr}
@@ -410,6 +425,16 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--mint-1);outline-off
 
 <footer class="foot">
   <div class="wrap">
+    <nav class="foot-legal" aria-label="特定商取引法に基づく表記">
+      <span class="foot-legal-label">特定商取引法に基づく表記</span>
+      <span class="foot-legal-shops">
+        <a href="/company/tokushoho-carta" aria-label="特定商取引法に基づく表記（CARTA）">CARTA</a>
+        <span class="sep" aria-hidden="true">/</span>
+        <a href="/company/tokushoho-niii" aria-label="特定商取引法に基づく表記（Niii）">Niii</a>
+        <span class="sep" aria-hidden="true">/</span>
+        <a href="/company/tokushoho-nun" aria-label="特定商取引法に基づく表記（nun）">nun</a>
+      </span>
+    </nav>
     <span>echo Labs株式会社</span>
     <span>&copy; 2026 echo Labs Inc.</span>
   </div>
