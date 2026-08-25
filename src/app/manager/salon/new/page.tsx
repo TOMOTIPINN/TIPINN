@@ -13,8 +13,12 @@ import SalonQr from "./SalonQr";
  * 店長が新しいサロンを登録する。店名（必須）／ロゴ（任意）／通知遅延（任意・既定180）を入力し、
  * 送信すると /api/manager/salon/new が salon_id・visit_token を採番して salons へ INSERT する。
  *
+ * ★招待制（migration 0043）★ 画面に到達できても、**有効な招待コードが無ければ作成できない**。
+ *   コードの発行は /admin/invites（echo Labs 運営者のみ）。検証・消費は API 側（route.ts）。
+ *
  * 認可（入口ゆるめ・新規オーナー導線）: 未ログイン→LINEログイン（returnTo）。
  *   staff行ゼロ(ctx=null)の人も salon/new だけは通す（最初の店を作る入口）。
+ *   ＝この画面の到達可否は緩いままで、実際の作成ゲートは招待コードが担う。
  *   staff行はあるが manager でない従業員は従来どおり /staff へ redirect。他の /manager/* は staff必須のまま。
  * 完了（?created=<id>）: 登録サロンの visit_token から /visit?salon=&t= のURLを作り、QR表示＋PNG保存を出す。
  * 書き込みは API（service_role・サーバー側）。トーン: サロンUI＝ミント・¥なし・赤なし・インラインstyle禁止。
@@ -32,6 +36,14 @@ const ERROR_MESSAGE: Record<string, string> = {
   forbidden: "この操作は許可されていません。",
   owner:
     "オーナーの店長登録に失敗したため、サロン作成を取り消しました。すでに別店舗のスタッフとして登録済みの可能性があります。",
+  // 招待コード（migration 0043）。理由は @/lib/salon-invite の inviteReasonMessage と同文。
+  invite_missing: "招待コードを入力してください。",
+  invite_not_found: "招待コードが正しくありません。",
+  invite_used: "この招待コードはすでに使用されています。",
+  invite_expired:
+    "この招待コードは有効期限が切れています。発行元にご連絡ください。",
+  invite_race:
+    "この招待コードは、ちょうど今ほかの登録に使われました。サロン作成は取り消しています。",
 };
 
 const NOTIFY_DEFAULT = 180;
@@ -122,7 +134,7 @@ export default async function ManagerSalonNewPage({
           <Eyebrow className="eyebrow-mint">New salon</Eyebrow>
           <h1 className="headline">サロンを登録</h1>
           <p className="muted">
-            店名を入力して登録すると、店頭に掲示する来店受付QRが発行されます。ロゴは後から変更できます。
+            招待コードと店名を入力して登録すると、店頭に掲示する来店受付QRが発行されます。ロゴは後から変更できます。
           </p>
         </header>
 
@@ -139,6 +151,26 @@ export default async function ManagerSalonNewPage({
             encType="multipart/form-data"
             className="stack-md"
           >
+            <div className="field-group">
+              <label className="field-label" htmlFor="code">
+                招待コード（必須）
+              </label>
+              <input
+                id="code"
+                name="code"
+                className="field"
+                type="text"
+                required
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                placeholder="XXXX-XXXX-XXXX"
+              />
+              <span className="field-help">
+                お送りした招待メールに記載のコードです。大文字・小文字とハイフンは問いません。
+              </span>
+            </div>
+
             <div className="field-group">
               <label className="field-label" htmlFor="name">
                 店名（必須）

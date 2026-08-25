@@ -57,7 +57,7 @@
 | `/manager/profile` | 店舗プロフィール（ロゴ円アップ） |
 | `/manager/kiosk` | 受付端末の登録・device_token の発行/再発行 |
 | `/manager/onboard-qr` | **店頭QR発行**。`/onboard` のQRを印刷・PNG保存できる常設ページ。`visit_token` は安定値なので常設QRに使える |
-| `/manager/salon/new` | サロン新規作成 |
+| `/manager/salon/new` | サロン新規作成。**招待コード必須**（migration 0043・有効なコードが無ければ作成不可） |
 
 ---
 
@@ -76,6 +76,21 @@
 - 好調＝直近が増加傾向
 - 安定＝それ以外
 - **絶対件数の閾値では判定しない**（→ `00_philosophy.md` §4.4）
+
+---
+
+## 5.5 echo Labs 運営者の世界（`/admin/*`）
+
+サロンの店長(manager)ではなく、**echo Labs の運営者**だけが入れる層。
+
+| ルート | 役割 |
+|---|---|
+| `/admin/invites` | サロン招待の発行・管理。一覧／新規発行／「送信済み」の手動チェック／期限切れの復旧 |
+
+- 判定は env **`ADMIN_LINE_USER_IDS`（カンマ区切りの line_user_id）のみ**。DB には持たない＝ `staff.role` には触らない
+- 非運営者・未ログイン・env 未設定は **404**（403 は返さない。URL の存在をオラクルにしないため）
+- **未設定なら全員が非運営者**（fail closed / `@/lib/admin-guard`）
+- メール送信機能は持たない。`sent_at` は運営者の手動チェックのみ
 
 ---
 
@@ -125,11 +140,15 @@ POST /api/staff/visit          来店記録 / 消込 / 取消 / 移行（action 
 /api/manager/visit             来店スタンプ設定
 /api/manager/visibility        表示制御
 /api/manager/profile           店舗プロフィール
-/api/manager/salon/new         サロン作成
+/api/manager/salon/new         サロン作成（招待コードを検証・消費）
 /api/manager/kiosk             device_token 発行/再発行
 /api/manager/stripe/onboard    Account Links を発行
 /api/manager/stripe/refresh    リンク再発行
 /api/manager/stripe/return     retrieve して連携状態を同期
+
+/api/admin/invites             サロン招待の発行（運営者のみ）
+/api/admin/invites/sent        「送信済み」の手動チェック
+/api/admin/invites/restore     期限切れ招待の復旧（期限を14日延長）
 ```
 
 ### Webhook / cron

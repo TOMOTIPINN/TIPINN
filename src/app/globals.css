@@ -2114,3 +2114,74 @@ textarea.field {
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* ============================================================
+   Admin — サロン招待の管理（/admin/invites・運営者のみ）
+   期限切れは「褪せたグレー」で表す（§2 赤は使わない）。
+   ============================================================ */
+.admin-invite { display: flex; flex-direction: column; gap: var(--space-md); }
+/* 期限切れ行のグレーアウト。opacity だけで畳み、色トークンは足さない。 */
+.admin-invite.is-expired { opacity: 0.55; }
+
+.admin-invite-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm) var(--space-md);
+}
+/* 招待コードは等幅で。転記・読み上げの誤りを減らす。 */
+.admin-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.95rem;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  word-break: break-all;
+}
+.admin-code-strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.08em;
+  margin-left: 0.4em;
+}
+
+/* 送信済チェック（onChange で即 submit）。 */
+.admin-sent { margin-left: auto; }
+.admin-sent-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: var(--g25);
+  cursor: pointer;
+}
+
+/* メタ情報。狭幅は1列、広ければ2列に流す。 */
+.admin-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem var(--space-md);
+  margin: 0;
+}
+.admin-meta-item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.4rem;
+}
+.admin-meta-item dt {
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  color: var(--g25);
+  flex: none;
+}
+.admin-meta-item dd {
+  margin: 0;
+  font-size: 0.86rem;
+  color: var(--ink);
+  text-align: right;
+  word-break: break-all;
+}
+@media (min-width: 640px) {
+  .admin-meta { grid-template-columns: 1fr 1fr; }
+}
