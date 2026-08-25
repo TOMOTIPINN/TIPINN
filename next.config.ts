@@ -24,6 +24,18 @@ const nextConfig: NextConfig = {
         source: "/company/tokushoho-nun",
         destination: "/company/tokushoho-nun.html",
       },
+      {
+        source: "/company/tokushoho-selni",
+        destination: "/company/tokushoho-selni.html",
+      },
+      {
+        source: "/company/tokushoho-suco",
+        destination: "/company/tokushoho-suco.html",
+      },
+      {
+        source: "/company/tokushoho-lma",
+        destination: "/company/tokushoho-lma.html",
+      },
     ];
   },
 };

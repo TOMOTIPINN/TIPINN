@@ -169,14 +169,15 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--mint-1);outline-off
   padding-bottom:16px;border-bottom:1px solid var(--line);
 }
 .foot-legal-label{letter-spacing:.12em}
-/* 店名リンク群は塊で折り返す。個々に折り返させると行末に "/" が取り残される */
-.foot-legal-shops{display:inline-flex;align-items:baseline;gap:16px;white-space:nowrap}
+/* 店名リンク群。店舗数が増えても崩れないよう自由に折り返させる。
+   "/" 区切りは使わない（狭い幅で行頭・行末に取り残されるうえ、"L/MA" のように
+   店名自体が "/" を含むと区切りと区別できないため）。masthead の .navlinks と同じく間隔で分ける。 */
+.foot-legal-shops{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
 .foot-legal a{
-  color:var(--g25);text-decoration:none;
+  color:var(--g25);text-decoration:none;white-space:nowrap;
   border-bottom:1px solid transparent;transition:color .2s,border-color .2s;
 }
 .foot-legal a:hover{color:var(--mint-1);border-bottom-color:var(--mint-1)}
-.foot-legal .sep{color:var(--line);user-select:none}
 
 @media (max-width:860px){
   .cards,.screens{grid-template-columns:1fr}
@@ -429,10 +430,11 @@ a:focus-visible,button:focus-visible{outline:2px solid var(--mint-1);outline-off
       <span class="foot-legal-label">特定商取引法に基づく表記</span>
       <span class="foot-legal-shops">
         <a href="/company/tokushoho-carta" aria-label="特定商取引法に基づく表記（CARTA）">CARTA</a>
-        <span class="sep" aria-hidden="true">/</span>
         <a href="/company/tokushoho-niii" aria-label="特定商取引法に基づく表記（Niii）">Niii</a>
-        <span class="sep" aria-hidden="true">/</span>
         <a href="/company/tokushoho-nun" aria-label="特定商取引法に基づく表記（nun）">nun</a>
+        <a href="/company/tokushoho-selni" aria-label="特定商取引法に基づく表記（SELNI）">SELNI</a>
+        <a href="/company/tokushoho-suco" aria-label="特定商取引法に基づく表記（suco eyebeauty）">suco eyebeauty</a>
+        <a href="/company/tokushoho-lma" aria-label="特定商取引法に基づく表記（L/MA）">L/MA</a>
       </span>
     </nav>
     <span>echo Labs株式会社</span>
