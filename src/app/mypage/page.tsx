@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Eyebrow, Card, StampRing, VipBadge } from "@/components/ui";
 import { LogoCircle } from "@/components/LogoCircle";
 import CheckInCard from "@/components/CheckInCard";
+import AddFriendCard from "@/components/AddFriendCard";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { computeVisitProgress } from "@/lib/visit";
 import { getSalonRewardsMap, getConsumableRewardStatesMap } from "@/lib/rewards";
@@ -84,7 +85,9 @@ export default async function MyPage() {
   ] = await Promise.all([
     supabaseAdmin
       .from("customers")
-      .select("display_name")
+      // line_is_friend は友だち追加導線の出し分けに使う（未追加のときだけ促す）。
+      // 既存の第1波クエリに列を足すだけ＝クエリ本数は増やさない。
+      .select("display_name, line_is_friend")
       .eq("id", session.customer_id)
       .single(),
     supabaseAdmin
@@ -201,6 +204,16 @@ export default async function MyPage() {
             お名前を変更
           </Link>
         </header>
+
+        {/* LINE 公式アカウント 友だち追加（未追加のときだけ）。
+            友だちでない顧客には感想リマインドが届かない（cron が skip_reason='not_friend' で
+            outbox を閉じ、後から追加しても再送されない）。顧客側に追加手段が無かったため、
+            最上部・既存カードより前に置いて必ず目に入るようにする。
+            env 未設定なら出さない（/staff と同じ安全側）。line_is_friend=true の人には出さない。 */}
+        {process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL &&
+          customer?.line_is_friend === false && (
+            <AddFriendCard url={process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL} />
+          )}
 
         <hr className="rule" />
 

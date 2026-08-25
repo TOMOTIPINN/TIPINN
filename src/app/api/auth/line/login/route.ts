@@ -48,12 +48,19 @@ export async function GET(request: Request) {
   // 同意画面で echo 公式アカウントの友だち追加を促す導線:
   //   ・店頭オンボーディング（returnTo=/onboard…）＝顧客（follow は /api/line/webhook が
   //     customers.line_is_friend へ同期）。
+  //   ・来店記録（returnTo=/visit…）＝顧客。2回目以降の来店QRから初めて echo に入る顧客は
+  //     /onboard を通らないため、ここで促さないと line_is_friend=false のままになり、
+  //     感想リマインドが notification_outbox で skip_reason='not_friend' として捨てられ続ける。
   //   ・スタッフ招待（returnTo=/staff/join…）＝スタッフ。PWA アイコンを失っても公式アカウントを
   //     恒久的な入口として残すため、招待→ログイン時にも友だち追加を促す。
   // いずれも「促す」だけで必須化しない（未追加でもスタッフ登録・利用は成立）。bot_prompt は authorize
   // 時のみ効くパラメータで callback は無関与。scope は openid profile のまま（bot_prompt に追加 scope 不要）。
   // 他導線（returnTo が上記以外）のログインには付けない＝既存挙動を変えない。
-  if (returnTo.startsWith("/onboard") || returnTo.startsWith("/staff/join")) {
+  if (
+    returnTo.startsWith("/onboard") ||
+    returnTo.startsWith("/visit") ||
+    returnTo.startsWith("/staff/join")
+  ) {
     authorizeUrl.searchParams.set("bot_prompt", "aggressive");
   }
 
