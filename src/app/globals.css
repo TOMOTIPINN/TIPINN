@@ -2185,3 +2185,71 @@ textarea.field {
 @media (min-width: 640px) {
   .admin-meta { grid-template-columns: 1fr 1fr; }
 }
+
+/* ============================================================
+   Admin — サロン稼働状況（/admin/salons・運営者のみ）
+   6店舗を横並びで比べる表。列が多いので横スクロールに逃がす。
+   §2 赤は使わない。率の高低に色を付けない（しきい値の色がサロンの
+   格付けとして独り歩きするのを避ける・docs/00_philosophy.md §4.5）。
+   ============================================================ */
+.admin-stat-scroll {
+  overflow-x: auto;
+  /* iOS の慣性スクロールでも端が切れて見えないように */
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-stat-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.86rem;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.admin-stat-table th,
+.admin-stat-table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+  vertical-align: top;
+}
+
+/* 見出し行。値と同じ濃さにせず、補助テキストの重みに落とす。 */
+.admin-stat-table thead th {
+  font-size: 0.72rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  color: var(--g25);
+  white-space: nowrap;
+}
+
+/* サロン名だけ左寄せ・固定列。横スクロールしても行を見失わない。 */
+.admin-stat-name {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--card);
+  text-align: left;
+  font-weight: 400;
+  max-width: 11rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 合計行。罫線を1本足して本文と分ける（色は足さない）。 */
+.admin-stat-table tfoot th,
+.admin-stat-table tfoot td {
+  border-top: 1px solid var(--line);
+  border-bottom: none;
+  color: var(--g25);
+}
+
+/* 未送信の理由内訳。数値の下に小さく畳む。 */
+.admin-stat-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--g25);
+  white-space: nowrap;
+}
