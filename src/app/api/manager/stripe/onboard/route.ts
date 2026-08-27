@@ -13,6 +13,9 @@ import { requireManager } from "@/lib/manager-guard";
  *
  * 認可: requireManager（未ログイン401／非manager403）。salon_id はセッション由来（ctx）で越境不能（§12）。
  * OAuth 方式は使わない（新規プラットフォームに非推奨）。
+ *
+ * 同時押下対策: sentinel で行を先に占有してから accounts.create を叩く。
+ * 逆順にすると、競合に負けたリクエストが作った連結アカウントが Stripe 側に取り残される。
  */
 export const runtime = "nodejs"; // Stripe SDK は Node ランタイムで
 
@@ -34,29 +37,57 @@ export async function POST() {
     let accountId = salon?.stripe_account_id ?? null;
 
     if (!accountId) {
-      // 新規作成 → 保存。stripe_connected_at は「連携を確立した時刻」として作成時に一度だけ刻む。
-      const account = await stripe.accounts.create({ type: "standard" });
-      accountId = account.id;
-
-      // 競合ガード: stripe_account_id が null の行だけ更新（同時押下での二重作成を握り潰す）。
-      const { data: updated } = await supabaseAdmin
+      // 占有を先に取る。書き込めた1本だけが accounts.create に進む。
+      const sentinel = `pending_${ctx.salon_id}`;
+      const { data: claimed } = await supabaseAdmin
         .from("salons")
-        .update({
-          stripe_account_id: accountId,
-          stripe_connected_at: new Date().toISOString(),
-        })
+        .update({ stripe_account_id: sentinel })
         .eq("id", ctx.salon_id)
         .is("stripe_account_id", null)
-        .select("stripe_account_id");
+        .select("id");
 
-      if (!updated || updated.length === 0) {
-        // 別リクエストが先に保存済み → そちらを正とする（今作った account は使わない）。
+      if (!claimed || claimed.length === 0) {
+        // 負けた → Stripe を叩かずに DB の値を採用する。
         const { data: reload } = await supabaseAdmin
           .from("salons")
           .select("stripe_account_id")
           .eq("id", ctx.salon_id)
           .single();
-        accountId = reload?.stripe_account_id ?? accountId;
+        accountId = reload?.stripe_account_id ?? null;
+
+        if (!accountId || accountId.startsWith("pending_")) {
+          // 先行リクエストがまだ作成中。数秒後に押し直してもらう。
+          return NextResponse.redirect(
+            new URL("/dashboard?stripe=processing", baseUrl),
+            { status: 303 }
+          );
+        }
+      } else {
+        try {
+          // 冪等キーは salon_id 由来の固定値。万一すり抜けても同じアカウントが返る。
+          const account = await stripe.accounts.create(
+            { type: "standard" },
+            { idempotencyKey: `salon_onboard_${ctx.salon_id}` }
+          );
+          accountId = account.id;
+
+          await supabaseAdmin
+            .from("salons")
+            .update({
+              stripe_account_id: accountId,
+              stripe_connected_at: new Date().toISOString(),
+            })
+            .eq("id", ctx.salon_id)
+            .eq("stripe_account_id", sentinel);
+        } catch (err) {
+          // 占有を解放しないと、このサロンは二度と連携できなくなる。
+          await supabaseAdmin
+            .from("salons")
+            .update({ stripe_account_id: null })
+            .eq("id", ctx.salon_id)
+            .eq("stripe_account_id", sentinel);
+          throw err;
+        }
       }
     }
 
