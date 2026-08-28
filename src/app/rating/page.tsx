@@ -70,17 +70,8 @@ export default async function RatingPage({
           </p>
         </header>
 
-        <RatingPicker salonId={salonId} staffId={staffId} reviewed={alreadyReviewed} />
-
-        {!alreadyReviewed && (
-          <a
-            href={`/review?salon=${encodeURIComponent(salonId)}`}
-            className="btn btn-quiet btn-block"
-          >
-            感想だけ送る
-          </a>
-        )}
-      </div>
+        <RatingPicker salonId={salonId} staffId={staffId} salonName={salon.name} staffName={staff.name} reviewed={alreadyReviewed} />
+  </div>
     </main>
   );
 }

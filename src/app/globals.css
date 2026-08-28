@@ -2253,3 +2253,58 @@ textarea.field {
   color: var(--g25);
   white-space: nowrap;
 }
+/* ── 購入確認カード（/rating・カスタマーUI） ─────────────
+   ワンタップ購入を避け、確定前に内容を提示する。
+   §5 に従い装飾は無彩色。ミントは主CTA（.btn-mint）のみ。 */
+
+.confirm-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.confirm-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.confirm-item .tier-label {
+  flex: 1;
+}
+
+.confirm-meta {
+  margin: 0;
+  padding: 4px 0 0;
+}
+
+.confirm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 10px 0;
+}
+
+.confirm-row dt {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  flex: none;
+}
+
+.confirm-row dd {
+  margin: 0;
+  text-align: right;
+}
+
+.confirm-note {
+  margin: 14px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  line-height: 1.8;
+}
