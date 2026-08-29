@@ -7,6 +7,7 @@ import {
   SALON_ASSETS_BUCKET,
   validateImage,
   uploadPublicImage,
+  removePublicImage,
 } from "@/lib/storage";
 import { checkInviteCode, consumeInvite } from "@/lib/salon-invite";
 
@@ -127,6 +128,9 @@ export async function POST(req: Request) {
 
   if (error) {
     console.error("salon onboarding insert failed:", error);
+    // ロゴは salons INSERT **より前**にアップロード済み。行は無いがファイルだけ残るため、
+    // 消す行が無いのが正常な経路として expectRow:false でロールバックを通す。
+    await rollbackSalon(salonId, logoUrl, { expectRow: false });
     return back("error=save");
   }
 
@@ -154,7 +158,7 @@ export async function POST(req: Request) {
   });
   if (ownerErr) {
     console.error("owner auto-register failed:", ownerErr);
-    await rollbackSalon(salonId);
+    await rollbackSalon(salonId, logoUrl);
     return back("error=owner");
   }
 
@@ -167,7 +171,7 @@ export async function POST(req: Request) {
       salonId,
     });
     await supabaseAdmin.from("staff").delete().eq("salon_id", salonId);
-    await rollbackSalon(salonId);
+    await rollbackSalon(salonId, logoUrl);
     return back("error=invite_race");
   }
 
@@ -175,24 +179,50 @@ export async function POST(req: Request) {
 }
 
 /**
- * 作りかけの salon を消す（補償トランザクション）。
+ * 作りかけの salon とアップロード済みロゴを消す（補償トランザクション）。
  *
  * 以前は delete の戻り値を捨てていたため、**ロールバック自体が失敗しても誰も気づけず**
  * 店長不在の孤児サロンが残り得た。削除結果を確認し、失敗したら salon_id 付きで
  * console.error に残す（孤児を後から特定できるようにする）。
  * 呼び出し側の応答は変えない（ユーザーには元のエラーを返す）。
+ *
+ * ロゴは salons INSERT **より前**にアップロードされる。よって INSERT 自体が失敗した経路
+ * （＝消すべき行が無い経路）でもこの関数を通さないとファイルだけが孤児として残る。
+ *
+ * @param logoUrl   アップロード済みロゴの public URL。null＝ロゴ未選択で、Storage には触れない。
+ * @param opts.expectRow
+ *   true（既定）＝ salons に行がある前提。消せなければ★ログ（従来の挙動）。
+ *   false ＝ INSERT が失敗した経路。**行が無いのが正常**なので、行削除の結果に関わらず
+ *   ログを出さない（正常系を★ログで汚さない）。ロゴの remove は変わらず実行する。
+ *
+ * Storage の失敗は removePublicImage 側のログのみ。ここで応答を変えると、
+ * ユーザーに元の失敗理由が伝わらなくなる。
  */
-async function rollbackSalon(salonId: string): Promise<void> {
+async function rollbackSalon(
+  salonId: string,
+  logoUrl: string | null,
+  opts?: { expectRow?: boolean },
+): Promise<void> {
+  const expectRow = opts?.expectRow ?? true;
+
   const { data, error } = await supabaseAdmin
     .from("salons")
     .delete()
     .eq("id", salonId)
     .select("id");
 
-  if (error || !data || data.length === 0) {
+  if (expectRow && (error || !data || data.length === 0)) {
     console.error(
       `[salon/new] ★ロールバック失敗＝孤児サロンが残った可能性 salon_id=${salonId}`,
       error,
     );
   }
+
+  // ロゴ未選択なら消すものが無い。
+  if (!logoUrl) return;
+
+  await removePublicImage({
+    bucket: SALON_ASSETS_BUCKET,
+    path: `salons/${salonId}/logo`,
+  });
 }

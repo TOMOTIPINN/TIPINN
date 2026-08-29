@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { requireManager } from "@/lib/manager-guard";
+import { SALON_ASSETS_BUCKET, removePublicImage } from "@/lib/storage";
 
 /**
  * POST /api/manager/staff/delete — スタッフの物理削除（hard delete・誤登録の重複を消す用）
@@ -17,6 +18,13 @@ import { requireManager } from "@/lib/manager-guard";
  *     アプリ側でガードしないと実績の attribution が黙って null 化してしまう。）
  *   stamp_adjustments.created_by/updated_by も set null になるが、これは削除を止める理由にはしない
  *   （誤登録スタッフが訂正操作をしている記録は通常無い）。監査記録が消える旨はモーダル文言で告知。
+ *
+ * 後片付け: 行削除に成功したら顔写真（salon-assets/staff/<id>/photo）も消す。
+ *   行が消えると photo_url も失われ、ファイルはアプリから二度と参照できない孤児になるため。
+ *   ★Storage の失敗は削除の失敗にしない★ 行は既に消えており、ここで 500 を返すと
+ *   「行は消えたのに失敗応答」という壊れた状態になる（呼び出し元は再試行できない）。
+ *   失敗は removePublicImage が console.error に残す＝孤児を後から特定できる。
+ *   archive（論理削除）経路は写真に一切触れない＝復帰でそのまま戻る（意図的な非対称）。
  *
  * 認可: requireManager（未ログイン401 / 非manager403）＋ .eq(salon_id, ctx.salon_id) で越境拒否。
  * 応答: JSON→JSON / フォーム→ /manager/staff?deleted=1 へ303。
@@ -93,6 +101,13 @@ export async function POST(req: Request) {
     console.error("staff delete failed:", error);
     return NextResponse.json({ error: "server_error" }, { status: 500 });
   }
+
+  // 行削除に成功した後だけ写真を消す（順序を逆にすると、行削除が失敗したときに
+  // 写真だけ消えた状態が残る）。戻り値は意図的に見ない＝失敗しても応答は変えない。
+  await removePublicImage({
+    bucket: SALON_ASSETS_BUCKET,
+    path: `staff/${staffId}/photo`,
+  });
 
   if (isJson) {
     return NextResponse.json({ ok: true, staff_id: staffId });

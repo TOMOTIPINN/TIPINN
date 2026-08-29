@@ -64,3 +64,31 @@ export async function uploadPublicImage({
   const { data } = supabaseAdmin.storage.from(bucket).getPublicUrl(path);
   return { ok: true, publicUrl: data.publicUrl };
 }
+
+/**
+ * 画像を1件削除する（サーバー側専用）。**例外は投げない**。
+ *
+ * 用途は「DB 側の削除に成功したあとの後片付け」。そこで throw / 500 を返すと
+ * 「行は消えたのに失敗応答」という壊れた状態になるため、失敗は false を返して
+ * 呼び出し側の応答を変えない（console.error に残して孤児を後から特定できるようにする）。
+ * この方針は @/lib/line-messaging の pushText・@/lib/login-attempts と同じ
+ * （副作用側の失敗で本処理を巻き添えにしない）。
+ *
+ * 上書き（差し替え）は uploadPublicImage の upsert で足りる＝ここを呼ぶ必要はない。
+ * 呼ぶのは「そのパスをもう二度と使わない」ときだけ。
+ */
+export async function removePublicImage({
+  bucket,
+  path,
+}: {
+  bucket: string;
+  path: string;
+}): Promise<boolean> {
+  const { error } = await supabaseAdmin.storage.from(bucket).remove([path]);
+
+  if (error) {
+    console.error(`storage remove failed: ${bucket}/${path}`, error);
+    return false;
+  }
+  return true;
+}
