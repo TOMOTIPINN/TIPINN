@@ -19,8 +19,10 @@ import {
  * やること:
  *   - checkout.session.completed → session.metadata を読み rating_purchases に INSERT。
  *   - account.updated → 連結アカウントの審査状態を salons に同期（オンボーディング Phase 2）。
- *   - 冪等（第一層・0032 stripe_events）: 署名検証直後にイベントを (id, type, salon_id, payload) で
- *     記録し、処理済み(processed_at NOT NULL)の再送は実処理を丸ごとスキップする。
+ *   - 冪等（第一層・0032 stripe_events）: 署名検証直後にイベントを
+ *     (id, type, salon_id, 絞り込み済み payload) で記録し、処理済み(processed_at NOT NULL)の
+ *     再送は実処理を丸ごとスキップする。payload は redactEventPayload() が許可リストで
+ *     最小化する＝購入者の個人情報（customer_details 等）は保存しない。
  *     二重配信で消込・課金が二重に走らないための最上位ガード。
  *     salon_id は event.account を salons.stripe_account_id で引いて埋める（引けなければ NULL）。
  *   - 冪等（第二層）: stripe_payment_id(= payment_intent) の unique で二重記録を防ぐ（ON CONFLICT DO NOTHING）。
