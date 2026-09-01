@@ -11,7 +11,7 @@ import { resolveSalonRole } from "@/lib/display-role";
 /**
  * 11 店長 Inbox（画面マップ11・サロンUI世界）。ルート: /manager/inbox
  *
- * 同サロンの声を新着順に一覧。各行を [全員に共有 / 店長控え] でキュレーション（reviews.visibility）。
+ * 同サロンの感想を新着順に一覧。各行を [全員に共有 / 店長控え] でキュレーション（reviews.visibility）。
  * トーン: 暖色＋ミント・ゴシック・**¥なし**（金額は select しない・§4）。
  *
  * 認証（方式B / [[auth-method-line-b]]）: ログイン中の LINE から getStaffContext() を解決。
@@ -135,7 +135,7 @@ export default async function ManagerInboxPage() {
         <SalonNav role={displayRole} />
         <header className="stack-sm">
           <Eyebrow className="eyebrow-mint">Manager inbox</Eyebrow>
-          <h1 className="headline">{salon.name} ・ 声の一覧</h1>
+          <h1 className="headline">{salon.name} ・ 感想の一覧</h1>
         </header>
 
         {migrationMissing && (
@@ -159,14 +159,14 @@ export default async function ManagerInboxPage() {
 
         <Card>
           {rows.length === 0 ? (
-            <p className="muted center-text">まだ声は届いていません。</p>
+            <p className="muted center-text">まだ感想は届いていません。</p>
           ) : (
             <InboxList rows={rows} />
           )}
         </Card>
 
         <p className="note-fine">
-          「店長控え」にした声はスタッフ本人の画面には表示されません。金額はこの画面では扱いません（原則5）。
+          「店長控え」にした感想はスタッフ本人の画面には表示されません。金額はこの画面では扱いません（原則5）。
         </p>
       </div>
     </main>

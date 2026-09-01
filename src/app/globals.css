@@ -1110,19 +1110,22 @@ textarea.field {
 }
 
 /* 狭幅（スマホ）の主ナビ。
-   4タブは全角4文字＋white-space:nowrap で縮まず、既定（label・padding 1.1rem）では
-   横1段 ≒455px となり iPhone SE の利用可能幅（375-48=327px）に収まらない。
+   タブは white-space:nowrap で縮まず、既定（フルラベル・padding 1.1rem）では
+   横1段 ≒425px となり iPhone SE の利用可能幅（375-48=327px）に収まらない。
    折り返し（flex-wrap）も横スクロール（overflow-x）も、右端の「来店受付」を
    見失わせるため採らない。短縮ラベル＋左右paddingの縮小で1段のまま収める。
-     短縮後: (数字 65.7 + 声 50.5 + スタッフ 96.3 + 受付 65.7) = 278.2px → padding を
-     1.1rem→0.75rem に縮めて -44.8px = 233.4px。+gap12 +row padding8 +border2
-     +bar gap10 +歯車38.4 ＝ 約 304px（327px に約23pxの余裕）。
+     短縮ラベル（数字2 / 感想2 / スタッフ4 / 受付2 文字）の素の幅は
+     (28.8+30.5+61.1+30.5) + letter-spacing ＝ 約 181px。padding を 1.1rem→0.6rem に
+     詰めて 4タブ計 229.5px。+gap12 +row padding8 +border2 +bar gap10 +歯車38.4
+     ＝ 約 300px。iPhone SE(327px) に約27px、360px 幅端末(312px) に約12px の余裕。
+     ⚠️ padding 0.75rem だと 319px となり 360px 幅端末で溢れる（「感想」が2文字のため）。
+     タブのラベルを伸ばすときは、この計算をやり直すこと。
    ブレークポイントは既存の .metric-grid（520px）に合わせて揃える。 */
 .salon-nav-label-short { display: none; }
 @media (max-width: 520px) {
   .salon-nav-label-full { display: none; }
   .salon-nav-label-short { display: inline; }
-  .salon-nav-link { padding-left: 0.75rem; padding-right: 0.75rem; }
+  .salon-nav-link { padding-left: 0.6rem; padding-right: 0.6rem; }
 }
 
 /* チェックイン（マイページ・白世界・§12 装飾ミント無し）。QRは提示専用アコーディオン。 */

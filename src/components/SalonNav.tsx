@@ -6,11 +6,11 @@ import { useState } from "react";
 import RoleBar, { type SalonRole } from "@/components/RoleBar";
 
 /**
- * サロン（店長）UI の共通ナビ。数字管理トップ〜声〜スタッフを1本で行き来する。
+ * サロン（店長）UI の共通ナビ。数字管理トップ〜感想〜スタッフを1本で行き来する。
  *
  * - /dashboard は /manager 配下ではない別ルートのため、layout ではなく「置くだけ」の
  *   client コンポーネントとして各ページ上部に手挿しする（§12 サロンUI・ミントのアクティブ表現）。
- * - 第一階層は 数字管理 / 声の一覧 / スタッフ / 来店受付 の4つ。初期設定系（店舗/特典/来店/受付端末/店頭QR）は
+ * - 第一階層は 数字管理 / 感想 / スタッフ / 来店受付 の4つ。初期設定系（店舗/特典/来店/受付端末/店頭QR）は
  *   「設定」ドロップダウンに集約（/manager/settings ハブは後回し）。
  * - 各タブは通常ラベル(label)と狭幅用の短縮ラベル(short)の両方を出力し、CSS の
  *   @media (max-width: 520px) で display を入れ替える（JS で幅を見ない＝SSR とハイドレーションで
@@ -32,8 +32,11 @@ const PRIMARY: PrimaryNavItem[] = [
   },
   {
     href: "/manager/inbox",
-    label: "声の一覧",
-    short: "声",
+    // /manager/inbox が読むのは reviews のみ（rating_purchases は参照0件）＝実態は感想の一覧。
+    // ドメイン用語も「感想 = reviews」で確定している（docs/10_domain.md）。
+    label: "感想",
+    // 既に2文字で最短。フル/短縮は同一（型の一貫性のため short は省略しない）。
+    short: "感想",
     match: (p) => p.startsWith("/manager/inbox"),
   },
   {
