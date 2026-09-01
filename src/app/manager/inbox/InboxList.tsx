@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 
 /**
- * 店長Inbox の声リスト（クライアント）。各行の可視性トグル（全員に共有 / 店長控え）を持つ。
+ * 店長Inbox の感想リスト（クライアント）。各行の可視性トグル（全員に共有 / 店長控え）を持つ。
  * 楽観更新 → POST /api/manager/visibility（失敗時はロールバック）。
  * 視覚は globals.css のトークンのみ（インラインstyle禁止・§8）。¥は受け取らない・表示しない。
  */
@@ -59,7 +59,7 @@ export default function InboxList({ rows }: { rows: InboxRow[] }) {
             <div
               className="seg"
               role="group"
-              aria-label="この声の可視性"
+              aria-label="この感想の可視性"
             >
               <button
                 type="button"
