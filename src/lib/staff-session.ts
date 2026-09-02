@@ -35,12 +35,24 @@ export async function resolveStaffByLineUserId(
 ): Promise<StaffContext | null> {
   if (!lineUserId) return null;
 
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("staff")
     .select("id, salon_id, role, name")
     .eq("line_user_id", lineUserId)
     .is("archived_at", null)
     .maybeSingle();
+
+  // maybeSingle は複数行ヒットで error=PGRST116 / data=null を返す（postgrest-js）。
+  // ここを黙って null にすると「スタッフ未登録」と同じ扱いになり、本人が /staff・/manager から
+  // 締め出されたまま痕跡が残らない。**挙動は変えず**（従来どおり null）、気づけるようにログだけ出す。
+  // ★ line_user_id は PII（原則7）＝出さない。error.message/details も PostgREST 由来だと
+  //   クエリ値を含み得るため、PGRST116（postgrest-js がローカル生成・行数のみ）の details だけ載せる。
+  if (error) {
+    console.error("[staff-session] resolveStaffByLineUserId failed", {
+      code: error.code,
+      ...(error.code === "PGRST116" ? { details: error.details } : {}),
+    });
+  }
 
   if (!data) return null;
 

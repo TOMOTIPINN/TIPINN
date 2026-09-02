@@ -87,13 +87,23 @@ export async function resolveInvite(
 ): Promise<InviteResult> {
   if (!token) return { ok: false, reason: "missing" };
 
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("staff")
     .select(
       "id, name, salon_id, role, line_user_id, invite_expires_at, salons(name)",
     )
     .eq("invite_token", token)
     .maybeSingle();
+
+  // 握り潰すと data=null → reason:"not_found" ＝「この招待は見つかりませんでした」に落ち、
+  // 原因（複数行ヒット／通信断）が追えなくなる。**挙動は変えず**ログだけ出す。
+  // ★ token / line_user_id は秘匿値＝出さない（→ [staff-session] と同じ作法）。
+  if (error) {
+    console.error("[staff-invite] token lookup failed", {
+      code: error.code,
+      ...(error.code === "PGRST116" ? { details: error.details } : {}),
+    });
+  }
 
   const row = data as Row | null;
   if (!row) return { ok: false, reason: "not_found" };
@@ -106,11 +116,21 @@ export async function resolveInvite(
   }
 
   // この LINE が既に別の staff に紐付いていないか（unique 制約の手前で親切に弾く）。
-  const { data: existing } = await supabaseAdmin
+  const { data: existing, error: existingError } = await supabaseAdmin
     .from("staff")
     .select("id")
     .eq("line_user_id", lineUserId)
     .maybeSingle();
+  // 複数行ヒット時は data=null ＝「他に紐付き無し」と同じ結果になり、line_taken を素通しする。
+  // **挙動は変えず**ログだけ出す（素通り自体の是正は認可の対照確認が要るため別作業）。
+  if (existingError) {
+    console.error("[staff-invite] line_taken guard failed", {
+      code: existingError.code,
+      ...(existingError.code === "PGRST116"
+        ? { details: existingError.details }
+        : {}),
+    });
+  }
   if (existing && existing.id !== row.id) {
     return { ok: false, reason: "line_taken" };
   }
