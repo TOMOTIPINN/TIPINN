@@ -809,6 +809,21 @@ textarea.field {
 .perk-item.is-used::before {
   color: var(--g25-soft);
 }
+/* 未達成（感想スタンプ累計 < required_count）。✓ を伏せ、チップ全体を中立トーンに落とす。
+   ✓ を消すだけだとゴールドの地色が残り「もらえるもの」に見えたままになるため、
+   is-used と同じく地色・罫線も落とす（誤解を消すのが目的）。
+   ★ .perk-item::before の既定は変えない。この打ち消しは .is-locked が付いた行だけに効く
+     ＝ /review/complete（src/app/review/complete/page.tsx:95・修飾クラス無し）は不変。
+   content:none ではなく visibility:hidden ＝ ✓の幅と gap を残して行頭を揃える
+   （同一サロン内に未達成行と達成行が混在してもタイトル左端がずれない）。 */
+.perk-item.is-locked {
+  color: var(--g25);
+  background: var(--card);
+  border-color: var(--line);
+}
+.perk-item.is-locked::before {
+  visibility: hidden;
+}
 
 /* 来店ゲージ（来店軸・mypage）。感想3マスの円リングとは別物のドット列。ミント #1FB89E（§12 カスタマー唯一の例外）。
    1行最大10個・10ごと改行・各行は中央寄せ＝flex-wrap + justify-content:center で実現（15なら上10／下5中央）。

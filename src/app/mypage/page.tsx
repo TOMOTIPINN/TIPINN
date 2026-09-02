@@ -318,9 +318,13 @@ export default async function MyPage() {
                     )}
 
                     {/* 特典（両軸共通・title のみ・金額/割引率は出さない）。0件なら出さない。
-                        状態型（is_consumable=false）＝常時✓のみ（現状維持）。
-                        消費型＝状態を出し分け: available→「使えます」／used→「使用済み」(褪せグレー)。
-                        未獲得の消費型は状態なし（statesMap に不在）＝状態型と同じ✓ゴールに落ちる。 */}
+                        3状態で描く: 未達成→✓なし・チップ中立(is-locked)／使える→ゴールド✓／
+                        使用済み→褪せ✓＋ラベル(is-used)。
+                        ✓ は「もらえる印」ではなく「もう手が届いた印」＝達成前に出すと
+                        「もう特典をもらえる」と誤解される（実害あり・2026-09-02 修正）。
+                        状態型(is_consumable=false)は state が常に undefined ＝ 未達成／使えるの2状態。
+                        消費型(true)は earned_count/redeemed_count 由来の state を優先し（現行判定を維持）、
+                        state が付かない＝未獲得のときだけ required_count と突き合わせる。 */}
                     {rewards.length > 0 && (
                       <div className="stack stack-sm">
                         <p className="perk-head">もらえる特典</p>
@@ -329,10 +333,16 @@ export default async function MyPage() {
                             const state = reward.is_consumable
                               ? consumableStatesMap.get(id)?.get(reward.id)
                               : undefined;
+                            // 未達成＝感想スタンプ累計が required_count に未到達。基準は行ごとの
+                            // required_count（CYCLE_SIZE を直書きしない＝6 等の行も正しく判定する）。
+                            // state が付いている消費型は獲得実績があるので達成扱い（現行判定を維持）。
+                            const locked =
+                              state === undefined &&
+                              reviewCount < reward.required_count;
                             return (
                               <li
                                 key={reward.id}
-                                className={`perk-item${state === "used" ? " is-used" : ""}`}
+                                className={`perk-item${locked ? " is-locked" : ""}${state === "used" ? " is-used" : ""}`}
                               >
                                 <span className="perk-title">
                                   {reward.title}
