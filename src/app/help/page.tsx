@@ -30,10 +30,22 @@ export default function HelpPage() {
         <div className="stack stack-sm center-text">
           <Eyebrow>Help</Eyebrow>
           <h1 className="headline">よくある質問</h1>
+          {/* セクションへのページ内リンク。JS無しの純粋なアンカー＝
+              ログインできない・スクリプトが動かない状況でも機能する。 */}
+          <nav className="help-nav" aria-label="セクション">
+            <a className="help-nav-link" href="#customer">
+              お客様へ
+            </a>
+            <a className="help-nav-link" href="#staff">
+              スタッフの方へ
+            </a>
+          </nav>
         </div>
 
         {/* ── お客様へ ───────────────────────────── */}
-        <h2 className="headline-sm">お客様へ</h2>
+        <h2 className="headline-sm help-anchor" id="customer">
+          お客様へ
+        </h2>
 
         <Card className="stack stack-md">
           <h3 className="help-q">LINEでご案内が届かない</h3>
@@ -57,7 +69,9 @@ export default function HelpPage() {
         <hr className="rule" />
 
         {/* ── スタッフの方へ ─────────────────────── */}
-        <h2 className="headline-sm">スタッフの方へ</h2>
+        <h2 className="headline-sm help-anchor" id="staff">
+          スタッフの方へ
+        </h2>
 
         <Card className="stack stack-md">
           <h3 className="help-q">来店受付でカメラが起動しない</h3>
