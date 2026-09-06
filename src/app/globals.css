@@ -2392,38 +2392,9 @@ textarea.field {
   word-break: break-all;
 }
 
-/* セクションへのページ内リンク（JS無しの純粋なアンカー）。
-   見た目は既存の .chip（細枠ピル）に合わせる＝新しい色は足さない。 */
-.help-nav {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-sm);
-}
-.help-nav-link {
-  font-family: var(--font-sans);
-  font-size: 0.85rem;
-  letter-spacing: 0.04em;
+/* ページ末尾のもう一方のFAQへの1行リンク（/help ⇄ /help/staff）。
+   カード群から少し離して置く。リンクの見た目は .help-url を併用する。 */
+.help-crosslink {
+  font-size: 0.88rem;
   color: var(--ink-soft);
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-full);
-  background: var(--card);
-  transition: var(--transition);
-}
-/* キーボード可視化のフォーカスリング。白世界なので無彩色（§2 ミントは使わない）。 */
-.help-nav-link:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-/* hover はポインタ環境のみ（タッチ端末の hover 貼り付き回避・40_decisions.md §4.3）。 */
-@media (hover: hover) {
-  .help-nav-link:hover {
-    border-color: var(--line-strong);
-  }
-}
-
-/* アンカー着地点の h2。スクロール後に見出しが画面上端へ貼り付かないよう余白を残す。 */
-.help-anchor {
-  scroll-margin-top: var(--space-lg);
 }
