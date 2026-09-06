@@ -416,6 +416,12 @@ export default async function MyPage() {
         <Link href="/" className="btn btn-quiet btn-block">
           ホームへ
         </Link>
+
+        {/* よくある質問（お客様向け）。/help への唯一の導線なので表示条件は付けず常設。
+            見た目は AddFriendCard と同じ .note-fine の1行リンク。 */}
+        <Link href="/help" className="note-fine">
+          よくある質問 →
+        </Link>
       </div>
     </main>
   );

@@ -421,6 +421,13 @@ export default async function StaffHomePage() {
             ダッシュボードへ
           </Link>
         )}
+
+        {/* よくある質問（スタッフ向け）。/help/staff への唯一の導線なので、
+            上の displayRole 条件の外に置き、ロールによらず常に出す。
+            見た目は AddFriendCard と同じ .note-fine の1行リンク。 */}
+        <Link href="/help/staff" className="note-fine">
+          よくある質問 →
+        </Link>
       </div>
     </main>
   );
