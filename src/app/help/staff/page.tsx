@@ -13,8 +13,10 @@ import { Eyebrow, Card } from "@/components/ui";
  * 表示環境: LINEアプリ内ブラウザ・モバイル幅（375px程度）前提。
  *   .container（max-width 440px）に収め、手順は縦積みの ol にする。インラインstyle無し（§8）。
  *
- * ⚠️ Android（Chrome）の手順は実機で未確認。コード上では検証できない内容のため、
- *    記述の正確性は原が別途実機で確認する。確認が済むまでこのコメントを残すこと。
+ * ⚠️ Android（Chrome）の手順と、LINE内ブラウザのメニュー表記（右下の「…」→
+ *    「他のアプリで開く」/「Safariで開く」）は実機で未確認。コード上では検証できない
+ *    内容のため、記述の正確性は原が別途実機で確認する。
+ *    確認が済むまでこのコメントを残すこと。
  */
 export const metadata: Metadata = {
   title: "よくある質問（スタッフ向け） - echo",
@@ -96,6 +98,12 @@ export default function HelpStaffPage() {
               <li>「ホーム画面に追加」を選ぶ</li>
             </ol>
           </div>
+
+          {/* ⚠️ LINE内ブラウザのメニュー表記は実機未確認（原が別途確認）。 */}
+          <p className="body">
+            LINEのトーク画面から開いている場合は、右下の「…」から「他のアプリで開く」
+            または「Safariで開く」を選んでから、上の手順をお試しください。
+          </p>
         </Card>
 
         {/* もう一方のFAQへ。JS無しの素の <a>＝スクリプトが動かない状況でも辿れる。 */}
