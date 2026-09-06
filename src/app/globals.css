@@ -2342,3 +2342,52 @@ textarea.field {
   font-size: 0.8125rem;
   line-height: 1.8;
 }
+
+/* ============================================================
+   よくある質問（/help・認証不要の公開ページ）
+   LINEアプリ内ブラウザ・モバイル幅前提。既存トークンのみで組む（§7 インラインstyle禁止）。
+   ============================================================ */
+
+/* 各質問の見出し（Card の先頭）。和文なので Eyebrow(ラテン伊体)ではなくゴシック。 */
+.help-q {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1rem;
+  letter-spacing: 0.03em;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+/* 手順の対象OS（「iPhone（Safari）の場合」）。手順リストの直前に置く小見出し。 */
+.help-os {
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+/* 操作手順の番号リスト。* リセットで padding:0 のため、番号の分だけ字下げを戻す。 */
+.help-steps {
+  list-style: decimal;
+  padding-left: 1.4em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: var(--ink-soft);
+}
+.help-steps::marker,
+.help-steps li::marker {
+  color: var(--g25);
+}
+
+/* 案内するURL。a は既定で下線なしのため、リンクだと分かるようここだけ戻す。
+   狭い画面でも折り返せるように break-all（375px で溢れさせない）。 */
+.help-url {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  text-decoration-color: var(--line-strong);
+  word-break: break-all;
+}
