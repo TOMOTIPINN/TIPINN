@@ -119,13 +119,17 @@ export async function checkFriendship(
 /**
  * 来店後の感想リマインド本文（§5: 温かく・急かさない）。
  * 末尾に /review?salon= への導線を付ける。
+ *
+ * ★本文に「本日」等の時点表現を入れないこと★
+ *   notify_at が来店日と別日になる場合（深夜の日またぎ・送信遅延・滞留分の再送）があり、
+ *   来店していない日に「本日」と届いてしまうため。
  */
 export function buildVisitReviewText(
   salonName: string,
   reviewUrl: string,
 ): string {
   return [
-    `${salonName}です。本日はご来店ありがとうございました。`,
+    `${salonName}です。ご来店ありがとうございました。`,
     "",
     "もしよければ、担当者へひとことお気持ちを添えていただけたら嬉しいです。急ぎませんし、おうちからでも大丈夫です。",
     "",
