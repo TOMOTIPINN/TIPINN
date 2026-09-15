@@ -10,9 +10,16 @@
  *   （このモジュールは宛先を推測しない）。¥・賞与には一切触れない（原則5/6）。
  * ・友だち判定は checkFriendship() を使う。**DB の customers.line_is_friend は使わない**
  *   （follow webhook でしか更新されず、follow がログイン先行だと false のまま取り残されるため）。
+ * ・送信系のほかに、当月の配信通数を読む GET を2つ持つ（getMessageQuota /
+ *   getMessageQuotaConsumption・呼び出し元は /api/cron/purge）。**読み取り専用で通数を
+ *   1通も消費しない。** アクセストークンの取り回しをこの1ファイルに閉じるため、
+ *   route 側で直接 fetch しない。
  */
 const PUSH_URL = "https://api.line.me/v2/bot/message/push";
 const PROFILE_URL = "https://api.line.me/v2/bot/profile";
+const QUOTA_URL = "https://api.line.me/v2/bot/message/quota";
+const QUOTA_CONSUMPTION_URL =
+  "https://api.line.me/v2/bot/message/quota/consumption";
 
 export type PushResult =
   | { ok: true }
@@ -135,4 +142,98 @@ export function buildVisitReviewText(
     "",
     `▽ 感想を送る\n${reviewUrl}`,
   ].join("\n");
+}
+
+/**
+ * 当月の送信可能通数の上限（GET /v2/bot/message/quota）。
+ *   type: "limited" … 上限あり。value = 無料通数 + 追加通数の合計
+ *   type: "none"    … 上限未設定（従量など）。接近判定のしようがない
+ */
+export type MessageQuota =
+  | { ok: true; type: "limited"; value: number }
+  | { ok: true; type: "none" }
+  | { ok: false; status: number; body: string };
+
+/** 当月の送信済み通数（GET /v2/bot/message/quota/consumption）。 */
+export type QuotaConsumption =
+  | { ok: true; totalUsage: number }
+  | { ok: false; status: number; body: string };
+
+/**
+ * Messaging API の GET を1本叩いて JSON を返す共通部。**例外は投げない**
+ * （pushText / checkFriendship と同じ思想。呼び出し元の cron を止めない）。
+ *
+ * cache: "no-store" を明示するのは、通数は**毎回必ず実測値でなければ意味がない**ため
+ * （フレームワークの既定が将来変わってキャッシュされると、上限接近の検知が静かに死ぬ）。
+ */
+async function lineGetJson(
+  url: string,
+): Promise<
+  { ok: true; json: unknown } | { ok: false; status: number; body: string }
+> {
+  const token = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN;
+  if (!token) {
+    return { ok: false, status: 0, body: "missing_access_token" };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  } catch (e) {
+    return { ok: false, status: 0, body: String(e) };
+  }
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    return { ok: false, status: res.status, body };
+  }
+
+  try {
+    return { ok: true, json: await res.json() };
+  } catch (e) {
+    return { ok: false, status: res.status, body: `invalid_json: ${String(e)}` };
+  }
+}
+
+/**
+ * 当月の送信可能通数の上限を取る（読み取り専用・通数を消費しない）。
+ *
+ * 想定外のレスポンス形（type が none/limited 以外・value 欠落）は **ok:false** に倒す。
+ * ここを黙って 0 や NaN で通すと、比較が常に成立して毎日アラートが出続ける。
+ */
+export async function getMessageQuota(): Promise<MessageQuota> {
+  const r = await lineGetJson(QUOTA_URL);
+  if (!r.ok) return r;
+
+  const j = r.json as { type?: unknown; value?: unknown };
+  if (j.type === "limited" && typeof j.value === "number") {
+    return { ok: true, type: "limited", value: j.value };
+  }
+  if (j.type === "none") return { ok: true, type: "none" };
+
+  return {
+    ok: false,
+    status: 200,
+    body: `unexpected_body: ${JSON.stringify(j)}`,
+  };
+}
+
+/** 当月の送信済み通数を取る（読み取り専用・通数を消費しない）。 */
+export async function getMessageQuotaConsumption(): Promise<QuotaConsumption> {
+  const r = await lineGetJson(QUOTA_CONSUMPTION_URL);
+  if (!r.ok) return r;
+
+  const j = r.json as { totalUsage?: unknown };
+  if (typeof j.totalUsage === "number") {
+    return { ok: true, totalUsage: j.totalUsage };
+  }
+
+  return {
+    ok: false,
+    status: 200,
+    body: `unexpected_body: ${JSON.stringify(j)}`,
+  };
 }

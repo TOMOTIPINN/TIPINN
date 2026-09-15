@@ -5,6 +5,7 @@ import {
   buildVisitReviewText,
   checkFriendship,
 } from "@/lib/line-messaging";
+import { notifyPushFailures } from "@/lib/security-alert";
 
 /**
  * GET /api/cron/line-push — 来店リマインド通知の送信ワーカー（通知基盤スライス3）。
@@ -28,6 +29,11 @@ import {
  *   ・skip はすべて status='skipped' ＋ skip_reason（0024）で理由を残す。後日
  *     `select skip_reason, count(*) ... where status='skipped' group by skip_reason` で内訳を観測できる。
  *   ・状態遷移は必ず .eq('status','pending') ガード付きで、cron 重複起動の二重送信を防ぐ。
+ *   ・この実行で failed が1件以上出たら、**最後に運営者へ1通だけ**通知する（件数のみ・
+ *     顧客/サロンの情報は載せない）。failed は「黙って再試行し続けない」ための終端状態
+ *     （MAX_ATTEMPTS の注記参照）だが、ログを見に行かないと気付けないので push で拾う。
+ *     1件1通ではなく実行あたり1通なのは、LINE 側の障害で失敗が束になったとき通知自体が
+ *     通数を食い潰さないため。
  *
  * 認可: Vercel cron は CRON_SECRET を Authorization: Bearer で付与する。一致しなければ 401。
  * 書き込みは supabaseAdmin・サーバー側のみ（RLS deny-by-default）。¥・賞与は扱わない（原則5/6）。
@@ -227,6 +233,12 @@ export async function GET(req: Request): Promise<NextResponse> {
     skips.not_friend +
     skips.no_line_user +
     skips.invalid_user_id;
+
+  // failed が出た実行だけ、運営者へ1通。notifyPushFailures は例外を投げず、
+  // SECURITY_ALERT_LINE_USER_ID 未設定なら無音で return する＝cron は絶対に失敗しない。
+  if (failed > 0) {
+    await notifyPushFailures(failed);
+  }
 
   return NextResponse.json({
     ok: true,

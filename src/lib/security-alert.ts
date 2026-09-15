@@ -13,6 +13,13 @@ import {
  * 役割: レート制限（@/lib/login-attempts の isThrottled）が発火したことを、
  * echo 運営者の LINE へ push で知らせる。送信は既存の pushText を使う（新規に API は書かない）。
  *
+ * このファイルは **運営者（SECURITY_ALERT_LINE_USER_ID）宛 push の唯一の置き場**。現在3種類:
+ *   1. notifyRateLimitHit    … レート制限の発火（不正アクセス検知・上記の申告書対応）
+ *   2. notifyQuotaNearLimit  … LINE 配信通数が上限に接近（/api/cron/purge から日次）
+ *   3. notifyPushFailures    … 来店リマインドの送信失敗（/api/cron/line-push から実行ごと）
+ * 2・3 はセキュリティ事象ではなく**運用アラート**だが、宛先・env 未設定なら無音・例外を投げない
+ * という制約が完全に同じなので、置き場を分けずここへ集約する（env とガードを1箇所に保つ）。
+ *
  * 方針:
  *  ・**例外を投げない**。通知の失敗で認証フロー側を絶対に壊さない
  *    （pushText / recordAttempt と同じ思想）。失敗は console.warn に status/body を出して握り潰さない。
@@ -90,4 +97,81 @@ export async function notifyRateLimitHit(
   } catch (e) {
     console.warn(`[security-alert] push threw scope=${scope}`, e);
   }
+}
+
+/**
+ * 運営者へ1通 push する共通部。**例外は投げない**／env 未設定なら**無音で return**。
+ *
+ * notifyRateLimitHit は本文組み立てまで含めて try で包む既存構造をそのまま残したいので
+ * この関数を使っていない（ログ書式を含め既存挙動を1文字も変えないため）。新規の通知は
+ * すべてここを通す。
+ *
+ * @param tag  ログに出す識別子（本文ではない）。秘匿値・個人情報を渡さないこと。
+ */
+async function pushToOperator(tag: string, text: string): Promise<void> {
+  const to = process.env.SECURITY_ALERT_LINE_USER_ID;
+  // 未設定＝通知を使わない環境（ローカル / Preview）。無言で何もしない。
+  if (!to) return;
+
+  try {
+    const result = await pushText(to, text);
+    if (!result.ok) {
+      // 通知が届かないこと自体が検知の穴になるため、必ずログに残す（握り潰さない）。
+      console.warn(
+        `[security-alert] push failed tag=${tag} status=${result.status} body=${result.body}`,
+      );
+    }
+  } catch (e) {
+    console.warn(`[security-alert] push threw tag=${tag}`, e);
+  }
+}
+
+/**
+ * LINE 配信通数が当月上限に接近したことを運営者へ通知する（/api/cron/purge から日次）。
+ *
+ * **状態を持たない**＝閾値を超えている間は毎日1通届く。既読管理のためのテーブルを
+ * 足すより、「毎朝しつこく届く」方が見落としに強い（超過すると顧客への来店リマインドが
+ * 丸ごと止まるため、静かに忘れられる方が損失が大きい）。
+ *
+ * 本文に入れるのは通数と閾値だけ＝顧客・サロンの情報は一切含まない（冒頭の方針どおり）。
+ */
+export async function notifyQuotaNearLimit(params: {
+  totalUsage: number;
+  limit: number;
+  thresholdRatio: number;
+}): Promise<void> {
+  const { totalUsage, limit, thresholdRatio } = params;
+  const percent = Math.round((totalUsage / limit) * 100);
+  const thresholdPercent = Math.round(thresholdRatio * 100);
+
+  const text = [
+    "【echo】LINE配信通数が上限に近づいています",
+    "",
+    `確認時刻: ${jstStamp.format(new Date())}（JST）`,
+    `当月の送信数: ${totalUsage.toLocaleString("ja-JP")} / ${limit.toLocaleString("ja-JP")}（${percent}%）`,
+    `閾値: 上限の${thresholdPercent}%`,
+    "",
+    "上限に達すると来店リマインドが届かなくなります。プラン変更を検討してください。",
+  ].join("\n");
+
+  await pushToOperator("quota_near_limit", text);
+}
+
+/**
+ * 来店リマインドの送信失敗を運営者へ通知する（/api/cron/line-push の実行1回につき最大1通）。
+ *
+ * 渡すのは**件数だけ**。どの顧客・どのサロンかは通知に載せない（冒頭の方針どおり。
+ * 調査は notification_outbox を見る＝運営者の LINE トーク履歴に業務情報を残さない）。
+ */
+export async function notifyPushFailures(count: number): Promise<void> {
+  const text = [
+    "【echo】LINE通知の送信失敗が発生しました",
+    "",
+    `発生時刻: ${jstStamp.format(new Date())}（JST）`,
+    `失敗件数: ${count}件（直近の cron 実行1回分）`,
+    "",
+    "notification_outbox の status='failed' を確認してください。",
+  ].join("\n");
+
+  await pushToOperator("push_failures", text);
 }
