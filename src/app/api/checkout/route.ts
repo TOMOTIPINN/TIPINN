@@ -3,6 +3,8 @@ import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { getTier } from "@/lib/rating-tiers";
+import { loadReviewForPurchase } from "@/lib/review-server";
+import { isPurchasableReview } from "@/lib/review-purchase";
 
 /**
  * POST /api/checkout — 評価スタンプ購入の Stripe Checkout Session を作る（4.1）。
@@ -21,6 +23,22 @@ import { getTier } from "@/lib/rating-tiers";
  *   ・確認した事実は Checkout Session の metadata に adult_confirmed / adult_confirmed_at で残す。
  *     時刻は**サーバー生成**（クライアントの申告時刻を信用しない）。
  *   ・UI（RatingPicker のチェックボックス）は補助。ここが唯一の実効的な関門。
+ *
+ * ★感想への紐付け（§13 決定3・4 / ステップ5）★
+ *   有料スタンプは「声＋評価」の組でのみ売る。チップ（言葉のない送金）化を防ぎ、
+ *   「課金されたのにスタッフに届かない」状態を作らないため、**reviewId を必須**にする。
+ *   ・reviewId が無い → 400 review_required
+ *   ・購入できない感想（他人の／別サロン・別スタッフ宛て／お店のみんなへ／
+ *     manager_only／rating<=2）→ 400 invalid_review
+ *     ★「存在しない」と「他人のもの」を区別しない★ 区別すると reviewId の総当たりで
+ *     実在を判別できるオラクルになる（/staff/received/[reviewId] が 404 に畳むのと同じ理由）。
+ *   ・その感想で既に購入済み → 409 already_purchased
+ *   判定は **完了画面（/review/complete）と同じ** isPurchasableReview（@/lib/review-purchase）。
+ *   ここに条件を書き写さない（2か所に置くと片方だけ直したときに画面と購入結果が食い違う）。
+ *
+ *   ⚠️ 購入済みチェックは belt にすぎない。Session 作成から webhook 到着までの数秒間に
+ *   2回支払われると両方ともここを通過する。**真の砦は migration 0047 の部分一意インデックス**で、
+ *   違反は webhook 側が検知して運営者へ通知する（§13 決定5）。
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -89,6 +107,39 @@ export async function POST(req: Request) {
     .single();
   if (!staff) {
     return NextResponse.json({ error: "invalid_staff" }, { status: 400 });
+  }
+
+  // 感想への紐付け（§13 ステップ5）。**Stripe に触れる前**に3段で弾く。
+  //   位置は staff 在籍チェックの直後＝salon / staff が確定してから照合する
+  //   （isPurchasableReview が salon_id / staff_id の一致を見るため、先に確定させる必要がある）。
+
+  // (1) reviewId は必須。空文字・空白のみも拒否する。
+  if (typeof reviewId !== "string" || reviewId.trim() === "") {
+    return NextResponse.json({ error: "review_required" }, { status: 400 });
+  }
+
+  // (2) 購入できる感想か。判定は完了画面と同じ純粋関数に委ねる（条件をここに書き写さない）。
+  //     customerId は **セッション由来**（クライアントの申告は使わない）。
+  const review = await loadReviewForPurchase(reviewId);
+  if (
+    !isPurchasableReview(review, {
+      customerId: session.customer_id,
+      salonId,
+      staffId,
+    })
+  ) {
+    // 存在しない / 他人の / 条件外 をすべて同じコードに畳む（オラクルにしない）。
+    return NextResponse.json({ error: "invalid_review" }, { status: 400 });
+  }
+
+  // (3) その感想で既に購入済みか（1感想1スタンプ・§13 決定4）。
+  //     ここは親切なエラーを返すための belt。真の砦は 0047 の部分一意インデックス。
+  const { count: purchasedCount } = await supabaseAdmin
+    .from("rating_purchases")
+    .select("id", { count: "exact", head: true })
+    .eq("review_id", reviewId);
+  if ((purchasedCount ?? 0) > 0) {
+    return NextResponse.json({ error: "already_purchased" }, { status: 409 });
   }
 
   const baseUrl = process.env.APP_BASE_URL!;

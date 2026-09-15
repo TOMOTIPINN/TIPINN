@@ -74,8 +74,24 @@ export default function RatingPicker({
       if (!res.ok || !data.url) throw new Error(data?.error ?? "failed");
       // Stripe Checkout（連結アカウント上）へ
       window.location.href = data.url;
-    } catch {
-      setError("購入手続きを開始できませんでした。時間をおいてお試しください。");
+    } catch (err) {
+      // !res.ok のとき throw new Error(data.error) 済＝ここに API の error コードが載る
+      //（ReviewForm の no_visit_today と同じ作法）。
+      // ★review_required と invalid_review は区別しない★
+      //   サーバー側が「存在しない」と「他人のもの」を同じコードに畳んでいる意図
+      //   （reviewId の総当たりで実在を判別させない）を、UI でも崩さないため。
+      //   どちらも案内は同じ「正しい入口から入り直してください」になる。
+      // それ以外（汎用エラー・ネットワーク断・JSON 破損）は従来どおりの文言。
+      const code = err instanceof Error ? err.message : "";
+      setError(
+        code === "already_purchased"
+          ? "この感想には、すでに評価スタンプをお送りいただいています。"
+          : code === "review_required" || code === "invalid_review"
+            ? "評価スタンプは、感想を送ったあとの画面からお送りいただけます。"
+            : code === "adult_confirmation_required"
+              ? "年齢の確認にチェックを入れてください。"
+              : "購入手続きを開始できませんでした。時間をおいてお試しください。",
+      );
       setPending(false);
     }
   }
