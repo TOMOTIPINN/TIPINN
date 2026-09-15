@@ -26,6 +26,17 @@ import { checkInviteCode, consumeInvite } from "@/lib/salon-invite";
  *         stripe_account_id は空のまま（Phase 2 で埋める）。
  *   自動登録: salons INSERT 成功後、作成者を新サロンの店長(role=manager)として staff に1行 INSERT。
  *
+ * ★公開同意（migration 0045）★
+ *   自動登録された staff 行は、その時点から顧客に氏名が表示される（/api/staff の絞り込みは
+ *   role を見ない）。この経路は**本人が自分で操作している**ので、同意は本人から直接取る
+ *   （店長の申告では許諾にならない・弁護士見解 / docs/40_decisions.md §10）。
+ *   ・publish_consent が明示的な肯定値でなければ **back("error=consent")**。
+ *     検証は **salons / staff / Storage のどの書き込みより前**（フォーム読み取りの直後）に置く。
+ *   ・staff の id は salon_id / visit_token と同じくサーバー側で randomUUID して
+ *     **1回の INSERT** に id と publish_consent_confirmed_by を同じ値で載せる（2段階 UPDATE にしない）。
+ *   ・id・日時はクライアントから受け取らない。
+ *   ・この2列は**記録であって公開の制御ではない**（顧客側の表示条件は archived_at のみ）。
+ *
  * 認可（入口ゆるめ・page と同型）: 未ログイン→ログイン。staff行ゼロ(新規オーナー)は許可。
  *   既存staffは manager のみ許可（従業員は弾く）。他の /manager/* は従来どおり staff必須。
  *   書き込みは service_role・サーバー側のみ（§3・§8）。
@@ -69,6 +80,14 @@ export async function POST(req: Request) {
   const form = await req.formData().catch(() => null);
   if (!form) return back("error=form");
 
+  // 公開同意（0045）。**明示的な肯定値以外はすべて拒否**（欠落・"false"・"0"・空文字を含む）。
+  // ★位置★ 招待コードの照会より前、Storage アップロード・salons/staff の INSERT より前。
+  //   ここを後ろに置くと、同意なしのリクエストでもロゴが Storage に残ったり、
+  //   最悪サロンを作ってからロールバックすることになる。
+  if (!isConsentGiven(form.get("publish_consent"))) {
+    return back("error=consent");
+  }
+
   // 招待コード（必須・migration 0043）。ロゴのアップロードより前に弾く
   // （無効なコードで Storage に孤児ファイルを作らせない）。
   // ここは表示用の事前チェックにすぎず、可否の最終判定は下の consumeInvite が行う。
@@ -96,6 +115,10 @@ export async function POST(req: Request) {
   // INSERT を1回で完結できる（孤児ファイルなし・DB既定の上書き）。
   const salonId = randomUUID();
   const visitToken = randomUUID();
+  // オーナーの staff 行の id も先に採番する（salonId / visitToken と同じ作法）。
+  // こうすると publish_consent_confirmed_by に「その行自身の id」を
+  // **同じ INSERT の中で**入れられる＝INSERT→UPDATE の2段階にしなくて済む。
+  const ownerStaffId = randomUUID();
 
   // ロゴは任意。選択されているときだけ検証＋アップロードして logo_url を作る。
   let logoUrl: string | null = null;
@@ -151,10 +174,15 @@ export async function POST(req: Request) {
   //    既に別店の staff 行を持つ人が作ると、この INSERT は unique 違反で失敗する（＝兼任は未対応）。
   //    その場合は直前に作った salon を消してロールバックし、孤児サロンを残さない。
   const { error: ownerErr } = await supabaseAdmin.from("staff").insert({
+    id: ownerStaffId,
     salon_id: salonId,
     name: ownerName,
     role: "manager",
     line_user_id: session.line_user_id,
+    // 0045。このフォームで本人が同意した記録。confirmed_by は自分自身の id
+    // （= ownerStaffId）で、クライアントからは受け取らない。
+    publish_consent_confirmed_at: new Date().toISOString(),
+    publish_consent_confirmed_by: ownerStaffId,
   });
   if (ownerErr) {
     console.error("owner auto-register failed:", ownerErr);
@@ -176,6 +204,18 @@ export async function POST(req: Request) {
   }
 
   return back(`created=${salonId}`);
+}
+
+/**
+ * 公開同意の申告を厳格に判定する（0045・/api/staff/bind の isConsentGiven と同じ方針）。
+ *
+ * **true と判定するのは明示的な肯定値のみ**。欠落（null）・"false"・"0"・空文字はすべて
+ * false ＝ error=consent になる。緩めて「値があれば true」にすると、欠落だけを弾いて
+ * 否定値を通してしまう。checkbox は checked のとき "on" を送るため、これを肯定値として受ける。
+ */
+function isConsentGiven(value: FormDataEntryValue | null): boolean {
+  if (typeof value !== "string") return false;
+  return value === "on" || value === "true" || value === "1";
 }
 
 /**

@@ -24,17 +24,14 @@ import { Eyebrow } from "@/components/ui";
  * uuid は useState 初期化関数ではなく useEffect で生成（SSR とクライアント hydration で別値になる
  * のを避ける）。生成前は key 空＝ボタン disabled。
  *
- * 公開同意の確認（0045）: staff 行は作られた瞬間から顧客に氏名が表示される（本人のログイン不要）。
- *   そのため「本人に説明し同意を得た」ことを**追加する前に**店長に確認させ、行に記録する。
- *   未チェックならボタンを押せないが、**これは UI の補助にすぎない**。真の検証はサーバー側
- *   （/api/manager/staff が false/欠落を 400 で弾く）＝クライアントの制御だけに頼らない。
+ * 公開同意（0045）はここでは扱わない。店長には本人に代わって許諾する権限がないため
+ *   （弁護士見解・docs/40_decisions.md §10）、同意は本人が /staff/join で行う。
  */
 export default function AddStaffForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [role, setRole] = useState<"staff" | "manager">("staff");
   const [idemKey, setIdemKey] = useState("");
-  const [consent, setConsent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -44,8 +41,8 @@ export default function AddStaffForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // 再入ガード: 送信中 or key 未生成 or 同意未確認なら何もしない。
-    if (submitting || !idemKey || !consent) return;
+    // 再入ガード: 送信中 or key 未生成なら何もしない。
+    if (submitting || !idemKey) return;
 
     // クライアント側の name 検証（サーバーの invalid_name に頼らず、投げる前に弾く）。
     const trimmed = name.trim();
@@ -69,9 +66,6 @@ export default function AddStaffForm() {
           name: trimmed,
           role,
           idempotency_key: idemKey,
-          // 店長が本人への説明と同意取得を確認した、という申告。
-          // サーバー側でも必ず検証される（ここを外しても通らない）。
-          publish_consent_confirmed: consent,
         }),
       });
 
@@ -89,7 +83,6 @@ export default function AddStaffForm() {
       // 成功: 次の追加のために state をリセット。特に idempotency_key を新規再生成することで、
       // （client 遷移で本コンポーネントが再マウントされない場合でも）別スタッフの追加が別 key になる（要件4）。
       setName("");
-      setConsent(false); // 次の1人ぶんの確認を、前の人の確認で済ませない。
       setIdemKey(crypto.randomUUID());
       // 追加したスタッフの QR を出すため ?created= 付きで戻る。server 再描画で一覧＋QRが反映される。
       router.push(`/manager/staff?created=${encodeURIComponent(data.staff_id)}`);
@@ -102,7 +95,7 @@ export default function AddStaffForm() {
     }
   }
 
-  const disabled = submitting || !idemKey || !consent;
+  const disabled = submitting || !idemKey;
 
   return (
     <form onSubmit={handleSubmit} className="stack-md">
@@ -149,27 +142,6 @@ export default function AddStaffForm() {
           <option value="manager">店長</option>
         </select>
       </div>
-
-      {/* 公開同意の確認（0045）。追加した瞬間から顧客に氏名が出るため、追加の手前に置く。
-          マークアップは既存の manager/visit/page.tsx と同じ field-group + field-label +
-          field-help 構成（新しい CSS クラスを増やさない）。 */}
-      <div className="field-group">
-        <label className="field-label" htmlFor="publish_consent">
-          本人に、氏名・写真などがお客様に表示されることを説明し、同意を得ています
-        </label>
-        <input
-          id="publish_consent"
-          name="publish_consent"
-          type="checkbox"
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
-          disabled={submitting}
-        />
-        <span className="field-help">
-          確認しないと追加できません。確認した店長と日時を記録します。
-        </span>
-      </div>
-
       <button
         type="submit"
         className="btn btn-outline btn-block"

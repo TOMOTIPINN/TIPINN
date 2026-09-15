@@ -6,21 +6,13 @@ import { createInviteToken, inviteExpiryISO, inviteUrl } from "@/lib/staff-invit
 
 /**
  * POST /api/manager/staff  — スタッフ新規作成＋招待発行（A1 管理画面 / [[auth-method-line-b]]）
- *   入力: name, role, idempotency_key, publish_consent_confirmed（form-data か JSON）。
- *         role は staff|manager をホワイトリスト検証（既定 staff）。salon_id はクライアントから受け取らない。
- *   作成: staff{ salon_id=ctx.salon_id, name, role, invite_token, invite_expires_at=now+24h, idempotency_key,
- *         publish_consent_confirmed_at, publish_consent_confirmed_by }
+ *   入力: name, role, idempotency_key（form-data か JSON）。role は staff|manager をホワイトリスト検証（既定 staff）。salon_id はクライアントから受け取らない。
+ *   作成: staff{ salon_id=ctx.salon_id, name, role, invite_token, invite_expires_at=now+24h, idempotency_key }
  *
- * ★公開同意の確認（migration 0045）★
- *   staff 行は作られた瞬間から顧客に氏名が表示される（本人のログイン不要・archived_at is null が
- *   唯一の公開条件）。そのため「本人に説明し同意を得た」ことを店長に確認させ、行に記録する。
- *   ・publish_consent_confirmed が true でなければ **400（consent_required）**。
- *     フォームのボタン disabled は UI の補助にすぎず、curl・JS 無効・改変クライアントでも
- *     必ずここで止まる（クライアントの制御だけに頼らない）。
- *   ・confirmed_by は **クライアントから受け取らない**。requireManager が解決した ctx.staff_id
- *     を使う＝「誰が確認したか」を申告に委ねない（salon_id と同じ作法）。
- *   ・この2列は**記録であって公開の制御ではない**。顧客側の表示条件は従来どおり
- *     salon_id 一致 ＋ archived_at is null のみで、0045 でも変えていない。
+ * ★公開同意（0045）はここでは取らない★
+ *   店長には本人に代わって許諾する権限がないため、店長の申告は許諾にならない（弁護士見解・
+ *   docs/40_decisions.md §10）。0045 で足した同意記録の2列は **本人が受諾する
+ *   /api/staff/bind でのみ**書き込む。この route は2列に一切触れない（null のまま作る）。
  *
  * 二重送信防止（migration 0023）: クライアントがフォームを開いた時点で生成した uuid を idempotency_key として受け取り、
  *   upsert(onConflict=idempotency_key, ignoreDuplicates) ＝ INSERT ... ON CONFLICT DO NOTHING で握り潰す。
@@ -46,31 +38,21 @@ export async function POST(req: Request) {
   let nameRaw: unknown;
   let roleRaw: unknown;
   let idemRaw: unknown;
-  let consentRaw: unknown;
   if (isJson) {
     const body = await req.json().catch(() => null);
     nameRaw = body?.name;
     roleRaw = body?.role;
     idemRaw = body?.idempotency_key;
-    consentRaw = body?.publish_consent_confirmed;
   } else {
     const form = await req.formData().catch(() => null);
     nameRaw = form?.get("name");
     roleRaw = form?.get("role");
     idemRaw = form?.get("idempotency_key");
-    consentRaw = form?.get("publish_consent_confirmed");
   }
 
   const name = typeof nameRaw === "string" ? nameRaw.trim() : "";
   if (!name || name.length > NAME_MAX) {
     return NextResponse.json({ error: "invalid_name" }, { status: 400 });
-  }
-
-  // 公開同意の確認（0045）。**明示的な true 以外はすべて拒否**（欠落・false・空文字・"0" を含む）。
-  // JSON は真偽値 true、form-data はチェック済み checkbox の "on"／明示の "true"・"1" を受ける。
-  // 緩めて「値があれば true」にすると、欠落だけを弾いて false を通してしまう。
-  if (!isConsentConfirmed(consentRaw)) {
-    return NextResponse.json({ error: "consent_required" }, { status: 400 });
   }
 
   // 役割はホワイトリスト検証（未指定・不正値は staff にフォールバック）
@@ -95,10 +77,6 @@ export async function POST(req: Request) {
         invite_token: token,
         invite_expires_at: inviteExpiryISO(),
         idempotency_key: idempotencyKey,
-        // 0045。ignoreDuplicates の upsert なので、二度押しの2回目は INSERT 自体が起きない
-        // ＝既存行の confirmed_at / confirmed_by は上書きされない（1回目の記録が正）。
-        publish_consent_confirmed_at: new Date().toISOString(),
-        publish_consent_confirmed_by: ctx.staff_id,
       },
       { onConflict: "idempotency_key", ignoreDuplicates: true },
     )
@@ -141,20 +119,4 @@ export async function POST(req: Request) {
     new URL(`/manager/staff?created=${staff.id}`, baseUrl),
     { status: 303 },
   );
-}
-
-/**
- * 「店長が本人への説明と同意取得を確認した」の申告を厳格に判定する（0045）。
- *
- * **true と判定するのは明示的な肯定値のみ**。欠落（undefined）・null・false・"false"・"0"・
- * 空文字はすべて false ＝ 400 になる。
- * form-data では checkbox が checked のとき "on" が送られるため、これも肯定値として受ける
- * （未チェックの checkbox はそもそもキー自体が送られない＝undefined で弾かれる）。
- */
-function isConsentConfirmed(value: unknown): boolean {
-  if (value === true) return true;
-  if (typeof value === "string") {
-    return value === "on" || value === "true" || value === "1";
-  }
-  return false;
 }

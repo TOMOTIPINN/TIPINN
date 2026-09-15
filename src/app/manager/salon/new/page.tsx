@@ -7,6 +7,7 @@ import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
 import SalonQr from "./SalonQr";
+import SalonConsentSubmit from "./SalonConsentSubmit";
 
 /**
  * サロン・オンボーディング（/manager/salon/new・サロンUI世界 / Phase 1・Stripe未接続 / [[auth-method-line-b]]）。
@@ -24,6 +25,8 @@ import SalonQr from "./SalonQr";
  * 書き込みは API（service_role・サーバー側）。トーン: サロンUI＝ミント・¥なし・赤なし・インラインstyle禁止。
  *
  * ※ 作成時に API 側で作成者を新サロンの店長(role=manager)として自動登録する（route.ts 参照）。
+ *   その自動登録で顧客に氏名が表示されるようになるため、**本人の公開同意**をこのフォームで取る
+ *   （0045・SalonConsentSubmit / docs/40_decisions.md §10）。検証は API 側でも行う。
  */
 const ERROR_MESSAGE: Record<string, string> = {
   form: "送信データを読み取れませんでした。もう一度お試しください。",
@@ -34,6 +37,10 @@ const ERROR_MESSAGE: Record<string, string> = {
   upload: "ロゴのアップロードに失敗しました。時間をおいて再度お試しください。",
   save: "登録に失敗しました。時間をおいて再度お試しください。",
   forbidden: "この操作は許可されていません。",
+  // 公開同意（0045）。UI では未チェックだと送信できないため、ここに来るのは
+  // curl・JS 無効・改変クライアントの経路。
+  consent:
+    "お客様への表示について同意のチェックが必要です。内容をご確認のうえチェックしてください。",
   owner:
     "オーナーの店長登録に失敗したため、サロン作成を取り消しました。すでに別店舗のスタッフとして登録済みの可能性があります。",
   // 招待コード（migration 0043）。理由は @/lib/salon-invite の inviteReasonMessage と同文。
@@ -221,9 +228,7 @@ export default async function ManagerSalonNewPage({
               </span>
             </div>
 
-            <button type="submit" className="btn btn-outline btn-block">
-              登録して来店QRを発行
-            </button>
+            <SalonConsentSubmit />
           </form>
         </Card>
       </div>

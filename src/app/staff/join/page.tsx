@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { resolveStaffByLineUserId } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import { resolveInvite, inviteReasonMessage } from "@/lib/staff-invite";
+import JoinConsentForm from "./JoinConsentForm";
 
 /**
  * /staff/join?token=<invite_token>  （認証方式B / [[auth-method-line-b]]）
@@ -12,6 +13,10 @@ import { resolveInvite, inviteReasonMessage } from "@/lib/staff-invite";
  * フロー: 未ログイン → returnTo付きで LINE ログインへ（新ID/PWは作らない）。
  *   ログイン済み＆トークン有効 → 「参加する」確認 → POST /api/staff/bind で紐付け。
  * トーン: サロンUI世界（ミント/ink・ゴシック・¥なし）。
+ *
+ * 公開同意（0045）: 受諾ボタンの手前で **本人**が同意する（店長の申告では許諾にならない・
+ *   弁護士見解 / docs/40_decisions.md §10）。フォーム部分は checked の state が要るため
+ *   JoinConsentForm（client）に切り出したが、POST の形式はネイティブのままで変えていない。
  */
 const ROLE_LABEL: Record<string, string> = {
   manager: "店長",
@@ -100,12 +105,7 @@ export default async function StaffJoinPage({
             </p>
             <p className="muted">対象：{staff.name} さん</p>
 
-            <form action="/api/staff/bind" method="post">
-              <input type="hidden" name="token" value={token} />
-              <button type="submit" className="btn btn-outline btn-block">
-                参加する
-              </button>
-            </form>
+            <JoinConsentForm token={token ?? ""} />
 
             <p className="note-fine">
               新しいIDやパスワードは作りません。いつものLINEログインで参加できます。
