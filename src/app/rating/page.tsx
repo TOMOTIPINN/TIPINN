@@ -9,15 +9,31 @@ import RatingPicker from "./RatingPicker";
  * サーバーコンポーネントで getSession() を検証し、未ログインはログインへ。
  * 対象は ?salon=<uuid>&staff=<uuid>。サロン名・スタッフ名のみ service role で解決して渡す。
  * tier の選択 → /api/checkout → Stripe Checkout（Direct Charge）へ遷移する。
+ *
+ * ?review=<uuid>（§13 ステップ4）: どの感想への評価かを /api/checkout へ引き継ぐための中継。
+ *   **この画面では購入可否を判定しない。** 判定（本人の感想か・スタッフ宛てか・everyone か・
+ *   rating>=3 か）は /api/checkout に1か所だけ置く（ステップ5）。ここに同じ判定を書くと
+ *   二重実装になり、片方だけ直したときに画面と購入結果が食い違う。
+ *   値はそのまま RatingPicker → checkout へ運ぶだけで、真偽はサーバーが決める。
  */
 export default async function RatingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ salon?: string; staff?: string; reviewed?: string }>;
+  searchParams: Promise<{
+    salon?: string;
+    staff?: string;
+    reviewed?: string;
+    review?: string;
+  }>;
 }) {
   // returnTo に元のパス（?salon=…&staff=…&reviewed=…）を載せるため、先にクエリを解決する。
   // 未ログインでログインへ飛ばす際、ログイン後に同じ /rating へ戻すため（QR/通知導線・§8）。
-  const { salon: salonId, staff: staffId, reviewed } = await searchParams;
+  const {
+    salon: salonId,
+    staff: staffId,
+    reviewed,
+    review: reviewId,
+  } = await searchParams;
 
   const session = await getSession();
   if (!session) {
@@ -25,6 +41,7 @@ export default async function RatingPage({
     if (salonId) params.set("salon", salonId);
     if (staffId) params.set("staff", staffId);
     if (reviewed) params.set("reviewed", reviewed);
+    if (reviewId) params.set("review", reviewId);
     const qs = params.toString();
     const returnTo = qs ? `/rating?${qs}` : "/rating";
     redirect(`/api/auth/line/login?returnTo=${encodeURIComponent(returnTo)}`);
@@ -70,7 +87,14 @@ export default async function RatingPage({
           </p>
         </header>
 
-        <RatingPicker salonId={salonId} staffId={staffId} salonName={salon.name} staffName={staff.name} reviewed={alreadyReviewed} />
+        <RatingPicker
+          salonId={salonId}
+          staffId={staffId}
+          salonName={salon.name}
+          staffName={staff.name}
+          reviewed={alreadyReviewed}
+          reviewId={reviewId}
+        />
   </div>
     </main>
   );

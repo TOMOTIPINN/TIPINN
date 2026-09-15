@@ -12,6 +12,11 @@ import { RATING_TIERS, getTier } from "@/lib/rating-tiers";
  * 特商法の表示義務および決済代行会社の審査要件（買い物カート画面）に対応する。
  * カスタマーUIのためミントは主CTA（.btn-mint）のみ。カードの装飾は無彩色で組む（§5）。
  *
+ * 表示の告知（§13 ステップ4）: **ティア選択画面**で「お名前とスタンプの種類が、担当スタッフと
+ *   サロンに表示されます。」を出す。スタッフ本人宛ての感想詳細（/staff/received/[reviewId]）に
+ *   顧客の表示名とティアが出るため、**金額を選ぶ前に**伝える（説明箇所をここ1か所に固定する）。
+ *   確認ステップには置かない（あそこは購入内容と年齢確認に絞る）。
+ *
  * 年齢確認: 未成年には有料スタンプを販売しない（法務確定）。確認ステップで「私は18歳以上です」を
  *   チェックさせ、未チェックの間は支払いボタンを押せない。
  *   ★状態は保存しない★ tier を選ぶ／選び直すたびに未チェックへ戻す。決済キャンセルで戻る経路は
@@ -25,6 +30,7 @@ export default function RatingPicker({
   salonName,
   staffName,
   reviewed,
+  reviewId,
 }: {
   salonId: string;
   staffId: string;
@@ -33,6 +39,9 @@ export default function RatingPicker({
   // 感想送信済みか。決済キャンセルで rating に戻った際も「感想だけ送る」を出さないため
   // checkout に引き継ぎ、cancel_url に reviewed を維持させる（課金ロジックには不使用）。
   reviewed: boolean;
+  // どの感想への評価か（§13 ステップ4）。checkout へ中継するだけで、ここでは検証しない。
+  // 購入可否の判定は /api/checkout に1か所だけ置く（ステップ5）。
+  reviewId?: string;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [adult, setAdult] = useState(false);
@@ -54,6 +63,9 @@ export default function RatingPicker({
           staffId,
           tier: tier.tier,
           reviewed,
+          // どの感想への評価か。値があるときだけ送る（無い場合は checkout 側で
+          // metadata.review_id が付かない＝従来どおり null で記録される）。
+          ...(reviewId ? { reviewId } : {}),
           // 年齢確認の申告。サーバー側でも必ず検証される（ここを外しても通らない）。
           adult_confirmed: adult,
         }),
@@ -181,8 +193,12 @@ export default function RatingPicker({
         ))}
       </div>
 
+      {/* 表示の告知（§13 ステップ4）。ティアを選ぶ**前**に置く＝金額を決める手前で伝える。
+          ここにあった「サロンへの評価スタンプ購入です…」は削除した。確認ステップ新設
+          （c77e25d）以降は同じ文が .confirm-note にもあり重複していたため。原則5 の説明も、
+          特商法・審査対応の4項目（金額・税込表示・返品不可・特商法リンク）も確認ステップ側にある。 */}
       <p className="muted center-text">
-        サロンへの評価スタンプ購入です。スタッフへ直接お金をお渡しするものではありません。
+        お名前とスタンプの種類が、担当スタッフとサロンに表示されます。
       </p>
     </div>
   );

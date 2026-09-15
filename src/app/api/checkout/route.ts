@@ -95,6 +95,14 @@ export async function POST(req: Request) {
   // 感想送信済みなら決済キャンセルで rating に戻っても「感想だけ送る」を再表示しない。
   // 値があるときだけ付ける（無ければ現状どおり＝表示側でフェイルセーフ）。
   const reviewedParam = reviewed ? "&reviewed=1" : "";
+  // どの感想への評価かを cancel_url にも維持する（§13 ステップ4）。
+  //   これが無いと「1回目キャンセル → /rating に戻って2回目」の人だけ reviewId を失い、
+  //   metadata.review_id が付かない＝感想に紐づかない購入になる。
+  //   ステップ5で reviewId を必須化すると、この経路が丸ごと 400 になる。
+  //   reviewed と同じ作法（値があるときだけ付ける）。
+  const reviewParam = reviewId
+    ? `&review=${encodeURIComponent(reviewId)}`
+    : "";
 
   // Webhook(4.2) が rating_purchases に記録するための手がかり。すべて文字列。
   const metadata: Record<string, string> = {
@@ -131,7 +139,7 @@ export async function POST(req: Request) {
         metadata,
         client_reference_id: session.customer_id,
         success_url: `${baseUrl}/rating/complete?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/rating?salon=${salonId}&staff=${staffId}${reviewedParam}`,
+        cancel_url: `${baseUrl}/rating?salon=${salonId}&staff=${staffId}${reviewedParam}${reviewParam}`,
       },
       // Direct Charge：連結アカウント上で Session を作成（手数料は連結アカウント負担）
       { stripeAccount: salon.stripe_account_id },
