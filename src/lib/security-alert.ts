@@ -36,6 +36,9 @@ import {
  *      echo 一元管理だが、「運営者が業務内容を覗ける」状態は作らない）。
  *  入れてよいのは「いつ・どの種類の入口で・どの IP が・どの閾値に達したか」だけ。
  *  これは運営者が遮断・調査の判断をするのに必要な最小限で、店舗の業務情報を含まない。
+ *  ・**例外**: Stripe の payment_intent id（`pi_...`）は載せてよい。運営者が Stripe 側で
+ *    手動返金するのに必須の識別子で、これ単体では顧客・サロン・スタッフを特定できない
+ *    （個人情報でも秘匿値でもなく、Stripe ダッシュボードの検索キーにすぎない）。
  */
 
 /** 発生時刻の表示（JST・YYYY-MM-DD HH:MM）。基準は他画面（dashboard / inbox）と同じ Asia/Tokyo。 */
@@ -174,4 +177,33 @@ export async function notifyPushFailures(count: number): Promise<void> {
   ].join("\n");
 
   await pushToOperator("push_failures", text);
+}
+
+/**
+ * 同じ感想への有料スタンプ二重決済を運営者へ通知する（0047 の部分一意制約違反・§13 決定5）。
+ *
+ * 発生経路: /api/checkout の「購入済み」チェックを通過してから webhook が届くまでの数秒間に
+ *   2回支払われると、2件目の INSERT が `rating_purchases_review_id_uniq` に衝突する。
+ *   echo は**自動返金もロックもしない**（§13 決定5・案Y）。記録を作らずに決済だけが残るので、
+ *   運営者が Stripe で手動返金する。Direct Charge のため**返金元はサロンの連結アカウント**。
+ *
+ * 本文に載せるのは `payment_intent id`（`pi_...`）だけ。
+ *   返金にはこの1個があれば足り、顧客名・サロン名・スタッフ名・review_id は要らない
+ *   （冒頭の「本文に入れないもの」とその例外を参照）。
+ *
+ * @param paymentIntentId 返金対象の payment_intent id（`pi_...`）
+ */
+export async function notifyDuplicateReviewPurchase(
+  paymentIntentId: string,
+): Promise<void> {
+  const text = [
+    "【echo】同じ感想への有料スタンプ二重決済を検知しました",
+    "",
+    `検知時刻: ${jstStamp.format(new Date())}（JST）`,
+    `payment: ${paymentIntentId}`,
+    "",
+    "記録はしていません。Stripe で返金してください（返金元はサロンの連結アカウントです）。",
+  ].join("\n");
+
+  await pushToOperator("duplicate_review_purchase", text);
 }

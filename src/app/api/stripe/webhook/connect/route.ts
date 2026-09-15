@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getTier } from "@/lib/rating-tiers";
+import { notifyDuplicateReviewPurchase } from "@/lib/security-alert";
 import {
   claimStripeEvent,
   markStripeEventProcessed,
@@ -74,6 +75,8 @@ export async function POST(req: Request) {
       | "recorded"
       | "skipped_unpaid"
       | "skipped_bad_metadata"
+      // 同じ感想への2件目（0047 の部分一意制約違反）。記録せず 200 で確定させる（§13 決定5）。
+      | "skipped_duplicate_review"
       | "account_synced"
       | "account_not_found"
       | "ignored_event_type" = "ignored_event_type";
@@ -152,7 +155,12 @@ async function syncAccountFromStripe(
 async function recordRatingPurchase(
   session: Stripe.Checkout.Session,
   connectedAccount: string,
-): Promise<"recorded" | "skipped_unpaid" | "skipped_bad_metadata"> {
+): Promise<
+  | "recorded"
+  | "skipped_unpaid"
+  | "skipped_bad_metadata"
+  | "skipped_duplicate_review"
+> {
   // 即時送信型・買い切り。支払い完了したものだけ記録する。
   if (session.payment_status !== "paid") {
     console.warn(
@@ -189,11 +197,64 @@ async function recordRatingPurchase(
   };
 
   // 冪等: stripe_payment_id(unique) で衝突したら何もしない（= INSERT ... ON CONFLICT DO NOTHING）。
+  // ★この onConflict は stripe_payment_id 専用★ 同じ決済の二重配信だけを吸収する。
+  //   review_id の部分一意制約（0047）はここでは吸収されず、下の error として浮上する。
   const { error } = await supabaseAdmin
     .from("rating_purchases")
     .upsert(row, { onConflict: "stripe_payment_id", ignoreDuplicates: true });
 
-  if (error) throw error;
+  if (error) {
+    // 同じ感想への2件目（0047 の部分一意制約違反・§13 決定5）。
+    //   /api/checkout の「購入済み」チェックを通過してから webhook が届くまでの数秒間に
+    //   2回支払われると起きる。**記録は作らない**（1感想1スタンプ）。
+    //   ここで throw すると 500 → Stripe が再送 → 何度やっても同じ制約で失敗し、
+    //   processed_at が永久に打たれない**再送ループ**になる。そのため throw せず、
+    //   運営者通知だけ出して正常終了させ、呼び出し元に markStripeEventProcessed を走らせる。
+    if (isDuplicateReviewPurchase(error)) {
+      console.error(
+        "[stripe-webhook/connect] duplicate review purchase",
+        { payment_intent: paymentIntent, account: connectedAccount },
+      );
+      // 通知は例外を投げない実装（@/lib/security-alert）。念のため await して 200 の流れは崩さない。
+      await notifyDuplicateReviewPurchase(paymentIntent);
+      return "skipped_duplicate_review";
+    }
+    // それ以外（別の 23505 を含む）は従来どおり再送させる。
+    throw error;
+  }
 
   return "recorded";
+}
+
+/** 0047 の部分一意インデックス名。エラー判定の唯一のキー（migration と一致させること）。 */
+const REVIEW_ID_UNIQUE_INDEX = "rating_purchases_review_id_uniq";
+
+/**
+ * upsert の error が「同じ感想への2件目」によるものか。
+ *
+ * **23505（unique_violation）かつ 0047 の制約名を含む場合だけ true。**
+ *   制約名を見ずに 23505 全体を握り潰すと、将来別の一意制約が増えたときに
+ *   その違反まで黙って 200 で流してしまう（記録が落ちたことに誰も気づけない）。
+ *
+ * 実測（2026-09-15・本番 PostgREST・使い捨てテーブル tmp_unique_probe で確認）:
+ *   部分一意インデックス違反は **code "23505" / HTTP 409** で返り、
+ *   制約名は **message にのみ**入る:
+ *     message = 'duplicate key value violates unique constraint "<index名>"'
+ *     details = 'Key (<列>)=(<値>) already exists.'  ← 列名と値は入るが**制約名は入らない**
+ *   対照群も確認済み: onConflict 対象（stripe_payment_id 相当）の衝突は吸収されて error=null、
+ *   NULL 行は部分一意の対象外で error=null。
+ *
+ * それでも message と details を**連結して**照合するのは、PostgREST / PostgreSQL の
+ *   バージョン差で制約名の入り先が変わっても壊れないようにするため。
+ *   どちらにも入らなければここが false になり、従来どおり throw（再送）になる
+ *   ＝安全側に倒れる（誤って握り潰すことはない）。
+ */
+function isDuplicateReviewPurchase(error: {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+}): boolean {
+  if (error.code !== "23505") return false;
+  const haystack = `${error.message ?? ""} ${error.details ?? ""}`;
+  return haystack.includes(REVIEW_ID_UNIQUE_INDEX);
 }
