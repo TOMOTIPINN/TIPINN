@@ -7,6 +7,7 @@ import { LogoCircle } from "@/components/LogoCircle";
 import {
   REVIEW_BODY_MIN,
   REVIEW_BODY_MAX,
+  REVIEW_WINDOW_DAYS,
   REVIEW_RATINGS,
   REVIEW_TAGS,
   SHARE_SCOPES,
@@ -128,7 +129,7 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
       const code = err instanceof Error ? err.message : "";
       setError(
         code === "no_visit_today"
-          ? "本日のご来店が確認できませんでした。ご来店当日にお試しください。"
+          ? `ご来店の確認ができませんでした。感想はご来店から${REVIEW_WINDOW_DAYS}日以内にお送りください。`
           : "送信に失敗しました。時間をおいて再度お試しください。",
       );
       setSubmitting(false);

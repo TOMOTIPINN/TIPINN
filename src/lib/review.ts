@@ -4,6 +4,18 @@
  * ルールがズレないようにする。画面マップ03に対応。
  */
 
+/* ---- 受付期間（migration 0046） ---- */
+/**
+ * 感想を受け付ける日数。来店日から数えてこの日数まで（当日を含む暦日で N+1 日分）。
+ * 例: REVIEW_WINDOW_DAYS=3 なら 15日に来店 → 18日まで受け付ける。
+ *
+ * ★RPC submit_review_and_earn_stamp（0046）の v_window_days と**必ず一致させること**★
+ *   片方だけ変えると、画面は受け付けるのに RPC が弾く（またはその逆）状態になる。
+ *   ここに置くのは、server（review-server.ts）と client（ReviewForm）の両方が読むため
+ *   （このモジュールは DB アクセスを持たない純粋モジュール）。
+ */
+export const REVIEW_WINDOW_DAYS = 3;
+
 /* ---- コメント本文（trim後の文字数で判定） ---- */
 export const REVIEW_BODY_MIN = 15;
 export const REVIEW_BODY_MAX = 300;

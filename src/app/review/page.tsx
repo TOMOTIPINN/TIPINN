@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { hasReviewedToday } from "@/lib/review-server";
+import { hasReviewedForLatestVisit } from "@/lib/review-server";
 import { Eyebrow } from "@/components/ui";
 import ReviewForm from "./ReviewForm";
 
@@ -49,16 +49,18 @@ export default async function ReviewPage({
     );
   }
 
-  // 本日分の感想は「1顧客/1サロン/JST日 につき1回」。既送信ならフォームを出さず、
-  // URL直打ち・リロードでも同じ既送信カードを返す（客を責めない・要件2）。
-  // 本当の砦は RPC（0020）。ここは表示の belt。
-  if (await hasReviewedToday(session.customer_id, salonId)) {
+  // 感想は「1来店につき1回」（0046・受付は来店から REVIEW_WINDOW_DAYS 日以内）。
+  // 既送信ならフォームを出さず、URL直打ち・リロードでも同じ既送信カードを返す（客を責めない・要件2）。
+  // 本当の砦は RPC（0046）。ここは表示の belt。
+  if (await hasReviewedForLatestVisit(session.customer_id, salonId)) {
     return (
       <main className="page">
         <div className="container stack center-text animate-in">
           <header className="stack-sm center-text">
             <Eyebrow>Thank you</Eyebrow>
-            <h1 className="headline font-elegant">本日分の感想は送信済みです</h1>
+            <h1 className="headline font-elegant">
+              今回のご来店分の感想は送信済みです
+            </h1>
             <p className="muted">{salon.name}</p>
           </header>
           <p className="body">またのご来店をお待ちしています。</p>
