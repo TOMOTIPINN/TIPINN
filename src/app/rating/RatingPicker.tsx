@@ -11,6 +11,13 @@ import { RATING_TIERS, getTier } from "@/lib/rating-tiers";
  * 確認ステップ: ワンタップで Checkout へ飛ばさず、購入内容を提示してから確定させる。
  * 特商法の表示義務および決済代行会社の審査要件（買い物カート画面）に対応する。
  * カスタマーUIのためミントは主CTA（.btn-mint）のみ。カードの装飾は無彩色で組む（§5）。
+ *
+ * 年齢確認: 未成年には有料スタンプを販売しない（法務確定）。確認ステップで「私は18歳以上です」を
+ *   チェックさせ、未チェックの間は支払いボタンを押せない。
+ *   ★状態は保存しない★ tier を選ぶ／選び直すたびに未チェックへ戻す。決済キャンセルで戻る経路は
+ *   フルページ遷移（cancel_url）なのでコンポーネントごと再マウントされ、確実に未チェックから始まる。
+ *   未チェックでボタンが押せないのは **UI の補助にすぎない**。真の検証はサーバー側
+ *   （/api/checkout が明示的な true 以外を 400 adult_confirmation_required で弾く）。
  */
 export default function RatingPicker({
   salonId,
@@ -28,20 +35,28 @@ export default function RatingPicker({
   reviewed: boolean;
 }) {
   const [selected, setSelected] = useState<string | null>(null);
+  const [adult, setAdult] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
 
   const tier = selected ? getTier(selected) : null;
 
   async function purchase() {
-    if (!tier || pending) return;
+    if (!tier || pending || !adult) return;
     setPending(true);
     setError("");
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ salonId, staffId, tier: tier.tier, reviewed }),
+        body: JSON.stringify({
+          salonId,
+          staffId,
+          tier: tier.tier,
+          reviewed,
+          // 年齢確認の申告。サーバー側でも必ず検証される（ここを外しても通らない）。
+          adult_confirmed: adult,
+        }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data?.error ?? "failed");
@@ -89,10 +104,24 @@ export default function RatingPicker({
           </p>
         </div>
 
+        {/* 年齢確認（法務確定・未成年には販売しない）。金額表示と支払いボタンの間に置く。
+            マークアップは共通クラス .field-check（globals.css）。赤は使わない（§12）。 */}
+        <label className="field-check" htmlFor="adult_confirmed">
+          <input
+            id="adult_confirmed"
+            name="adult_confirmed"
+            type="checkbox"
+            checked={adult}
+            onChange={(e) => setAdult(e.target.checked)}
+            disabled={pending}
+          />
+          <span>私は18歳以上です</span>
+        </label>
+
         <button
           type="button"
           className="btn btn-mint btn-block"
-          disabled={pending}
+          disabled={pending || !adult}
           onClick={purchase}
         >
           {pending ? "処理中…" : `${yen} を支払う`}
@@ -104,6 +133,7 @@ export default function RatingPicker({
           disabled={pending}
           onClick={() => {
             setSelected(null);
+            setAdult(false); // 選び直したら年齢確認もやり直す（状態を持ち越さない）。
             setError("");
           }}
         >
@@ -134,7 +164,11 @@ export default function RatingPicker({
             key={t.tier}
             type="button"
             className="tier-row"
-            onClick={() => setSelected(t.tier)}
+            onClick={() => {
+              setSelected(t.tier);
+              // 確認ステップに入るたび未チェックから始める（前回の確認を持ち越さない）。
+              setAdult(false);
+            }}
           >
             <span className="tier-emoji" aria-hidden="true">
               {t.emoji}

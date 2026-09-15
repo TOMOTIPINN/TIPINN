@@ -428,6 +428,41 @@ fieldset.field-group {
   min-width: 0;
 }
 
+/* チェック1つの確認行（年齢確認・公開同意で共通）。
+   ・チェックボックスを文言の**左**に置き、1行目の文字と上下中央を揃える。
+   ・文言が折り返してもチェックボックスの右側に収まる（flex + align-items:flex-start）。
+   ・<label> で input を包むため、文字をタップしても切り替わる。
+   ・タップ領域はスマホ基準の 44px を下限にする。
+   ・**色は足さない**。チェック自体の色はブラウザ既定のままにする
+     （mint は「サロンUI専用・好調/ブランド」で、カスタマーUI では主CTA だけに使う規約のため、
+      3画面で共有するこのクラスに accent-color を持たせない）。 */
+.field-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  /* 直後のボタンとの余白。設置先の親は stack-sm(8px) か stack-md(16px) のどちらかなので、
+     ここで +8px して**どちらでも最低 16px**（field-group 間と同じ）を確保する。 */
+  margin-block-end: var(--space-sm);
+  padding-block: var(--space-sm);
+  min-height: 44px;
+  cursor: pointer;
+}
+.field-check input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  /* 1行目の行ボックス（0.9rem × 1.6 ≒ 23px）に対して 20px の四角を中央へ寄せる。 */
+  margin-block-start: 2px;
+  cursor: pointer;
+}
+.field-check > span {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
 /* 入力ラベル（ゴシック・小・G2.5寄り） */
 .field-label {
   font-family: var(--font-sans);

@@ -25,13 +25,9 @@ export default function JoinConsentForm({ token }: { token: string }) {
     <form action="/api/staff/bind" method="post" className="stack-md">
       <input type="hidden" name="token" value={token} />
 
-      {/* マークアップは既存の manager/visit/page.tsx と同じ field-group + field-label 構成
-          （新しい CSS クラスを増やさない）。checked のときだけ "on" が送られる。 */}
-      <div className="field-group">
-        <label className="field-label" htmlFor="publish_consent">
-          私の氏名・肩書・紹介文・写真（登録されている場合）が、echo
-          を利用するお客様に表示されることに同意します
-        </label>
+      {/* マークアップは共通クラス .field-check（globals.css）。
+          checked のときだけ "on" が送られる。 */}
+      <label className="field-check" htmlFor="publish_consent">
         <input
           id="publish_consent"
           name="publish_consent"
@@ -39,7 +35,11 @@ export default function JoinConsentForm({ token }: { token: string }) {
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
         />
-      </div>
+        <span>
+          私の氏名・肩書・紹介文・写真（登録されている場合）が、echo
+          を利用するお客様に表示されることに同意します
+        </span>
+      </label>
 
       <button
         type="submit"

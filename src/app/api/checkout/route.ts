@@ -12,6 +12,15 @@ import { getTier } from "@/lib/rating-tiers";
  *   - customer_id は**サーバーのセッションから**取得（クライアントから受け取らない / 原則7）。
  *   - 価格はサーバーの tier 定義のみ信用。クライアントの amount は破棄（原則8）。
  * 記録（rating_purchases への insert）は Webhook（4.2）で行う。ここでは作らない。
+ *
+ * ★年齢確認★ 未成年には有料スタンプを販売しない（法務確定）。
+ *   ・adult_confirmed が **真偽値 true** でなければ 400（adult_confirmation_required）。
+ *     欠落・false・文字列の "true"・"0"・空文字はすべて拒否する。
+ *   ・検証は **payload を読んだ直後**＝Stripe はもちろん **salons / staff の DB 参照よりも前**に置く。
+ *     確認していないリクエストで DB を引かないため（位置の理由は下の実装コメント参照）。
+ *   ・確認した事実は Checkout Session の metadata に adult_confirmed / adult_confirmed_at で残す。
+ *     時刻は**サーバー生成**（クライアントの申告時刻を信用しない）。
+ *   ・UI（RatingPicker のチェックボックス）は補助。ここが唯一の実効的な関門。
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -25,6 +34,7 @@ export async function POST(req: Request) {
     tier?: string;
     reviewId?: string;
     reviewed?: boolean;
+    adult_confirmed?: unknown;
   };
   try {
     payload = await req.json();
@@ -33,6 +43,23 @@ export async function POST(req: Request) {
   }
 
   const { salonId, staffId, tier, reviewId, reviewed } = payload;
+
+  // 年齢確認（法務確定・未成年には販売しない）。
+  // ★位置★ payload を読んだ直後＝tier 検証・salons/staff の DB 参照・sessions.create の
+  //   **すべてより前**。確認のないリクエストで DB を引かない／Stripe に一切触れないため。
+  // ★厳格さ★ 受けるのは真偽値 true のみ。欠落（undefined）・null・false はもちろん、
+  //   文字列 "true" / "1" / "on" も拒否する。このエンドポイントの入口は JSON だけで、
+  //   フォーム経由（checkbox の "on"）が存在しない＝文字列を許す理由がない。
+  //   緩めて「値があれば true」にすると、欠落だけを弾いて false を通してしまう。
+  if (payload.adult_confirmed !== true) {
+    return NextResponse.json(
+      { error: "adult_confirmation_required" },
+      { status: 400 },
+    );
+  }
+  // 確認した時刻はサーバーで採る（クライアントの申告時刻を信用しない）。
+  const adultConfirmedAt = new Date().toISOString();
+
   // 価格はサーバー定義のみ信用（原則8）。クライアントが amount を送ってきても見ない。
   const tierDef = getTier(tier);
   if (!salonId || !staffId || !tierDef) {
@@ -76,6 +103,10 @@ export async function POST(req: Request) {
     staff_id: staffId,
     tier: tierDef.tier,
     amount: String(tierDef.amount),
+    // 年齢確認の記録（既存キーは変えない・消さない）。webhook / rating_purchases は不変で、
+    // ここは Stripe 側に事実を残すためだけに使う（監査・問い合わせ時の照合用）。
+    adult_confirmed: "true",
+    adult_confirmed_at: adultConfirmedAt,
   };
   if (reviewId) metadata.review_id = reviewId;
 

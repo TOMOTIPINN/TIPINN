@@ -26,13 +26,9 @@ export default function SalonConsentSubmit() {
 
   return (
     <>
-      {/* マークアップは同フォーム内の他フィールドと同じ field-group + field-label 構成
-          （新しい CSS クラスを増やさない）。checked のときだけ "on" が送られる。 */}
-      <div className="field-group">
-        <label className="field-label" htmlFor="publish_consent">
-          私はこのサロンのスタッフとして echo
-          に登録され、私の氏名・肩書・紹介文・写真（登録されている場合）がお客様に表示されることに同意します
-        </label>
+      {/* マークアップは共通クラス .field-check（globals.css）。
+          checked のときだけ "on" が送られる。 */}
+      <label className="field-check" htmlFor="publish_consent">
         <input
           id="publish_consent"
           name="publish_consent"
@@ -40,7 +36,11 @@ export default function SalonConsentSubmit() {
           checked={consent}
           onChange={(e) => setConsent(e.target.checked)}
         />
-      </div>
+        <span>
+          私はこのサロンのスタッフとして echo
+          に登録され、私の氏名・肩書・紹介文・写真（登録されている場合）がお客様に表示されることに同意します
+        </span>
+      </label>
 
       <button
         type="submit"
