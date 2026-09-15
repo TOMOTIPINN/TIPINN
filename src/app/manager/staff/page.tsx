@@ -8,6 +8,7 @@ import {
   inviteUrl,
   isInviteActive,
   inviteRemainingHours,
+  unboundAlertDays,
 } from "@/lib/staff-invite";
 import { Eyebrow, Card } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
@@ -24,6 +25,12 @@ import DeleteStaffButton from "./DeleteStaffButton";
  * 認可: 未ログイン→LINEログイン（returnTo）／非manager→閲覧不可。salon は ctx.salon_id にスコープ。
  * QR は招待URL（/staff/join?token=…）を qrcode でローカル生成（外部送信なし・原則7）。
  * トーン: ミント/ink・ゴシック・¥なし。インラインstyle禁止（globals.css のトークンのみ）。
+ *
+ * 未受諾の滞留表示（0045 / §10）: 本人が受諾しないままの行は、同意が無いのに顧客へ
+ *   表示され続ける。弁護士見解は「承諾なしなら消せる体制と、確認までの時間が短いので
+ *   あれば問題ない」なので、**店長が気づける**よう UNBOUND_ALERT_DAYS 経過した行の
+ *   バッジを「未参加・N日経過」に差し替え、対処（再発行 / アーカイブ）を1文で添える。
+ *   **表示のみ**＝自動で非表示にも通知もしない（顧客側は一切変更しない）。
  */
 type StaffRow = {
   id: string;
@@ -107,12 +114,23 @@ export default async function ManagerStaffPage({
     qr?: string;
     hoursLeft?: number;
     url?: string;
+    /** 未受諾のまま閾値を超えた日数。null＝注意表示を出さない（0045 / §10）。 */
+    staleDays?: number | null;
   };
   const views: View[] = await Promise.all(
     staff.map(async (row): Promise<View> => {
       if (row.line_user_id) return { row, state: "bound" };
+
+      // ★未受諾の判定は line_user_id と bound_at の**両方** null を要求する★
+      //   本番には line_user_id はあるが bound_at が null の行が7件ある
+      //   （オーナー自動登録は bound_at を入れない／bound_at 導入前の旧行）。
+      //   bound_at だけで判定すると、その7件（うち6件は店長）が「未参加」と誤表示される。
+      //   ここは line_user_id 有りを先に bound で返しているので、残りに bound_at を重ねる。
+      const staleDays =
+        row.bound_at == null ? unboundAlertDays(row.created_at) : null;
+
       if (!isInviteActive(row.invite_token, row.invite_expires_at)) {
-        return { row, state: "expired" };
+        return { row, state: "expired", staleDays };
       }
       const url = inviteUrl(baseUrl, row.invite_token!);
       const qr = await QRCode.toDataURL(url, { margin: 1, width: 240 });
@@ -122,6 +140,7 @@ export default async function ManagerStaffPage({
         qr,
         hoursLeft: inviteRemainingHours(row.invite_expires_at!),
         url,
+        staleDays,
       };
     }),
   );
@@ -202,13 +221,27 @@ export default async function ManagerStaffPage({
                     {v.state === "bound" && (
                       <span className="status-pill is-bound">参加済み</span>
                     )}
-                    {v.state === "invited" && (
+                    {/* 滞留（0045 / §10）は招待中・期限切れの両方に優先して出す。
+                        期限切れの方がより長く放置されている状態なので、ここを除くと
+                        いちばん気づくべき行が「未参加」のまま日数なしになる。 */}
+                    {v.staleDays != null && (
+                      <span className="status-pill is-stale">
+                        未参加・{v.staleDays}日経過
+                      </span>
+                    )}
+                    {v.state === "invited" && v.staleDays == null && (
                       <span className="status-pill">招待中</span>
                     )}
-                    {v.state === "expired" && (
+                    {v.state === "expired" && v.staleDays == null && (
                       <span className="status-pill is-expired">未参加</span>
                     )}
                   </div>
+
+                  {v.staleDays != null && (
+                    <p className="note-fine">
+                      本人が参加していません。招待を再発行するか、同意が得られない場合はアーカイブしてください。
+                    </p>
+                  )}
 
                   {v.row.bio && <p className="staff-admin-bio">{v.row.bio}</p>}
 

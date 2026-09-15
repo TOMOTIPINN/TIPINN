@@ -2105,6 +2105,13 @@ textarea.field {
   color: color-mix(in srgb, var(--mint-deep) 80%, var(--ink));
 }
 .status-pill.is-expired { color: var(--g25-soft); }
+/* 未受諾の滞留（0045 / §10）＝店長に気づかせたいが、赤は使わない（§12）・mint は
+   「好調・上昇」専用なので使わない。退職者タグ（.archived-tag）と同じ
+   「中立グレー＋淡い塗り」で、枠線だけの他ピルより一段目立たせる。 */
+.status-pill.is-stale {
+  background: #FAF9F7;
+  color: var(--ink);
+}
 
 /* QR ブロック（招待中のスタッフに表示）。 */
 .qr-block {

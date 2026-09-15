@@ -43,6 +43,40 @@ export function inviteRemainingHours(
 ): number {
   return Math.max(0, Math.ceil((new Date(expiresISO).getTime() - nowMs) / 3_600_000));
 }
+
+/**
+ * 「受諾されないまま放置されている」と見なすまでの日数（店長画面の注意表示・0045 / §10）。
+ *
+ * 弁護士見解は「承諾なしなら消せる体制と、確認までの時間が短いのであれば、
+ * 同意前に表示される期間は問題ない」。その「確認までの時間が短い」を担保するために、
+ * 店長が未受諾の行に気づける閾値としてこの日数を置く。
+ * env にしない（運用で動かす値ではない。動かすなら根拠と一緒にこの行を書き換える）。
+ */
+export const UNBOUND_ALERT_DAYS = 3;
+
+/**
+ * 未受諾のまま経過した日数を返す。閾値未満なら null（＝注意表示を出さない）。
+ *
+ * ★暦日ではなく「経過時間」で数える（JST 問題を作らない）★
+ *   `created_at` は timestamptz（絶対時刻）で、ここでの比較は now - created_at という
+ *   **時間差**。時間差はタイムゾーンに依存しないため、サーバーが UTC で動いていても
+ *   JST で動いていても結果は同じで、日付境界のズレは**起きない**。
+ *   代わりに「JST の暦日で3日」とは意味が変わる（例: 2日と23時間経過は 2 を返す＝まだ出さない）。
+ *   店長に出す注意表示は「短期間で気づけるか」が目的で、暦日の厳密さは要らないため
+ *   こちらを採る。暦日で数えると now の取り方次第で表示が1日ぶれる。
+ *
+ * @param createdAtISO staff.created_at
+ * @returns 経過日数（切り捨て）。閾値 UNBOUND_ALERT_DAYS 未満なら null
+ */
+export function unboundAlertDays(
+  createdAtISO: string,
+  nowMs: number = Date.now(),
+): number | null {
+  const elapsedMs = nowMs - new Date(createdAtISO).getTime();
+  const days = Math.max(0, Math.floor(elapsedMs / 86_400_000));
+  return days >= UNBOUND_ALERT_DAYS ? days : null;
+}
+
 export type InviteStaff = {
   id: string;
   name: string;
