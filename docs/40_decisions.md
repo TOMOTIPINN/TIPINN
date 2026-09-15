@@ -659,6 +659,32 @@ cron は HTTP 200 を返し続け（送信対象0件と判定）、ダッシュ�
 （適用前に `routine_privileges` が postgres / service_role のみであることを確認、
 適用後に `pg_get_functiondef` で新判定の反映と当日限定判定の消失を確認）。
 
+#### 本番実機確認（2026-09-15 16:16〜16:27 JST）
+
+テストサロン `682336ef-…` × 運営者本人の顧客アカウントで実施。
+
+**事前に確認したこと**:
+来店行は SQL で手動作成した（`submit_visit_and_earn_stamp` を通さないため
+**LINE 通知は enqueue されない**）。`reviews`・`visits` に**トリガーなし**、
+`earned_stamps` は `trg_audit_earned_stamps` → `fn_audit_log`
+（`audit_log` への insert のみ・**外部送信なし**）であることを事前確認。
+
+**対照群**:
+
+| # | 条件 | 結果 |
+|---|---|---|
+| A | 当日来店 | 1回目 `awarded=1`・`earned_stamps` **新規行 count=1**／2回目は「今回のご来店分の感想は送信済みです」 |
+| B | 4日前の来店のみ | フォームは表示される。送信で「ご来店の確認ができませんでした。感想はご来店から3日以内にお送りください。」／`reviews`・`earned_stamps` とも**作成0件** |
+| C | 2日前の来店 | `awarded=1`・`count=1` |
+
+各対照群のあとに `reviews` / `visits` / `earned_stamps` を **id 指定で削除**し、
+最終的に件数0を確認した。
+
+**残っているもの（意図的）**:
+`audit_log` にテスト由来の行が4件残っている
+（`earned_stamps` の INSERT/DELETE × 2・`record_id` は `ea1f5016-…` と `2b010dec-…`）。
+**監査ログは手で消さない方針**のため削除していない。
+
 #### 採らなかった案と理由
 
 | 案 | 採らなかった理由 |
