@@ -119,8 +119,13 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
 
       // 完了画面へ遷移（フォームには戻さない）。
       const awarded = data.stampAwarded ? "1" : "0";
+      // review: 完了画面が「この感想に有料スタンプを送れるか」を判定するために渡す（§13 ステップ3）。
+      //   API が返さない場合（想定外）は付けない＝完了画面は購入リンクを出さない（安全側）。
+      const reviewParam = data.reviewId
+        ? `&review=${encodeURIComponent(data.reviewId)}`
+        : "";
       router.push(
-        `/review/complete?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}&awarded=${awarded}`,
+        `/review/complete?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}&awarded=${awarded}${reviewParam}`,
       );
     } catch (err) {
       // !res.ok のとき throw new Error(data.error) 済＝ここに API の error コードが載る。

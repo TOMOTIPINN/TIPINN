@@ -10,6 +10,7 @@
  */
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { REVIEW_WINDOW_DAYS } from "@/lib/review";
+import type { PurchasableReviewRow } from "@/lib/review-purchase";
 
 /** JST は UTC+9 固定（サマータイム無し）。dashboard-data / staff-stats と同じ前提。 */
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -76,4 +77,38 @@ export async function hasReviewedForLatestVisit(
     .gte("created_at", jstDayStartISO(visit.visited_on));
 
   return (count ?? 0) > 0;
+}
+
+/**
+ * 有料スタンプの購入可否を判定するために、reviews を1件引く（判定はしない）。
+ *
+ * **取得と判定を分ける**: 判定は @/lib/review-purchase の isPurchasableReview（純粋関数）。
+ * ここは「判定に必要な列だけを引いてくる」責務に閉じる。
+ *
+ * select は判定に使う6列のみ。**body は取らない**
+ * （感想本文は購入可否の判断に不要で、取らなければ取り違えて表示することもない）。
+ *
+ * 見つからない・取得に失敗した場合は null を返す（呼び出し側で「購入不可」に倒す）。
+ * reviewId はクライアント由来の値なので、**所有者確認は必ず判定側で行うこと**
+ * （ここでは customer_id で絞らない。絞ると「他人の id を渡された」と
+ *   「存在しない」の区別がつかなくなり、判定の分岐が書けない）。
+ */
+export async function loadReviewForPurchase(
+  reviewId: string,
+): Promise<PurchasableReviewRow | null> {
+  const { data, error } = await supabaseAdmin
+    .from("reviews")
+    .select("id, customer_id, salon_id, staff_id, share_scope, rating")
+    .eq("id", reviewId)
+    .maybeSingle();
+
+  if (error) {
+    // 取得できない＝購入不可に倒す。握り潰さずログだけ残す（review_id は秘匿値ではない）。
+    console.error("[review-server] loadReviewForPurchase failed", {
+      review_id: reviewId,
+      code: error.code,
+    });
+    return null;
+  }
+  return (data as PurchasableReviewRow | null) ?? null;
 }

@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { Eyebrow, StampRing, VipBadge } from "@/components/ui";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { getSalonRewards } from "@/lib/rewards";
+import { loadReviewForPurchase } from "@/lib/review-server";
+import { isPurchasableReview } from "@/lib/review-purchase";
 
 /**
  * 感想 送信完了画面（画面マップ06・白世界）。
@@ -12,24 +14,40 @@ import { getSalonRewards } from "@/lib/rewards";
  * - stamp_awarded=false → 「感想ありがとうございました」＋ 1日1個の説明
  * 合計数は query ではなく earned_stamps から再取得（authoritative）。
  * awarded は今回の送信で付与されたかの一回性フラグなので query で受ける。
+ *
+ * 「評価スタンプを送る」リンク（§13 ステップ3）:
+ *   ?review=<uuid> の感想が **購入可能な感想**（本人の・このサロンの・このスタッフ宛ての・
+ *   share_scope='everyone' かつ rating>=3）のときだけ出す。判定は @/lib/review-purchase の
+ *   isPurchasableReview（/api/checkout と同じ関数）。満たさない／review が無い／引けない場合は
+ *   **リンクを出さないだけ**で、エラー画面にはしない（完了画面の他の表示は従来どおり）。
  */
 export default async function ReviewCompletePage({
   searchParams,
 }: {
-  searchParams: Promise<{ salon?: string; staff?: string; awarded?: string }>;
+  searchParams: Promise<{
+    salon?: string;
+    staff?: string;
+    awarded?: string;
+    review?: string;
+  }>;
 }) {
   const session = await getSession();
   if (!session) {
     redirect("/api/auth/line/login");
   }
 
-  const { salon: salonId, staff: staffId, awarded } = await searchParams;
+  const {
+    salon: salonId,
+    staff: staffId,
+    awarded,
+    review: reviewId,
+  } = await searchParams;
   if (!salonId) {
     redirect("/");
   }
   const stampAwarded = awarded === "1";
 
-  const [{ data: salon }, { data: stamp }, { data: staff }, rewards] =
+  const [{ data: salon }, { data: stamp }, { data: staff }, rewards, reviewRow] =
     await Promise.all([
       supabaseAdmin.from("salons").select("name, logo_url").eq("id", salonId).single(),
       supabaseAdmin
@@ -49,6 +67,8 @@ export default async function ReviewCompletePage({
         : Promise.resolve({ data: null }),
       // このサロンのVIP特典（表示用・title のみ出す）。
       getSalonRewards(salonId),
+      // 購入リンクの可否判定に使う感想（判定に必要な6列のみ・body は取らない）。
+      reviewId ? loadReviewForPurchase(reviewId) : Promise.resolve(null),
     ]);
 
   const count = stamp?.count ?? 0;
@@ -59,6 +79,14 @@ export default async function ReviewCompletePage({
   const perkJustFired = stampAwarded && vip.isVIP && vip.progressInCycle === 0;
   const logo = salon?.logo_url ?? null;
   const initials = (salon?.name ?? "").slice(0, 4);
+
+  // 有料スタンプを送れる感想か（/api/checkout と同じ判定・@/lib/review-purchase）。
+  // customerId は **セッション由来**で、URL からは受け取らない。
+  const canPurchase = isPurchasableReview(reviewRow, {
+    customerId: session.customer_id,
+    salonId,
+    staffId: staffId ?? null,
+  });
 
   return (
     <main className="page">
@@ -105,7 +133,7 @@ export default async function ReviewCompletePage({
           </p>
         )}
 
-        {staffId && staff && (
+        {canPurchase && staffId && staff && reviewId && (
           <div className="stack stack-sm">
             <Eyebrow>Send your thanks</Eyebrow>
             <p className="muted">
@@ -113,7 +141,8 @@ export default async function ReviewCompletePage({
             </p>
             <a
               // reviewed=1：感想は送信済みなので rating 側で「感想だけ送る」を出さない目印。
-              href={`/rating?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}&reviewed=1`}
+              // review=：どの感想への評価かを /rating → /api/checkout へ引き継ぐ（§13 決定3）。
+              href={`/rating?salon=${encodeURIComponent(salonId)}&staff=${encodeURIComponent(staffId)}&reviewed=1&review=${encodeURIComponent(reviewId)}`}
               className="btn btn-mint btn-block"
             >
               評価スタンプを送る
