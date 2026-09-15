@@ -25,6 +25,11 @@
 ### 混同しやすいペア
 
 - **rating（1〜4の感想の評価値）** と **rating_purchases（有償スタンプ）** は別物。ルート `/rating` は後者（有償スタンプ選択画面）
+- ただし**別テーブルだが無関係ではない**: 有料スタンプは `rating_purchases.review_id` で感想に紐付き、
+  **1感想につき1回まで**（migration 0047 の部分一意インデックス `rating_purchases_review_id_uniq`・
+  `where review_id is not null`）。購入できるのは「スタッフ本人に届く感想」のみで、
+  判定は `src/lib/review-purchase.ts` の `isPurchasableReview`（→ `docs/40_decisions.md` §13）。
+  `review_id` が NULL の行は §13 以前の購入（遡及しない）
 - **`/manager/visit`** は来店の記録画面ではなく**来店スタンプの設定画面**
 - **`/staff/visit`（ログイン中スタッフ用）** と **`/kiosk`（常設iPad用）** は**同じ来店受付機能の2つの入口**。認可方式だけが違う
 
