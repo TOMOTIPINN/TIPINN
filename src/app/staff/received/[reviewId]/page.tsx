@@ -8,10 +8,7 @@ import RoleBar from "@/components/RoleBar";
 import { resolveSalonRole } from "@/lib/display-role";
 import { getTier } from "@/lib/rating-tiers";
 import { REVIEW_RATINGS } from "@/lib/review";
-import {
-  STAFF_BODY_MIN_RATING,
-  STAFF_VISIBLE_SHARE_SCOPE,
-} from "@/lib/review-visibility";
+import { staffViewMode, type StaffViewMode } from "@/lib/review-visibility";
 import {
   jstPeriodStartISO,
   rankForCount,
@@ -31,15 +28,18 @@ import {
  *   金額列（rating_purchases.amount）は **select しない**（¥がスタッフ画面に漏れないことを構造で担保・§2/§4）。
  *
  * 認証（方式B / [[auth-method-line-b]]）: ログイン中の LINE から getStaffContext() を解決。
- *   未ログイン → returnTo付きで LINE ログインへ。閲覧できるのは
- *   ・staff  : 本人宛て（staff_id===自分）かつ share_scope='everyone' かつ rating>=3
- *   ・manager: 同サロンの声すべて（従来どおり絞らない）
+ *   未ログイン → returnTo付きで LINE ログインへ。表示は3段階（§14 決定1・3）:
+ *   ・manager   : 同サロンの声すべて（従来どおり絞らない）→ **full**
+ *   ・staff full: 本人宛て・share_scope='everyone'・rating>=3 → 従来どおり本文まで
+ *   ・staff stamp_only: 本人宛て・everyone・rating<=2 **かつ有料スタンプあり**
+ *       → **お客様の表示名とティアだけ**。本文・その時の気分・タグは出さない
  *   それ以外は存在を伏せて notFound()＝**HTTP 404**（他人の評価は見せない）。
  *   「存在しない」と「権限が無い」を区別しない（403 を返さない）のは意図的で、
  *   区別するとレビューIDの総当たりで実在を判別できるオラクルになるため。
+ *   **「低評価で購入なし」も同じ 404 に畳む**（購入の有無を当てさせない）。
  *
  * 到達導線: /staff の Team voices の各行（自分宛て or 同サロンの manager のみリンク化）と、
- *   /staff の「あなたに届いた声」セクション。リンク可否は下の canView と厳密に一致させる。
+ *   /staff の「あなたに届いた声」セクション。リンク可否は下の mode と厳密に一致させる。
  */
 
 type ReviewRow = {
@@ -113,46 +113,75 @@ export default async function StaffReceivedPage({
   const review = data as ReviewRow | null;
 
   /**
-   * 閲覧可否。ロールで条件が違う。
+   * お客様が送った評価スタンプ（tier）。amount は取得しない（¥非表示）。
+   *
+   * ★可視判定より**前**に引く（§14 決定3）★
+   *   rating<=2 の感想は「有料スタンプがあるか」で stamp_only / hidden が分かれるため、
+   *   404 を返すかどうかがこの結果に依存する。従来は notFound() の後に引いていた。
+   *   review が引けなかったときは無駄なので引かない。
+   */
+  let hasPurchase = false;
+  let purchaseTier: string | null = null;
+  if (review) {
+    const { data: purchase } = await supabaseAdmin
+      .from("rating_purchases")
+      .select("tier")
+      .eq("review_id", reviewId)
+      .maybeSingle();
+    hasPurchase = !!purchase;
+    purchaseTier = purchase?.tier ?? null;
+  }
+  const tierDef = getTier(purchaseTier);
+
+  /**
+   * 表示モード。ロールで条件が違う。
    *
    *  ・manager: 自分宛て、または同サロンの声すべて（サロン全体宛 staff_id=null を含む）。
-   *      店長は /manager/inbox で全件を受け止める役割なので、ここは絞らない。
-   *  ・staff  : 自分宛て（staff_id 一致）**かつ** /staff の Team voices と同じ可視条件
-   *      （share_scope='everyone' かつ rating>=3）。
-   *      share_scope='manager_only' は「店長にだけ伝えたい」というお客様の選択であり、
-   *      本人が直URLで読めるならその選択肢が意味を失う。rating<=2（気づきの声）も
-   *      店長が受け止める設計（docs/00_philosophy.md）のため本人には直接見せない。
-   *      → SQL 側の .eq/.gte と揃えるため null は不可視に倒す（NULL>=3 は偽）。
+   *      店長は /manager/inbox で全件を受け止める役割なので、ここは絞らない＝常に full。
+   *  ・staff  : @/lib/review-visibility の staffViewMode に委ねる（3値）。
+   *      full       … everyone かつ rating>=3。従来どおり本文まで
+   *      stamp_only … everyone かつ rating<=2 で、その感想に有料スタンプがある。
+   *                   低評価の言葉は店長が口頭で伝える（docs/00_philosophy.md §4.8）ので
+   *                   本文は出さないが、**誰からの応援かは本人に届けてよい**
+   *      hidden     … それ以外（manager_only / 低評価で購入なし / 他人宛て）
+   *      判定条件をここに書き写さない（/staff の一覧と食い違うため）。
    *
    * 弾いた場合は存在を伏せて 404（下の notFound()）。403 とは区別しない。
    */
-  const canView =
-    !!review &&
-    (ctx.role === "manager"
+  const mode: StaffViewMode = !review
+    ? "hidden"
+    : ctx.role === "manager"
       ? review.staff_id === ctx.staff_id || review.salon_id === ctx.salon_id
-      : review.staff_id === ctx.staff_id &&
-        review.share_scope === STAFF_VISIBLE_SHARE_SCOPE &&
-        (review.rating ?? 0) >= STAFF_BODY_MIN_RATING);
+        ? "full"
+        : "hidden"
+      : staffViewMode(review, { staffId: ctx.staff_id, hasPurchase });
 
   // 「存在しない」と「権限が無い」を **同じ 404** に畳む（not-found.tsx が文言を持つ）。
   // 403 で出し分けると、レビューIDの総当たりで実在を判別できるオラクルになるため区別しない。
-  if (!review || !canView) {
+  // 「低評価で購入なし」もここに畳まれる＝購入の有無を外から当てられない。
+  if (!review || mode === "hidden") {
     notFound();
   }
+
+  // stamp_only は「ティアを届ける」ためだけのモード。tier を解決できない（未知の tier 文字列など）
+  // ときは出すものが何も残らないので、空の画面を見せずに hidden と同じ 404 に倒す。
+  if (mode === "stamp_only" && !tierDef) {
+    notFound();
+  }
+
+  /**
+   * 名前とティアだけを届けるモード（§14 決定3）。本文・その時の気分・タグを出さない。
+   * ⚠️ review.body は select 済みだが **描画しない**。サーバーコンポーネントは
+   *   描画された出力しかクライアントへ送らないため、本文はブラウザに渡らない。
+   *   ここに本文を足す変更をするときは §14 決定1（本文は店長のみ）に戻ること。
+   */
+  const isStampOnly = mode === "stamp_only";
 
   const customer = one(review.customers);
   const fromName = customer?.display_name ?? "お客様";
   const staffId = review.staff_id;
   // サロン全体宛（staff_id null）＝「お店のみんなへ」。個人指標（累計/ランク）は出さない。
   const isSalonWide = staffId === null;
-
-  // お客様が送った評価スタンプ（tier）をスタッフに見せる。amount は取得しない（¥非表示）。
-  const { data: purchase } = await supabaseAdmin
-    .from("rating_purchases")
-    .select("tier")
-    .eq("review_id", reviewId)
-    .maybeSingle();
-  const tierDef = getTier(purchase?.tier);
 
   // hero は「お客様が送った評価スタンプ（tier）」の絵柄＋tier名のみ。ムード顔文字は hero に出さない。
   // 無償の感想のみ（tierなし）は中立マーク＋「感想が届きました」にフォールバック。
@@ -164,7 +193,10 @@ export default async function StaffReceivedPage({
       : "感想が届きました";
 
   // お客様の「その時の気分」＝絵文字評価（最高/よい/普通/改善）。Review セクション側に添える。
-  const mood = REVIEW_RATINGS.find((r) => r.value === review.rating) ?? null;
+  // stamp_only では rating を出さないので算出もしない（§14 決定3）。
+  const mood = isStampOnly
+    ? null
+    : (REVIEW_RATINGS.find((r) => r.value === review.rating) ?? null);
 
   // 蓄積（件数のみ・フッター用）。累計=今週 / ランク=通算（仮閾値）。
   const [weekCount, totalCount] = staffId
@@ -175,7 +207,7 @@ export default async function StaffReceivedPage({
     : [0, 0];
   const rank = rankForCount(totalCount);
 
-  const tags = (review.tags ?? []).filter(Boolean);
+  const tags = isStampOnly ? [] : (review.tags ?? []).filter(Boolean);
 
   const displayRole = await resolveSalonRole(ctx);
 
@@ -218,32 +250,38 @@ export default async function StaffReceivedPage({
 
         <hr className="rule" />
 
-        {/* Review（その時の気分＋タグ＋本文カード） */}
-        <section className="stack-sm">
-          <Eyebrow className="eyebrow-mint">Review</Eyebrow>
-          {mood && (
-            <div className="mood-row">
-              <span className="mood-emoji" aria-hidden="true">
-                {mood.emoji}
-              </span>
-              <span className="mood-label">
-                その時の気分・{mood.label}
-              </span>
-            </div>
-          )}
-          {tags.length > 0 && (
-            <div className="staff-tag-row">
-              {tags.map((t) => (
-                <span key={t} className="tag-mint">
-                  {t}
-                </span>
-              ))}
-            </div>
-          )}
-          <div className="voice-card">「{review.body}」</div>
-        </section>
+        {/* Review（その時の気分＋タグ＋本文カード）。
+            stamp_only では**セクションごと出さない**（後続の細罫線も一緒に畳んで
+            罫線が二重にならないようにする）。 */}
+        {!isStampOnly && (
+          <>
+            <section className="stack-sm">
+              <Eyebrow className="eyebrow-mint">Review</Eyebrow>
+              {mood && (
+                <div className="mood-row">
+                  <span className="mood-emoji" aria-hidden="true">
+                    {mood.emoji}
+                  </span>
+                  <span className="mood-label">
+                    その時の気分・{mood.label}
+                  </span>
+                </div>
+              )}
+              {tags.length > 0 && (
+                <div className="staff-tag-row">
+                  {tags.map((t) => (
+                    <span key={t} className="tag-mint">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className="voice-card">「{review.body}」</div>
+            </section>
 
-        <hr className="rule" />
+            <hr className="rule" />
+          </>
+        )}
 
         {/* 累計（今週件数）／ランク。個人指標のためサロン全体宛では丸ごと非表示。
             ランク（A/B/C/D）はさらに RANK_ENABLED のときのみ＝現在は常に非表示。
