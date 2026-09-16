@@ -9,6 +9,10 @@ import { resolveSalonRole } from "@/lib/display-role";
 import { getTier } from "@/lib/rating-tiers";
 import { REVIEW_RATINGS } from "@/lib/review";
 import {
+  STAFF_BODY_MIN_RATING,
+  STAFF_VISIBLE_SHARE_SCOPE,
+} from "@/lib/review-visibility";
+import {
   jstPeriodStartISO,
   rankForCount,
   PAID_STAMPS_ENABLED,
@@ -127,8 +131,8 @@ export default async function StaffReceivedPage({
     (ctx.role === "manager"
       ? review.staff_id === ctx.staff_id || review.salon_id === ctx.salon_id
       : review.staff_id === ctx.staff_id &&
-        review.share_scope === "everyone" &&
-        (review.rating ?? 0) >= 3);
+        review.share_scope === STAFF_VISIBLE_SHARE_SCOPE &&
+        (review.rating ?? 0) >= STAFF_BODY_MIN_RATING);
 
   // 「存在しない」と「権限が無い」を **同じ 404** に畳む（not-found.tsx が文言を持つ）。
   // 403 で出し分けると、レビューIDの総当たりで実在を判別できるオラクルになるため区別しない。

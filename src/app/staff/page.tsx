@@ -10,6 +10,10 @@ import AddFriendCard from "@/components/AddFriendCard";
 import { resolveSalonRole } from "@/lib/display-role";
 import { REVIEW_RATINGS } from "@/lib/review";
 import {
+  STAFF_BODY_MIN_RATING,
+  STAFF_VISIBLE_SHARE_SCOPE,
+} from "@/lib/review-visibility";
+import {
   GREETING_LABEL,
   jstGreeting,
   jstPeriodStartISO,
@@ -180,7 +184,9 @@ export default async function StaffHomePage() {
     .eq("salon_id", ctx.salon_id);
   const voicesQuery =
     displayRole === "staff"
-      ? voicesBase.eq("share_scope", "everyone").gte("rating", 3)
+      ? voicesBase
+          .eq("share_scope", STAFF_VISIBLE_SHARE_SCOPE)
+          .gte("rating", STAFF_BODY_MIN_RATING)
       : voicesBase.neq("share_scope", "manager_only");
 
   /**
@@ -195,8 +201,8 @@ export default async function StaffHomePage() {
     .select("id, body, rating, created_at")
     .eq("salon_id", ctx.salon_id)
     .eq("staff_id", ctx.staff_id)
-    .eq("share_scope", "everyone")
-    .gte("rating", 3)
+    .eq("share_scope", STAFF_VISIBLE_SHARE_SCOPE)
+    .gte("rating", STAFF_BODY_MIN_RATING)
     .order("created_at", { ascending: false })
     .limit(5);
 
