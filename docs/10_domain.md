@@ -27,8 +27,9 @@
 - **rating（1〜4の感想の評価値）** と **rating_purchases（有償スタンプ）** は別物。ルート `/rating` は後者（有償スタンプ選択画面）
 - ただし**別テーブルだが無関係ではない**: 有料スタンプは `rating_purchases.review_id` で感想に紐付き、
   **1感想につき1回まで**（migration 0047 の部分一意インデックス `rating_purchases_review_id_uniq`・
-  `where review_id is not null`）。購入できるのは「スタッフ本人に届く感想」のみで、
-  判定は `src/lib/review-purchase.ts` の `isPurchasableReview`（→ `docs/40_decisions.md` §13）。
+  `where review_id is not null`）。購入できるのは「本人が・担当スタッフ宛てに・`everyone` で送った
+  未購入の感想」で、判定は `src/lib/review-purchase.ts` の `isPurchasableReview`
+  （→ `docs/40_decisions.md` §13・§14）。**rating は購入条件ではない**（§14）。
   `review_id` が NULL の行は §13 以前の購入（遡及しない）
 - **`/manager/visit`** は来店の記録画面ではなく**来店スタンプの設定画面**
 - **`/staff/visit`（ログイン中スタッフ用）** と **`/kiosk`（常設iPad用）** は**同じ来店受付機能の2つの入口**。認可方式だけが違う
@@ -52,7 +53,7 @@
 
 | テーブル | 列 | 備考 |
 |---|---|---|
-| `reviews` | id, customer_id, salon_id, staff_id, body, created_at, rating, tags, share_scope | rating 1..4（4=最高/3=よい/2=普通/1=改善）。share_scope: `manager_only` / `everyone`（`either` は廃止済み） |
+| `reviews` | id, customer_id, salon_id, staff_id, body, created_at, rating, tags, share_scope | rating 1..4（4=最高/3=よい/2=普通/1=改善）。share_scope: `manager_only` / `everyone`（`either` は廃止済み）。**rating 1〜2 の本文はスタッフ本人に出さない**（店長のみ・→ `00_philosophy.md` §4.8 / §14） |
 | `rating_purchases` | id, customer_id, salon_id, staff_id, review_id, tier, amount, stripe_payment_id … | **お金の台帳。残高カラム無し**（原則4） |
 | `earned_stamps` | id, customer_id, salon_id, count, updated_at | `unique(customer_id, salon_id)` |
 

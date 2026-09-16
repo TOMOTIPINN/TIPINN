@@ -202,7 +202,8 @@ export default async function StaffHomePage() {
 
   // Team voices の中身はロールで出し分ける（件数の集計は不変＝数字は全部・中身は選ばれたものだけ）。
   //  ・staff       : share_scope='everyone'（お店のスタッフに共有）かつ rating>=3 のみ
-  //                  （rating 1,2 は要対応の声で店長が受け止める）。
+  //                  （rating 1,2 の本文は店長が受け止める・docs/00_philosophy.md §4.8）。
+  //                  ここは**本文を出す一覧**なので §14 後も rating>=3 のまま。
   //  ・manager/owner: 従来どおり manager_only 以外・rating 制限なし。
   const displayRole = await resolveSalonRole(ctx);
   // staff_id は「その行を /staff/received/[id] で開けるか」の判定にだけ使う（絞り込み条件は不変）。
