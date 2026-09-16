@@ -8,6 +8,7 @@ import { Eyebrow, Card } from "@/components/ui";
 import RoleBar from "@/components/RoleBar";
 import AddFriendCard from "@/components/AddFriendCard";
 import { resolveSalonRole } from "@/lib/display-role";
+import { getTier } from "@/lib/rating-tiers";
 import { REVIEW_RATINGS } from "@/lib/review";
 import {
   STAFF_BODY_MIN_RATING,
@@ -30,9 +31,10 @@ import {
  *   集計は staff_id 軸（感想＋有料評価の件数のみ）。金額列は select しない。
  *
  * 13 スタッフ通知（/staff/received/[reviewId]）への導線はこの画面が持つ:
- *   ・「あなたに届いた声」… 自分宛ての新着5件（全行リンク）
- *   ・Team voices        … 開ける行だけリンク（canOpen が detail の canView と同条件）
- *   どちらも絞り込みは share_scope='everyone' かつ rating>=3（staff 経路）で不変。
+ *   ・「あなたに届いた声」… 自分宛ての新着5件（全行リンク）。§14 決定3 で
+ *       **rating<=2 でも有料スタンプが贈られたものは本文なしの行で出す**ようになった
+ *   ・Team voices        … 開ける行だけリンク（canOpen が detail の canView と同条件）。
+ *       **本文を出す一覧なので rating>=3 のまま**（§14 決定1・低評価の本文は店長のみ）
  *
  * 認証（方式B / [[auth-method-line-b]]）: ログイン中の LINE から getStaffContext() で
  *   staff_id/salon_id を解決。?staff= は受け取らない（自分のデータのみ）。
@@ -50,13 +52,39 @@ type VoiceRow = {
   staff: { name: string } | { name: string }[] | null;
 };
 
-/** 「あなたに届いた声」の1行（自分宛て・件数ではなく中身を出す）。 */
-type MyVoiceRow = {
+/**
+ * 「あなたに届いた声」の1行（自分宛て・件数ではなく中身を出す）。
+ * §14 決定3 で2種類になった。判別は mode で行う。
+ *   full       … rating>=3。従来どおり本文つき
+ *   stamp_only … rating<=2 で有料スタンプが贈られたもの。**本文も rating も持たない**
+ *                （持たせないために select 自体を分けている）
+ * ★stamp_only の行に顧客名・ティアは出さない★（§13 決定2 を維持）。
+ *   名前とティアは詳細（/staff/received/[reviewId]）でだけ出す。
+ */
+/** (1) rating>=3 のクエリが返す行（mode を付ける前）。 */
+type MyHighRow = {
   id: string;
   body: string;
   rating: number | null;
   created_at: string;
 };
+
+/** (2) rating<=2 のクエリが返す行。**body も rating も持たない**（select していない）。 */
+type MyLowRow = { id: string; created_at: string };
+
+type MyVoiceRow =
+  | ({ mode: "full" } & MyHighRow)
+  | ({ mode: "stamp_only" } & MyLowRow);
+
+/** 「あなたに届いた声」に出す最大件数。 */
+const MY_VOICES_LIMIT = 5;
+
+/**
+ * rating<=2 側の走査件数。購入の有無は別テーブルなので、先に多めに取ってから絞る。
+ * MY_VOICES_LIMIT だけ取ると「直近5件がすべて購入なし」のときに、
+ * その少し前にある購入済みの1件を取りこぼす。
+ */
+const LOW_RATING_SCAN = 20;
 
 /** 集計スコープ: あなたへ（staff_id 一致）／お店全体（salon_id のみ・staff_id 不問＝あなた宛も含む全レビュー）。 */
 type CountScope = { staffId: string } | { salonId: string; wholeSalon: true };
@@ -190,13 +218,20 @@ export default async function StaffHomePage() {
       : voicesBase.neq("share_scope", "manager_only");
 
   /**
-   * 「あなたに届いた声」= 自分宛て（staff_id 一致）の感想。
-   * 絞り込みは Team voices の staff 経路と同一条件（share_scope='everyone' かつ rating>=3）。
-   * 自分宛てだからといって manager_only や rating<=2（気づきの声）を本人に直接見せない
-   * ＝「低評価は店長が受け止める」設計（docs/00_philosophy.md）を導線側でも守る。
+   * 「あなたに届いた声」= 自分宛て（staff_id 一致）・everyone の感想。
+   * manager_only は本人に出さない（「店長にだけ伝えたい」というお客様の選択）。
    * salon_id は staff_id から一意に決まるが、越境の保険として二重スコープにする。
+   *
+   * §14 決定3 でクエリを**2本に分けた**:
+   *   (1) rating>=3        … 従来どおり本文つきで出す
+   *   (2) rating<=2 / null … 有料スタンプが贈られたものだけ、**本文なし**の行で出す
+   *
+   * ★(2) で body を select しない★
+   *   低評価の本文をスタッフ本人に見せない設計（docs/00_philosophy.md §4.8）を、
+   *   「画面で出さない」ではなく「**取ってこない**」ことで担保する。
+   *   1本のクエリにまとめると本文を取らざるを得なくなるので、あえて分けている。
    */
-  const myVoicesQuery = supabaseAdmin
+  const myHighQuery = supabaseAdmin
     .from("reviews")
     .select("id, body, rating, created_at")
     .eq("salon_id", ctx.salon_id)
@@ -204,7 +239,19 @@ export default async function StaffHomePage() {
     .eq("share_scope", STAFF_VISIBLE_SHARE_SCOPE)
     .gte("rating", STAFF_BODY_MIN_RATING)
     .order("created_at", { ascending: false })
-    .limit(5);
+    .limit(MY_VOICES_LIMIT);
+
+  // rating が null の行も低評価側に入れる（本文を出してよい根拠が無いため）。
+  // staffViewMode（@/lib/review-visibility）の null 扱いと揃えること。
+  const myLowQuery = supabaseAdmin
+    .from("reviews")
+    .select("id, created_at")
+    .eq("salon_id", ctx.salon_id)
+    .eq("staff_id", ctx.staff_id)
+    .eq("share_scope", STAFF_VISIBLE_SHARE_SCOPE)
+    .or(`rating.lt.${STAFF_BODY_MIN_RATING},rating.is.null`)
+    .order("created_at", { ascending: false })
+    .limit(LOW_RATING_SCAN);
 
   // 感想（reviews）: あなたへ／お店への各グループ×今週/今月/今期 ＋ Team voices。
   const [
@@ -215,7 +262,8 @@ export default async function StaffHomePage() {
     shopRvM,
     shopRvQ,
     voicesRes,
-    myVoicesRes,
+    myHighRes,
+    myLowRes,
   ] = await Promise.all([
     countRows("reviews", youScope, weekStart),
     countRows("reviews", youScope, monthStart),
@@ -224,7 +272,8 @@ export default async function StaffHomePage() {
     countRows("reviews", salonScope, monthStart),
     countRows("reviews", salonScope, quarterStart),
     voicesQuery.order("created_at", { ascending: false }).limit(5),
-    myVoicesQuery,
+    myHighQuery,
+    myLowQuery,
   ]);
 
   const youReviews: PeriodCounts = {
@@ -268,7 +317,48 @@ export default async function StaffHomePage() {
   }
 
   const voices = (voicesRes.data ?? []) as VoiceRow[];
-  const myVoices = (myVoicesRes.data ?? []) as MyVoiceRow[];
+
+  /**
+   * 低評価側のうち「有料スタンプが贈られたもの」だけを残す（§14 決定3）。
+   * ★詳細（/staff/received/[reviewId]）の stamp_only 条件と厳密に一致させる★
+   *   向こうは tier を解決できないものを 404 に倒すので、ここでも getTier で絞る。
+   *   緩めるとリンク先が 404 になり、締めると届いたスタンプに辿り着けない。
+   * ★amount は select しない★（¥がスタッフ画面に漏れない構造を崩さない）。
+   *   tier も表示はしない。ここでは「詳細が開けるか」の判定にだけ使う。
+   */
+  const lowRows = (myLowRes.data ?? []) as MyLowRow[];
+  let stampedLowIds = new Set<string>();
+  if (lowRows.length > 0) {
+    const { data: purchased } = await supabaseAdmin
+      .from("rating_purchases")
+      .select("review_id, tier")
+      .in(
+        "review_id",
+        lowRows.map((r) => r.id),
+      );
+    stampedLowIds = new Set(
+      (purchased ?? [])
+        .filter((p) => getTier(p.tier))
+        .map((p) => p.review_id as string),
+    );
+  }
+
+  // 2本を新着順にマージして上位 MY_VOICES_LIMIT 件。
+  // ★limit はマージ後に掛ける★ クエリ側で5件ずつ取って後から混ぜると順序が壊れる。
+  const myVoices: MyVoiceRow[] = [
+    ...((myHighRes.data ?? []) as MyHighRow[]).map((v) => ({
+      ...v,
+      mode: "full" as const,
+    })),
+    ...lowRows
+      .filter((r) => stampedLowIds.has(r.id))
+      .map((r) => ({ ...r, mode: "stamp_only" as const })),
+  ]
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )
+    .slice(0, MY_VOICES_LIMIT);
 
   /**
    * その行を /staff/received/[id] で開けるか。
@@ -337,6 +427,27 @@ export default async function StaffHomePage() {
             ) : (
               <div>
                 {myVoices.map((v) => {
+                  // stamp_only（§14 決定3）: 日付と「評価スタンプが届きました」だけ。
+                  // 本文と rating は持っていない。顧客名とティアも**ここには出さない**
+                  // （§13 決定2 を維持）。それらは詳細画面でだけ出す。
+                  if (v.mode === "stamp_only") {
+                    return (
+                      <Link
+                        key={v.id}
+                        href={`/staff/received/${v.id}`}
+                        className="team-voice"
+                      >
+                        <div className="team-voice-head">
+                          <span className="team-voice-name">
+                            評価スタンプが届きました
+                          </span>
+                          <span className="team-voice-time">
+                            {jstDate.format(new Date(v.created_at))}
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  }
                   const mood =
                     REVIEW_RATINGS.find((r) => r.value === v.rating) ?? null;
                   return (
