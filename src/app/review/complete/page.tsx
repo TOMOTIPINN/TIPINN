@@ -17,7 +17,9 @@ import { isPurchasableReview } from "@/lib/review-purchase";
  *
  * 「評価スタンプを送る」リンク（§13 ステップ3）:
  *   ?review=<uuid> の感想が **購入可能な感想**（本人の・このサロンの・このスタッフ宛ての・
- *   share_scope='everyone' かつ rating>=3）のときだけ出す。判定は @/lib/review-purchase の
+ *   share_scope='everyone'）のときだけ出す。**rating は見ない**（§14）ので、
+ *   「改善」「普通」を選んだ直後の完了画面にもこのリンクは出る（意図どおり）。
+ *   判定は @/lib/review-purchase の
  *   isPurchasableReview（/api/checkout と同じ関数）。満たさない／review が無い／引けない場合は
  *   **リンクを出さないだけ**で、エラー画面にはしない（完了画面の他の表示は従来どおり）。
  */
@@ -67,7 +69,7 @@ export default async function ReviewCompletePage({
         : Promise.resolve({ data: null }),
       // このサロンのVIP特典（表示用・title のみ出す）。
       getSalonRewards(salonId),
-      // 購入リンクの可否判定に使う感想（判定に必要な6列のみ・body は取らない）。
+      // 購入リンクの可否判定に使う感想（判定に必要な5列のみ・body と rating は取らない）。
       reviewId ? loadReviewForPurchase(reviewId) : Promise.resolve(null),
     ]);
 

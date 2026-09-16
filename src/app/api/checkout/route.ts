@@ -29,7 +29,8 @@ import { isPurchasableReview } from "@/lib/review-purchase";
  *   「課金されたのにスタッフに届かない」状態を作らないため、**reviewId を必須**にする。
  *   ・reviewId が無い → 400 review_required
  *   ・購入できない感想（他人の／別サロン・別スタッフ宛て／お店のみんなへ／
- *     manager_only／rating<=2）→ 400 invalid_review
+ *     manager_only）→ 400 invalid_review
+ *     ★rating は見ない（§14）★ 低評価（rating<=2）の感想にも贈れる。
  *     ★「存在しない」と「他人のもの」を区別しない★ 区別すると reviewId の総当たりで
  *     実在を判別できるオラクルになる（/staff/received/[reviewId] が 404 に畳むのと同じ理由）。
  *   ・その感想で既に購入済み → 409 already_purchased
