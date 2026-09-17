@@ -396,9 +396,11 @@ export default async function MyPage() {
                             </Link>
                             {/* 日数は REVIEW_WINDOW_CALENDAR_DAYS（= REVIEW_WINDOW_DAYS + 1）から
                                 組み立てる。判定が between（両端を含む）なので暦日では +1 になる。
-                                数字を書き写すと、定数を変えたとき文言だけ取り残される。 */}
+                                数字を書き写すと、定数を変えたとき文言だけ取り残される。
+                                「ご来店日を含めて」は ReviewForm のエラー文言と同じ言い回し。
+                                「ご来店後」だと来店当日を含むかが読み取れない（§15）。 */}
                             <p className="note-fine">
-                              {`ご来店後${REVIEW_WINDOW_CALENDAR_DAYS}日間のみ感想をお送りいただけます`}
+                              {`ご来店日を含めて${REVIEW_WINDOW_CALENDAR_DAYS}日間のみ感想をお送りいただけます`}
                             </p>
                           </>
                         )}
