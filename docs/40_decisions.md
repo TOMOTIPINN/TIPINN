@@ -767,6 +767,8 @@ cron は HTTP 200 を返し続け（送信対象0件と判定）、ダッシュ�
   「課金されたのにスタッフに届かない」が残るため。
   判定は `src/lib/review-purchase.ts` の `isPurchasableReview` に**単一化**し、
   完了画面の導線（belt）と `/api/checkout`（砦）の2か所で使う。
+  ⚠️ **`share_scope='everyone'` は §19（2026-09-17）で撤廃した。**以降の正は §19
+  （`manager_only` の感想にも評価スタンプを贈れる。届かない問題は表示側で解いた）。
 - **決定2の修正**: 名前＋ティアは「スタッフ本人宛て詳細」に加え **「同サロンの店長」にも表示される**
   （既存の `canView` 経路）。§5「オーナーは全数字を見る」と整合するため許容。
 - **告知文**「お名前とスタンプの種類が、担当スタッフとサロンに表示されます。」を
@@ -845,8 +847,11 @@ CARTA × 運営者本人・スタッフ「原」で実施。
 2. **購入条件から rating を外す。** 条件は「本人・当該サロン/スタッフ宛て・
    `share_scope='everyone'`・未購入」。`manager_only` は引き続き購入不可
    （「店長にだけ伝えたい」という選択を課金で覆さない＝§13 の理由がそのまま残る）。
+   ⚠️ **`share_scope='everyone'` は §19（2026-09-17）で撤廃した。**以降の正は §19。
 3. **rating<=2 の感想に贈られたスタンプは、スタッフ本人に「お客様の表示名＋ティア」で届ける。**
    本文と rating は出さない。
+   ⚠️ **このうち「rating を出さない」は §19（2026-09-17）で撤廃した。**以降は
+   **購入があれば rating も届ける**（4段階の絵文字は「言葉」ではない）。本文を出さない点は不変。
 4. **購入画面の告知文とプライバシーポリシー第5条4項は変更不要**
    （「お名前とスタンプの種類が、担当スタッフとサロンに表示されます。」は今回の変更後も過不足がない）。
 
@@ -1507,3 +1512,152 @@ CARTA・今月（カード分割後の版）で確認した。
 3. 合計（感想＋評価スタンプ）を見る手段が画面から無くなった。必要になったら再検討する
    （合算は「1つの感想にスタンプが付くと2件」になる延べ数なので、意味のある指標か自体が未確定）。
 4. HR タブから ¥ が消えたことで、店長が金額を見るには日次タブへ戻る必要がある。
+
+---
+
+## 19. `manager_only` の感想にも評価スタンプを贈れる（2026-09-17 決定・**実装は未着手**）
+
+**上書き対象**: §13「追加決定（2026-09-15）」の購入条件（`:760-771`）／
+§14 決定2（`:847-850`）／§14 決定3 のうち **「rating を出さない」部分だけ**（`:851-855`。
+本文を出さない点は不変）。**いずれも本文は書き換えず、各所に「§19 で上書き」の注記を1行入れてある。**
+
+### 背景
+
+`isPurchasableReview` の条件5（`share_scope === 'everyone'`）は §13 で入れた。理由は
+「`manager_only` の感想に有料スタンプが付くと**課金されたのにスタッフに届かない**が残るため」。
+つまり §14 で `rating` を外した後も、**購入条件が「本文をスタッフ本人に見せる条件」に相乗りしたまま**だった。
+
+2026-09-17 の調査で分かったこと:
+
+- **`manager_only` の本文がスタッフ本人に漏れる経路は1つも無い。**
+  `/staff` の3クエリ（Team voices `staff/page.tsx:212`・`myHigh` `:237`・`myLow` `:246`）は
+  すべて `share_scope` で先に弾いており、`myLow` は **body を select すらしていない**。
+  詳細（`staff/received/[reviewId]/page.tsx:107`）は body を取るが `staffViewMode` が
+  `hidden` に倒して **404**（`:162-164`）。**スタッフ宛ての LINE 通知は存在しない**
+  （push は顧客への来店リマインドと運営者へのアラートの2つだけ）。
+- **body が `share_scope` 無しで読めるのは店長経路だけ**（`/manager/inbox:178`・
+  `/dashboard` の `dashboard-data.ts:180`。後者は `:207` に「manager 専用ガード済＝全 share_scope 閲覧可」）。
+- **`rating_purchases` から `reviews` を join して body を取る箇所は 0 件。**
+- **DB 側に `share_scope='everyone'` を前提にした条件は無い。**
+  CHECK（`0004:25-28`）と RPC の入力検証（`0046:58-59` ほか）は**書き込み時の値チェックのみ**、
+  一意インデックス `0047:37-39` は `review_id` だけ、RLS はポリシー0件、webhook は
+  `metadata.review_id` しか見ない。→ **migration 不要。**
+
+つまり **「届かない」を表示側で解けば、購入条件から `share_scope` を外せる。**
+
+### 決定
+
+1. **購入条件から `share_scope` を外す**（`isPurchasableReview` の条件5 を削除）。
+   条件は「**本人・当該サロン/スタッフ宛て（`staff_id` 非 null かつ一致）・未購入**」だけになる。
+2. **購入があった感想は、`share_scope`・`rating` によらずスタッフ本人に
+   「お客様の名前・ティア・rating」を届ける。**
+   **本文とタグは、`everyone` かつ `rating>=3` 以外では届けない。**
+3. **`review-visibility` は `manager_only` を rating 判定より前に打ち切り、`full` を返しえない形にする。**
+4. **`myHighQuery`・Team voices の `share_scope='everyone'` 絞り込みは変えない。**
+5. **`/staff` 一覧の stamp_only 行は従来どおり日付＋「評価スタンプが届きました」のみ。**
+   名前・ティア・rating は**詳細画面だけ**（§13 決定2 を維持）。
+
+### 理由
+
+- お客様が「店長のみ」で選んだのは **本文の届け先**であって、**応援を贈らないこと**ではない。
+- **rating が届くことで、スタッフが自主的に店長へ助言を求められる。**
+  低評価の言葉は店長が受け止める（`00_philosophy.md` §4.8）という設計と矛盾しない。
+  むしろ「何かあったらしい」と本人が気づける方が、店長との会話が始まりやすい。
+- **4段階の絵文字は「言葉」ではない。** §14 決定3 が rating を伏せたのは
+  「低評価の**言葉**を本人に届けない」ためで、絵文字1つはその「言葉」に当たらない。
+  → **`everyone` の低評価でも rating を届ける**ように揃える（案 B・非対称を作らない）。
+
+### ★判定順の罠（実装時に最も注意すること）★
+
+現行 `review-visibility.ts:57-62` は3段で、**`:60` を緩めるだけでは `:61` に落ちる**。
+
+```
+if (share_scope !== 'everyone') return "hidden";   // :60 ← ここを緩めると
+if ((rating ?? 0) >= 3)         return "full";     // :61 ← ここに落ちて本文が出る
+return hasPurchase ? "stamp_only" : "hidden";      // :62
+```
+
+**`manager_only` かつ `rating 4` の感想の本文がスタッフ本人に出る。**
+`manager_only` は **rating を見る前に打ち切り**、`hasPurchase ? "stamp_only" : "hidden"` の
+2択しか返さない形にすること。**`full` を返しうる経路に `manager_only` を通さない。**
+
+### モードの整理（案 B・3値のまま）
+
+| モード | 出すもの | 対象 |
+|---|---|---|
+| `full` | 名前・ティア・**rating**・**タグ**・**本文** | `everyone` かつ `rating>=3` |
+| `stamp_only` | 名前・ティア・**rating**（タグと本文は出さない） | 購入あり かつ `full` 以外（`manager_only` 全 rating ／ `everyone` の `rating<=2`・null） |
+| `hidden` | なし（404） | 購入なしで `full` 以外・他人宛て・`staff_id` null |
+
+**モードは増やさない。** `stamp_only` の中身に rating を足すだけで足りる（案 B を採った理由の1つ）。
+
+### 実装の範囲（未着手）
+
+| ファイル | 変更 |
+|---|---|
+| `src/lib/review-purchase.ts` | 条件5（`:77`）と `PURCHASE_SHARE_SCOPE`（`:29`）を削除。**`PurchasableReviewRow` から `share_scope` 列も落とす**（`:36-42`。§14 で `rating` を落としたのと同じ作法＝この場に条件を書き戻す余地を消す）。JSDoc を §19 に |
+| `src/lib/review-server.ts` | `loadReviewForPurchase` の select を5列→4列（`share_scope` を落とす） |
+| `src/lib/review-visibility.ts` | 決定3。`manager_only` を rating 判定より前に打ち切る |
+| `src/app/staff/received/[reviewId]/page.tsx` | `mood`（rating の絵文字）を `stamp_only` でも算出する（`:196-198`）。**`:256` は案A＝気分・タグ・本文を要素ごとに出し分け、タグと本文は `full` のみ。** 罫線の二重化に注意 |
+| `src/app/staff/page.tsx` | `myLowQuery`（`:246-255`）の `.eq(share_scope, everyone)` を外し `manager_only` も拾う。**body は select しない**まま。`myHighQuery`・Team voices は**変更しない**（決定4） |
+| — | **migration 不要。** `/manager/inbox`・`/dashboard`・`/mypage`・`/api/checkout`・`/rating`・`/review/complete`・webhook・LINE リマインドは**変更不要**（判定を関数に委ねているため追従する） |
+
+**挙動が変わる副作用（意図どおり）**: `manager_only` を選んだ直後の `/review/complete` と
+`/mypage` にも「評価スタンプを送る」が出る（§14 で低評価に出るようにしたのと同じ構図）。
+
+### 排他性の確認（実装時）
+
+`myHighQuery`（`everyone` かつ `rating>=3`）と新しい `myLowQuery` が**同じ行を二重に拾わない**こと。
+`manager_only` は `myHighQuery` の `.eq(everyone)` で必ず弾かれるので理屈上は排他だが、実機で確認する。
+
+### 法務
+
+**変更不要**（§14 決定4 と同じ論法）。購入画面の告知文
+「お名前とスタンプの種類が、担当スタッフとサロンに表示されます。」は、`manager_only` を選んだ
+お客様にも**過不足なく成立する**（名前とティアしか出ない。rating は「スタンプの種類」に
+付随する評価の粒度で、本文＝お客様の言葉ではない）。プライバシーポリシー第5条4項も変更しない。
+
+### 採らなかった案と理由
+
+| 案 | 採らなかった理由 |
+|---|---|
+| `manager_only` だけ rating を出す（案 A） | **より強く隠した方が多く届く**逆転になる（`manager_only`＋rating1 は届き、`everyone`＋rating1 は届かない）。理由はどちらにも等しく当てはまる |
+| `manager_only` も rating を出さない（案 C） | §14 と揃うが、決定2 の核心（スタッフが店長へ助言を求められる）が失われる |
+| モードを4値に増やす（`stamp_rating` 新設） | 案 B なら3値のままで足りる。モードが増えるほど判定順の罠が増える |
+| `share_scope` を画面に配って分岐する | 判定が `review-visibility` と画面の2か所に散る（§14 で単一ソース化した意味が消える） |
+| 条件5 だけ外して表示側を触らない | **「課金されたのにスタッフに届かない」が再現する**（§13 が条件5 を入れた元の理由） |
+
+### 本番確認手順（実装後）
+
+| # | 条件 | 期待 |
+|---|---|---|
+| 1 | `manager_only`＋rating 4 で感想を送る | `/review/complete` に**「評価スタンプを送る」が出る**（従来は出なかった） |
+| 2 | `/mypage` | 同じ感想に対して「評価スタンプを送る」が出る |
+| 3 | 購入する | 決済が通り `rating_purchases` に1件 |
+| 4 | スタッフ本人の `/staff` | 日付＋「評価スタンプが届きました」の行のみ（名前・ティア・rating は出ない・決定5） |
+| 5 | その行から詳細へ | **名前＋ティア＋気分（最高）**。**本文・タグは出ない** |
+| 6 | `manager_only`＋rating 1 で同じ手順 | 詳細で**気分（改善）まで出て、本文は出ない**（決定2 の核心） |
+| 7 | `manager_only`＋購入なし | 一覧に出ない・詳細は **404** |
+| 8 | Team voices | `manager_only` は**出ない**（決定4・staff 経路も manager 経路も） |
+| 9 | 店長の `/manager/inbox`・`/dashboard` | 従来どおり本文が読める（変化なし） |
+| 10 | `everyone`＋rating 4 | 従来どおり本文まで（`full`・回帰） |
+| 11 | `everyone`＋rating 1＋購入 | **rating（改善）が出る**。本文は出ない（§14 決定3 の rating 部分を上書きした結果） |
+
+`npm run lint` が変更前と同数・`npm run build` 成功も各ステップで確認する。
+
+### 範囲外
+
+- 店長経路（`/manager/inbox`・`/dashboard`）の表示（従来どおり全 `share_scope` の本文を読む）
+- `/staff` 一覧に名前・ティアを出すこと（§13 決定2 を維持）
+- タグを `full` 以外で出すこと（タグは本文相当の情報とみなす）
+- 購入への期限追加（§15 決定4 のまま）
+
+### 未対応・確認事項
+
+1. **実装は未着手。** 着手は **§15 の本番実機確認（2026-09-22 まで）が終わってから**。
+2. `review-visibility.ts` の判定順（上の「罠」）を実装時に必ず確認する。
+   `manager_only`＋`rating 4`＋購入ありで**本文が出ないこと**を本番確認 6 の前に単体で確かめる。
+3. `myHighQuery` と `myLowQuery` の排他性（同じ行を二重に拾わないか）。
+4. `docs/00_philosophy.md` §4.8 は §19 に合わせて一般化済み（「本人に見せない本文」）。
+   実装時にコード内コメント（`review-visibility.ts` / `review-purchase.ts` /
+   `staff/page.tsx` / `staff/received/[reviewId]/page.tsx`）の典拠も §19 に揃えること。
