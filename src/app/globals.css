@@ -1977,7 +1977,12 @@ textarea.field {
 .inbox-stat-label { font-size: 0.78rem; letter-spacing: 0.04em; color: var(--g25); }
 .inbox-stat-value { font-family: var(--font-sans); font-weight: 700; font-size: 1rem; color: var(--ink); }
 
-/* Inbox 行: 上段メタ（絵柄/担当/顧客/時刻）→ 本文抜粋 → 可視性トグル。 */
+/* Inbox 行: 上段メタ（絵柄/担当/顧客/時刻）→ 公開範囲バッジ → 本文抜粋（docs/40_decisions.md §16）。
+   ★上段は **折り返さない（nowrap）**★
+     以前は flex-wrap: wrap で、名前が長い行だけ時刻が次の段に落ちて**行ごとに位置がずれた**。
+     名前側を縮めて（min-width:0 + ellipsis）時刻を全行で同じ右端に固定する。
+   公開範囲バッジは上段に混ぜず **常に名前の下の段（.inbox-scope）** に置く。
+   上段に置くと名前の長さで横に並んだり下に落ちたりして位置が定まらない。 */
 .inbox-row {
   display: flex;
   flex-direction: column;
@@ -1990,12 +1995,35 @@ textarea.field {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
-.inbox-emoji { font-size: 1.2rem; line-height: 1; }
-.inbox-staff { font-size: 0.95rem; color: var(--ink); }
-.inbox-customer { font-size: 0.88rem; color: var(--ink-soft); }
-.inbox-time { margin-left: auto; font-size: 0.8rem; color: var(--g25); white-space: nowrap; }
+.inbox-emoji { flex: none; font-size: 1.2rem; line-height: 1; }
+/* 名前は長い行だけを縮める（時刻を押し出さない）。 */
+.inbox-staff {
+  font-size: 0.95rem;
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inbox-customer {
+  font-size: 0.88rem;
+  color: var(--ink-soft);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inbox-time {
+  flex: none;
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--g25);
+  white-space: nowrap;
+}
+/* 公開範囲バッジの段（名前の直下・左揃え固定）。 */
+.inbox-scope { display: flex; align-items: center; }
 .inbox-body { font-size: 0.9rem; color: var(--ink-soft); line-height: 1.8; }
 
 /* ============================================================

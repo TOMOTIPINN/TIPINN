@@ -45,14 +45,19 @@ const SCOPE_LABEL = new Map<string, string>(
  *   出さないことで異常が見えるようにする。
  *
  * 色: everyone=ミント / manager_only=褪せグレー（.tag-quiet）。**赤は使わない**（30_design §2）。
+ *
+ * 位置は **常に名前の下の段（.inbox-scope）**。上段（.inbox-meta）に混ぜると
+ * 名前の長さで横に並んだり下に落ちたりして、行ごとに位置が変わる。
  */
 function ScopeBadge({ scope }: { scope: string | null }) {
   const label = scope ? SCOPE_LABEL.get(scope) : undefined;
   if (!label) return null;
   return (
-    <span className={scope === "manager_only" ? "tag-quiet" : "tag-mint"}>
-      {label}
-    </span>
+    <div className="inbox-scope">
+      <span className={scope === "manager_only" ? "tag-quiet" : "tag-mint"}>
+        {label}
+      </span>
+    </div>
   );
 }
 
@@ -67,9 +72,9 @@ export default function InboxList({ rows }: { rows: InboxRow[] }) {
             </span>
             <span className="inbox-staff">{r.staffName}</span>
             <span className="inbox-customer">{r.customerName}様</span>
-            <ScopeBadge scope={r.shareScope} />
             <span className="inbox-time">{r.time}</span>
           </div>
+          <ScopeBadge scope={r.shareScope} />
           <p className="inbox-body">「{r.body}」</p>
         </div>
       ))}
