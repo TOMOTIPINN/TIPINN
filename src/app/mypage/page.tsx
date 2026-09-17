@@ -10,6 +10,8 @@ import AddFriendCard from "@/components/AddFriendCard";
 import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { computeVisitProgress } from "@/lib/visit";
 import { getSalonRewardsMap, getConsumableRewardStatesMap } from "@/lib/rewards";
+import { getMypageActionsMap } from "@/lib/review-server";
+import { ratingHref } from "@/lib/review";
 import { getCustomerMigrationDeltas } from "@/lib/stamp-adjustments";
 import { getTier } from "@/lib/rating-tiers";
 
@@ -156,9 +158,16 @@ export default async function MyPage() {
     return 0;
   });
 
-  // 第2波: 和集合IDのサロンメタ(来店列込み) と rewards、消費型特典の使用状態を一括取得（N+1回避）。
-  const [{ data: salonData }, rewardsMap, consumableStatesMap] =
-    await Promise.all([
+  // 第2波: 和集合IDのサロンメタ(来店列込み) と rewards、消費型特典の使用状態、
+  //        補助導線（§15）を一括取得（N+1回避）。
+  // ⚠️ 上の `reviews` / `reviewRows` / `reviewMap` は **earned_stamps**（感想スタンプの累計）で、
+  //    ここで足す actionsMap の「感想」（reviews テーブル）とは別物。名前を混ぜないこと。
+  const [
+    { data: salonData },
+    rewardsMap,
+    consumableStatesMap,
+    mypageActionsMap,
+  ] = await Promise.all([
       orderedIds.length
         ? supabaseAdmin
             .from("salons")
@@ -169,6 +178,7 @@ export default async function MyPage() {
         : Promise.resolve({ data: [] as SalonMeta[] }),
       getSalonRewardsMap(orderedIds),
       getConsumableRewardStatesMap(session.customer_id, orderedIds),
+      getMypageActionsMap(session.customer_id, orderedIds),
     ]);
 
   const salonMeta = new Map<string, SalonMeta>();
@@ -236,6 +246,8 @@ export default async function MyPage() {
               const logo = meta.logo_url ?? null;
               const initials = (meta.name ?? "").slice(0, 3);
               const rewards = rewardsMap.get(id) ?? [];
+              // 補助導線（§15）。Map に無いサロン＝どちらも出さない。
+              const actions = mypageActionsMap.get(id);
 
               // 感想軸（earned_stamps 行があるときのみ）。
               const hasReview = reviewMap.has(id);
@@ -359,6 +371,44 @@ export default async function MyPage() {
                             );
                           })}
                         </ul>
+                      </div>
+                    )}
+
+                    {/* 補助導線（§15）。LINE リマインドの置き換えではなく**補助**で、
+                        LINE 側（cron/line-push）は一切変えていない。
+                        促す期間は感想の受付期間（REVIEW_WINDOW_DAYS）と揃えてある
+                        ＝期間を過ぎると両方消える。購入そのものに期限は無い（§15 決定4）。
+                        色は足さない（ミントは「好調/上昇」の差し色・30_design §2／赤は使わない）。
+                        強弱だけで表す: 通知時刻を過ぎたら btn-outline、それ以前は btn-quiet。 */}
+                    {(actions?.canReview || actions?.purchase) && (
+                      <div className="stack stack-sm">
+                        {actions.canReview && (
+                          <Link
+                            href={`/review?salon=${encodeURIComponent(id)}`}
+                            className={`btn btn-block ${
+                              actions.reviewDue ? "btn-outline" : "btn-quiet"
+                            }`}
+                          >
+                            感想を送る
+                          </Link>
+                        )}
+                        {actions.purchase && (
+                          <>
+                            <Link
+                              href={ratingHref({
+                                salonId: id,
+                                staffId: actions.purchase.staffId,
+                                reviewId: actions.purchase.reviewId,
+                              })}
+                              className="btn btn-quiet btn-block"
+                            >
+                              評価スタンプを送る
+                            </Link>
+                            <p className="note-fine">
+                              感想を送ったあとに、評価スタンプを贈れます。
+                            </p>
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
