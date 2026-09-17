@@ -53,7 +53,7 @@
 
 | テーブル | 列 | 備考 |
 |---|---|---|
-| `reviews` | id, customer_id, salon_id, staff_id, body, created_at, rating, tags, share_scope | rating 1..4（4=最高/3=よい/2=普通/1=改善）。share_scope: `manager_only` / `everyone`（`either` は廃止済み）。**rating 1〜2 の本文はスタッフ本人に出さない**（店長のみ・→ `00_philosophy.md` §4.8 / §14） |
+| `reviews` | id, customer_id, salon_id, staff_id, body, created_at, rating, tags, share_scope | rating 1..4（4=最高/3=よい/2=普通/1=改善）。share_scope: `manager_only` / `everyone`（`either` は廃止済み）。**rating 1〜2 の本文はスタッフ本人に出さない**（店長のみ・→ `00_philosophy.md` §4.8 / §14）。`visibility` 列（0006）が DB に存在するが**コードからは未使用**（§16 で読み書きを廃止・列は残す） |
 | `rating_purchases` | id, customer_id, salon_id, staff_id, review_id, tier, amount, stripe_payment_id … | **お金の台帳。残高カラム無し**（原則4） |
 | `earned_stamps` | id, customer_id, salon_id, count, updated_at | `unique(customer_id, salon_id)` |
 

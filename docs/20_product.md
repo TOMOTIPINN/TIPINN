@@ -52,7 +52,7 @@
 
 | ルート | 役割 |
 |---|---|
-| `/manager/inbox` | 店長Inbox（全員共有 / 店長控え） |
+| `/manager/inbox` | 店長Inbox（お客様が選んだ公開範囲を表示・**店長は変更しない**・§16。一覧は新着50件・件数はサロン全体） |
 | `/manager/staff` | スタッフ一覧 |
 | `/manager/staff/[id]` | スタッフ編集 |
 | `/manager/rewards` | 特典設定（最大2件・消費型/状態型の切替） |
@@ -141,7 +141,6 @@ POST /api/staff/visit          来店記録 / 消込 / 取消 / 移行（action 
 /api/manager/rewards/update    更新
 /api/manager/rewards/delete    削除
 /api/manager/visit             来店スタンプ設定
-/api/manager/visibility        表示制御
 /api/manager/profile           店舗プロフィール
 /api/manager/salon/new         サロン作成（招待コードを検証・消費）
 /api/manager/kiosk             device_token 発行/再発行
