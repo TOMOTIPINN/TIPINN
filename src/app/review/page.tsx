@@ -49,7 +49,8 @@ export default async function ReviewPage({
     );
   }
 
-  // 感想は「1来店につき1回」（0046・受付は来店から REVIEW_WINDOW_DAYS 日以内）。
+  // 感想は「1来店につき1回」（0046・受付は来店から REVIEW_WINDOW_DAYS 日以内
+  //   ＝来店当日を含めると REVIEW_WINDOW_CALENDAR_DAYS 暦日。**お客様向けの文言は後者で書く**）。
   // 既送信ならフォームを出さず、URL直打ち・リロードでも同じ既送信カードを返す（客を責めない・要件2）。
   // 本当の砦は RPC（0046）。ここは表示の belt。
   if (await hasReviewedForLatestVisit(session.customer_id, salonId)) {

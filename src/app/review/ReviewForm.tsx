@@ -7,7 +7,7 @@ import { LogoCircle } from "@/components/LogoCircle";
 import {
   REVIEW_BODY_MIN,
   REVIEW_BODY_MAX,
-  REVIEW_WINDOW_DAYS,
+  REVIEW_WINDOW_CALENDAR_DAYS,
   REVIEW_RATINGS,
   REVIEW_TAGS,
   SHARE_SCOPES,
@@ -131,10 +131,16 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
       // !res.ok のとき throw new Error(data.error) 済＝ここに API の error コードが載る。
       // 来店裏付けチェック（0032）で弾かれたときだけ専用文言。
       // それ以外（汎用エラー・ネットワーク断・JSON 破損）は従来どおりの文言。
+      //
+      // ★日数は REVIEW_WINDOW_CALENDAR_DAYS（暦日＝REVIEW_WINDOW_DAYS + 1）から組み立てる★
+      //   判定は `visited_on between today - REVIEW_WINDOW_DAYS and today`（両端を含む）なので、
+      //   来店当日を1日目と数えると +1 になる。以前は差分（3）で書いていたため、
+      //   /mypage の「ご来店後4日間」と**同じ制限が 3 と 4 の2つの数字**で説明されていた（§15）。
+      //   「ご来店日を含めて」を付けて数え方も明示する。**数字を書き写さない。**
       const code = err instanceof Error ? err.message : "";
       setError(
         code === "no_visit_today"
-          ? `ご来店の確認ができませんでした。感想はご来店から${REVIEW_WINDOW_DAYS}日以内にお送りください。`
+          ? `ご来店の確認ができませんでした。感想はご来店日を含めて${REVIEW_WINDOW_CALENDAR_DAYS}日以内にお送りください。`
           : "送信に失敗しました。時間をおいて再度お試しください。",
       );
       setSubmitting(false);
