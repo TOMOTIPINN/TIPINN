@@ -1,11 +1,24 @@
-"use client";
-
-import { useState, useTransition } from "react";
+import { SHARE_SCOPES } from "@/lib/review";
 
 /**
- * 店長Inbox の感想リスト（クライアント）。各行の可視性トグル（全員に共有 / 店長控え）を持つ。
- * 楽観更新 → POST /api/manager/visibility（失敗時はロールバック）。
- * 視覚は globals.css のトークンのみ（インラインstyle禁止・§8）。¥は受け取らない・表示しない。
+ * 店長Inbox の感想リスト（表示専用・サーバーコンポーネント）。
+ *
+ * ★§16（2026-09-17）でトグルを廃止した★
+ *   以前は各行に [全員に共有 / 店長控え] のトグルを持ち、reviews.visibility を
+ *   更新していた（クライアントコンポーネント）。visibility はスタッフ側の表示判定
+ *   （@/lib/review-visibility）にも購入条件（@/lib/review-purchase）にも使われて
+ *   おらず、「店長控え＝スタッフに表示されない」という画面の説明と実装が
+ *   食い違っていた（2026-09-17 調査）。→ docs/40_decisions.md §16
+ *
+ *   いまこの行に出るのは **お客様が選んだ公開範囲（share_scope）** で、
+ *   店長は変更できない。対話要素が無くなったので "use client" も外した。
+ *
+ * 文言は @/lib/review の SHARE_SCOPES を正とする（お客様が感想フォームで見た
+ * 選択肢とまったく同じ文字列を店長にも見せる）。'everyone' を「全体に公開」等と
+ * 言い換えない — 外部公開ではないため（review.ts の SHARE_SCOPES 直上のコメント）。
+ *
+ * 視覚は globals.css のトークンのみ（インラインstyle禁止・30_design §7）。
+ * ¥は受け取らない・表示しない（原則5）。
  */
 export type InboxRow = {
   id: string;
@@ -14,73 +27,52 @@ export type InboxRow = {
   customerName: string;
   time: string;
   body: string;
-  visibility: "all" | "manager";
+  /** お客様が選んだ公開範囲。'everyone' | 'manager_only' 以外（null / 'either'）もあり得る。 */
+  shareScope: string | null;
 };
 
-export default function InboxList({ rows }: { rows: InboxRow[] }) {
-  const [state, setState] = useState<Record<string, "all" | "manager">>(
-    () => Object.fromEntries(rows.map((r) => [r.id, r.visibility])),
+const SCOPE_LABEL = new Map<string, string>(
+  SHARE_SCOPES.map((s) => [s.value, s.label]),
+);
+
+/**
+ * 公開範囲のバッジ。
+ *
+ * **既知の値だけを明示的に判定し、それ以外はバッジを出さない。**
+ *   `10_domain.md` は `either` を廃止済みとするが RPC 0046 は今も受理する
+ *   （本番 prosrc は未確認・HANDOFF 食い違い#1）。`neq('manager_only')` のような
+ *   二分法にすると未知の値が黙ってどちらかに寄り、画面が食い違いを隠してしまう。
+ *   出さないことで異常が見えるようにする。
+ *
+ * 色: everyone=ミント / manager_only=褪せグレー（.tag-quiet）。**赤は使わない**（30_design §2）。
+ */
+function ScopeBadge({ scope }: { scope: string | null }) {
+  const label = scope ? SCOPE_LABEL.get(scope) : undefined;
+  if (!label) return null;
+  return (
+    <span className={scope === "manager_only" ? "tag-quiet" : "tag-mint"}>
+      {label}
+    </span>
   );
-  const [, startTransition] = useTransition();
+}
 
-  function setVisibility(id: string, next: "all" | "manager") {
-    const prev = state[id];
-    if (prev === next) return;
-    setState((s) => ({ ...s, [id]: next })); // 楽観更新
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/manager/visibility", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ reviewId: id, visibility: next }),
-        });
-        if (!res.ok) throw new Error("failed");
-      } catch {
-        setState((s) => ({ ...s, [id]: prev })); // ロールバック
-      }
-    });
-  }
-
+export default function InboxList({ rows }: { rows: InboxRow[] }) {
   return (
     <div>
-      {rows.map((r) => {
-        const vis = state[r.id];
-        return (
-          <div key={r.id} className="inbox-row">
-            <div className="inbox-meta">
-              <span className="inbox-emoji" aria-hidden="true">
-                {r.emoji}
-              </span>
-              <span className="inbox-staff">{r.staffName}</span>
-              <span className="inbox-customer">{r.customerName}様</span>
-              <span className="inbox-time">{r.time}</span>
-            </div>
-            <p className="inbox-body">「{r.body}」</p>
-            <div
-              className="seg"
-              role="group"
-              aria-label="この感想の可視性"
-            >
-              <button
-                type="button"
-                className={`seg-btn${vis === "all" ? " is-active" : ""}`}
-                aria-pressed={vis === "all"}
-                onClick={() => setVisibility(r.id, "all")}
-              >
-                全員に共有
-              </button>
-              <button
-                type="button"
-                className={`seg-btn${vis === "manager" ? " is-active" : ""}`}
-                aria-pressed={vis === "manager"}
-                onClick={() => setVisibility(r.id, "manager")}
-              >
-                店長控え
-              </button>
-            </div>
+      {rows.map((r) => (
+        <div key={r.id} className="inbox-row">
+          <div className="inbox-meta">
+            <span className="inbox-emoji" aria-hidden="true">
+              {r.emoji}
+            </span>
+            <span className="inbox-staff">{r.staffName}</span>
+            <span className="inbox-customer">{r.customerName}様</span>
+            <ScopeBadge scope={r.shareScope} />
+            <span className="inbox-time">{r.time}</span>
           </div>
-        );
-      })}
+          <p className="inbox-body">「{r.body}」</p>
+        </div>
+      ))}
     </div>
   );
 }
