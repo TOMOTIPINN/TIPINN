@@ -81,3 +81,32 @@ export type ShareScope = (typeof SHARE_SCOPES)[number]["value"];
 export function isValidShareScope(s: unknown): s is ShareScope {
   return SHARE_SCOPES.some((x) => x.value === s);
 }
+
+/* ---- 評価スタンプ購入画面（/rating）へのリンク ---- */
+
+/**
+ * 「評価スタンプを送る」の遷移先を組み立てる（§15）。
+ *
+ * 購入画面は **salon / staff / review の3点セット**を要求する。
+ * `isPurchasableReview`（@/lib/review-purchase）が「本人・当該サロン/スタッフ宛て・
+ * everyone・未購入」を見るため、staff と review のどちらが欠けても購入できない。
+ *
+ * `reviewed=1` を必ず付ける: 決済をキャンセルして /rating に戻ったときに
+ * 「感想だけ送る」を再表示しないためのフラグ（/api/checkout のコメントと同じ意図）。
+ *
+ * ※ /review/complete も同じ形の URL を組み立てているが、**あちらは購入導線の一部**なので
+ *   §15 では触らない（この関数を使うのは /mypage だけ）。寄せ替えるなら別途。
+ */
+export function ratingHref(params: {
+  salonId: string;
+  staffId: string;
+  reviewId: string;
+}): string {
+  const q = new URLSearchParams({
+    salon: params.salonId,
+    staff: params.staffId,
+    reviewed: "1",
+    review: params.reviewId,
+  });
+  return `/rating?${q.toString()}`;
+}
