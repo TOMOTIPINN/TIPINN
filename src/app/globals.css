@@ -1430,6 +1430,13 @@ textarea.field {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm);
+  align-items: center;
+}
+/* 内訳チップ行の見出し（「感想」「スタンプ」）。どちらの内訳かを1語で示す（§18 A）。 */
+.pill-row-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: var(--g25);
 }
 .stat-pill {
   display: inline-flex;

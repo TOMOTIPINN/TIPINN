@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { REVIEW_RATINGS } from "@/lib/review";
 import {
   TIER_ORDER,
   TIER_EMOJI,
@@ -13,7 +14,14 @@ import {
  * スタッフ別の評価ビュー（画面マップ14系）。集計は server（dashboard-data.ts）が行い、
  * cur / prev（期間・前期間の StaffAgg マップ）を props で受け取る。
  *
- * 表示内容（§12）: 評価件数 / ティア内訳（絵文字＋件数） / リアルボイス / 前期間比 のみ。
+ * 表示内容（§12・§18）: 感想数 / **感想の4段階別内訳** / 評価スタンプ数 / ティア内訳 /
+ * リアルボイス / 前期間比 のみ。すべて**件数のまま**出す。
+ *
+ * ★スコア化しない（§18 A・docs/00_philosophy.md §4.1・4.4・4.5）★
+ *  - 平均点・合計スコアを出さない（1次元の点数は廃止した順位ポイントの再来）。
+ *  - 並び順は**在籍順のまま**（件数順に並べ替えない）＝スタッフ間の順位を作らない。
+ *  - rating 1〜2 を強調色にしない。4段階すべて同じ .stat-pill。**赤は使わない**。
+ *  - 「改善 0件」を良いことのように見せない（0件は減光の中立表示）。
  *
  * 法的ガード（厳守・原則5・6 / 金融庁回答の前提）:
  *  - スタッフ個人に ¥売上・賞与額・順位ポイント・加重スコアは出さない（StaffAgg.revenue は集計層で 0）。
@@ -100,6 +108,12 @@ export default function StaffPeriodView({
               ? TIER_ORDER.filter((t) => a.tiers[t] > 0)
               : TIER_ORDER;
             const showPillRow = isAll ? a.ratings > 0 : true;
+            // 感想の4段階も同じ流儀（全員表示＝0件は省く / 個人選択＝4段階すべて0込み）。
+            // 並びは REVIEW_RATINGS の定義順（4→1）で固定＝件数で並べ替えない。
+            const ratingList = isAll
+              ? REVIEW_RATINGS.filter((r) => a.reviewRatings[r.value] > 0)
+              : REVIEW_RATINGS;
+            const showRatingRow = isAll ? a.reviews > 0 : true;
             const archived = staffArchived[name];
             return (
               <div
@@ -119,8 +133,33 @@ export default function StaffPeriodView({
                   感想 {a.reviews}件 ・ 評価スタンプ {a.ratings}件
                 </p>
 
+                {showRatingRow && (
+                  <div className="pill-row">
+                    <span className="pill-row-label">感想</span>
+                    {ratingList.map((r) => (
+                      // 絵文字＋件数（例「😊 2」）。段階名は aria-label/title に残す。
+                      <span
+                        key={r.value}
+                        className={`stat-pill${
+                          a.reviewRatings[r.value] === 0 ? " is-zero" : ""
+                        }`}
+                        title={`${r.label}：${a.reviewRatings[r.value]}件`}
+                        aria-label={`${r.label} ${a.reviewRatings[r.value]}件`}
+                      >
+                        <span className="stat-pill-emoji" aria-hidden="true">
+                          {r.emoji}
+                        </span>
+                        <span className="stat-pill-count">
+                          {a.reviewRatings[r.value]}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {showPillRow && (
                   <div className="pill-row">
+                    <span className="pill-row-label">スタンプ</span>
                     {tierList.map((t) => (
                       // 内部向け：絵文字＋件数（例「🎉 1」）。ティア名は aria-label/title に残す。
                       <span
