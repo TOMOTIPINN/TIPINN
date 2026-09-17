@@ -30,9 +30,24 @@ export const TIER_EMOJI = Object.fromEntries(
   RATING_TIERS.map((t) => [t.label, t.emoji]),
 ) as Record<Tier, string>;
 
+/**
+ * 感想の4段階（reviews.rating）別の件数。**評価スタンプ（有償）とは別物**。
+ *
+ * ⚠️ 紛らわしい2語が同居する:
+ *   ・StaffAgg.ratings       … **有償の評価スタンプ**の件数（rating_purchases）
+ *   ・StaffAgg.reviewRatings … **感想の4段階**（reviews.rating 1..4）の件数
+ * 名前で区別する。片方をもう片方の意味で読むと数字がまるごと入れ替わる。
+ */
+export type ReviewRatingCounts = Record<1 | 2 | 3 | 4, number>;
+
+export function emptyReviewRatings(): ReviewRatingCounts {
+  return { 1: 0, 2: 0, 3: 0, 4: 0 };
+}
+
 // スタッフ別の期間集計（1スタッフ分）。
 export type StaffAgg = {
   reviews: number; // 感想数
+  reviewRatings: ReviewRatingCounts; // 感想の4段階別内訳（§18・件数のまま。平均やスコアにしない）
   ratings: number; // 評価スタンプ数（件数）
   revenue: number; // ★店舗集計専用。per-staff は常に 0 で client へ渡す（原則5・個人¥を漏らさない）
   tiers: Record<Tier, number>; // ティア別内訳（件数）

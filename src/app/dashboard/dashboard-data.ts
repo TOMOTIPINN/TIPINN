@@ -25,6 +25,7 @@ import { computeVipProgress } from "@/lib/vip";
 import {
   TIER_ORDER,
   emptyTiers,
+  emptyReviewRatings,
   flowStatus,
   type Tier,
   type StaffAgg,
@@ -62,7 +63,15 @@ export type DashboardData = {
   salonRevenuePrev: number;
   totalCountCur: number;
   totalCountPrev: number;
-  tierBreakdown: { label: Tier; count: number }[];
+  /** 店舗の感想件数（当期）。「評価件数」の内訳として出す（§18 B・引き算させない）。 */
+  reviewCountCur: number;
+  /** 店舗の評価スタンプ件数（当期）。同上。reviewCountCur + ratingCountCur = totalCountCur。 */
+  ratingCountCur: number;
+  /** 当期・前期間の日付範囲（JST・M/D 表記）。**定義は変えず表示だけ足す**（§18 5節）。 */
+  curRangeLabel: string;
+  prevRangeLabel: string;
+  /** ティア別の件数と売上（当期・店舗全体）。売上は rating_purchases.amount の実値合計（§18 C）。 */
+  tierBreakdown: { label: Tier; count: number; revenue: number }[];
   recent: RecentEval[];
   vipCustomers: VipCustomer[];
   vipTotal: number;
@@ -74,6 +83,7 @@ type ReviewRow = {
   staff_id: string | null;
   customer_id: string;
   body: string;
+  rating: number | null;
   share_scope: string | null;
   created_at: string;
 };
@@ -100,6 +110,26 @@ function jstMonthStartMs(nowMs: number, monthsBack: number): number {
   d.setUTCMonth(d.getUTCMonth() - monthsBack);
   return d.getTime() - JST_OFFSET_MS;
 }
+// UTC ミリ秒 → JST の "M/D"。
+function jstMD(ms: number): string {
+  const d = new Date(ms + JST_OFFSET_MS);
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
+/**
+ * 集計窓の日付範囲ラベル（JST・§18 5節）。**計算には一切使わない・表示専用。**
+ *
+ * 窓は [start, end) の半開区間なので、終端はその日の 0:00 を指す
+ * （例: 前期間 8/15〜9/1 は「9/1 0:00 を含まない」）。
+ * 終端が「いま」なら日付ではなく「現在」と書く（今月・直近Nヶ月は end が現在時刻のため）。
+ * period.ts が ISO 化した値を再 parse する都合で end は now よりわずかに過去になりうるので、
+ * 1分の余裕を見て判定する。
+ */
+function jstRangeLabel(startMs: number, endMs: number, nowMs: number): string {
+  const end = endMs >= nowMs - 60_000 ? "現在" : jstMD(endMs);
+  return `${jstMD(startMs)}〜${end}`;
+}
+
 // UTC ミリ秒 → JST 月キー "YYYY-MM"。
 function jstMonthKey(ms: number): string {
   const d = new Date(ms + JST_OFFSET_MS);
@@ -142,7 +172,7 @@ export async function getDashboardData(
       (from, to) =>
         supabaseAdmin
           .from("reviews")
-          .select("staff_id, customer_id, body, share_scope, created_at")
+          .select("staff_id, customer_id, body, rating, share_scope, created_at")
           .eq("salon_id", salonId)
           .gte("created_at", spanStartISO)
           .order("created_at", { ascending: true })
@@ -197,7 +227,14 @@ export async function getDashboardData(
   function buildAgg(startMs: number, endMs: number): Record<string, StaffAgg> {
     const out: Record<string, StaffAgg> = {};
     for (const name of staffNames) {
-      out[name] = { reviews: 0, ratings: 0, revenue: 0, tiers: emptyTiers(), voice: null };
+      out[name] = {
+        reviews: 0,
+        reviewRatings: emptyReviewRatings(),
+        ratings: 0,
+        revenue: 0,
+        tiers: emptyTiers(),
+        voice: null,
+      };
     }
     const latestVoiceMs: Record<string, number> = {};
     for (const r of reviews) {
@@ -206,6 +243,12 @@ export async function getDashboardData(
       const name = r.staff_id ? idToName.get(r.staff_id) : undefined;
       if (!name || !out[name]) continue;
       out[name].reviews += 1;
+      // 感想の4段階別（§18 A）。**件数のまま**持つ（平均やスコアにしない・00_philosophy §4.1）。
+      // 1..4 以外（null・想定外の値）は数えない＝どの段階にも寄せない。
+      const rating = r.rating;
+      if (rating === 1 || rating === 2 || rating === 3 || rating === 4) {
+        out[name].reviewRatings[rating] += 1;
+      }
       // 本画面は manager 専用ガード済＝全 share_scope 閲覧可。voice は最新の body を採用。
       if (!latestVoiceMs[name] || t >= latestVoiceMs[name]) {
         latestVoiceMs[name] = t;
@@ -228,32 +271,55 @@ export async function getDashboardData(
   const cur = buildAgg(curStartMs, curEndMs);
   const prev = buildAgg(prevStartMs, prevEndMs);
 
-  // 店舗合計（全行・null staff 含む＝総件数を正確に）。¥は amount 合計。
+  /**
+   * 店舗合計（全行・null staff 含む＝総件数を正確に）。¥は amount 合計。
+   *
+   * 感想とスタンプを**分けて返す**（§18 B）。
+   *   「評価件数」は両者の合算で、1つの感想にスタンプが付くと 2 件になる。
+   *   内訳を画面に出すために、合計だけでなく内訳もここで確定させる
+   *   （表示側で引き算しない＝数字の出どころを1か所にする）。
+   */
   function salonTotals(startMs: number, endMs: number) {
-    let count = 0;
+    let reviewCount = 0;
+    let ratingCount = 0;
     let revenue = 0;
     for (const r of reviews) {
-      if (inWindow(Date.parse(r.created_at), startMs, endMs)) count += 1;
+      if (inWindow(Date.parse(r.created_at), startMs, endMs)) reviewCount += 1;
     }
     for (const rp of ratings) {
       if (inWindow(Date.parse(rp.created_at), startMs, endMs)) {
-        count += 1;
+        ratingCount += 1;
         revenue += rp.amount;
       }
     }
-    return { count, revenue };
+    return { count: reviewCount + ratingCount, reviewCount, ratingCount, revenue };
   }
   const curTot = salonTotals(curStartMs, curEndMs);
   const prevTot = salonTotals(prevStartMs, prevEndMs);
 
-  // ティア内訳（当期・店舗全体）。
+  /**
+   * ティア内訳（当期・店舗全体）。件数と**売上**（§18 C）。
+   *
+   * ★売上は `rating_purchases.amount` の実値を足す（件数×単価にしない）★
+   *   価格は改定される（Wonderful ¥500→¥1,000・2026-06-18・CLAUDE.md §6）。
+   *   現単価を掛けると**改定前の行を含む期間で過大になる**。台帳の実額が正。
+   *   実値合計なので、内訳の総和は上部の店舗合計¥（salonTotals の revenue）と必ず一致する。
+   */
   const breakdown = emptyTiers();
+  const breakdownRevenue = emptyTiers();
   for (const rp of ratings) {
     if (!inWindow(Date.parse(rp.created_at), curStartMs, curEndMs)) continue;
     const label = SLUG_TO_LABEL[rp.tier];
-    if (label) breakdown[label] += 1;
+    if (label) {
+      breakdown[label] += 1;
+      breakdownRevenue[label] += rp.amount;
+    }
   }
-  const tierBreakdown = TIER_ORDER.map((label) => ({ label, count: breakdown[label] }));
+  const tierBreakdown = TIER_ORDER.map((label) => ({
+    label,
+    count: breakdown[label],
+    revenue: breakdownRevenue[label],
+  }));
 
   // 最近の評価（当期・最新5件・顧客名は含めない＝原則7）。
   const recent: RecentEval[] = ratings
@@ -350,6 +416,10 @@ export async function getDashboardData(
     salonRevenuePrev: prevTot.revenue,
     totalCountCur: curTot.count,
     totalCountPrev: prevTot.count,
+    reviewCountCur: curTot.reviewCount,
+    ratingCountCur: curTot.ratingCount,
+    curRangeLabel: jstRangeLabel(curStartMs, curEndMs, nowMs),
+    prevRangeLabel: jstRangeLabel(prevStartMs, prevEndMs, nowMs),
     tierBreakdown,
     recent,
     vipCustomers,
