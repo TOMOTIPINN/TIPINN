@@ -156,9 +156,15 @@ export default function DashboardClient({
               <div className="metric-card">
                 <p className="metric-label">評価件数（対象期間）</p>
                 <p className="metric-value">{evalCount}件</p>
+                {/* 内訳（§18 B）。「評価件数」は感想＋評価スタンプの合算で、
+                    1つの感想にスタンプが付くと 2 件になる。引き算させずここに出す。 */}
                 <p className="metric-delta">
-                  対象期間 {label}・前期間比{" "}
+                  感想 {data.reviewCountCur} ・ 評価スタンプ {data.ratingCountCur}
+                </p>
+                <p className="metric-delta">
+                  対象期間 {label}（{data.curRangeLabel}）・前期間比{" "}
                   <DeltaPct prev={evalCountPrev} cur={evalCount} />
+                  （前期間 {data.prevRangeLabel}）
                 </p>
               </div>
               <div className="metric-card">
@@ -172,8 +178,9 @@ export default function DashboardClient({
                 <p className="metric-label">評価スタンプ売上（店舗合計）</p>
                 <p className="metric-value font-elegant">{yen(salonRev)}</p>
                 <p className="metric-delta">
-                  対象期間 {label}・前期間比{" "}
+                  対象期間 {label}（{data.curRangeLabel}）・前期間比{" "}
                   <DeltaPct prev={salonRevPrev} cur={salonRev} />
+                  （前期間 {data.prevRangeLabel}）
                 </p>
               </div>
             </div>
@@ -211,18 +218,35 @@ export default function DashboardClient({
               </div>
             </Card>
 
-            {/* 4. ティア別の内訳（当期・店舗全体） */}
+            {/* 4. ティア別の内訳（当期・店舗全体）。件数が主・¥は従（原則・金額を主役にしない） */}
             <Card>
               <div className="stack-md">
                 <h2 className="headline-sm">ティア別の内訳</h2>
                 <div className="pill-row">
                   {data.tierBreakdown.map((t) => (
-                    <span key={t.label} className="stat-pill">
+                    <span
+                      key={t.label}
+                      className="stat-pill"
+                      title={`${t.label}：${t.count}件・${yen(t.revenue)}`}
+                    >
                       <span className="stat-pill-label">{t.label}</span>
                       <span className="stat-pill-count">{t.count}</span>
                     </span>
                   ))}
                 </div>
+                {/* ティア別の売上（§18 C）。rating_purchases.amount の実値合計なので
+                    総和は上部の店舗合計¥と必ず一致する。件数の下に小さく置く。 */}
+                <p className="note-fine">
+                  {data.tierBreakdown.map((t, i) => (
+                    <span key={t.label}>
+                      {i > 0 && " ・ "}
+                      {t.label} {yen(t.revenue)}
+                    </span>
+                  ))}
+                </p>
+                <p className="note-fine">
+                  ※金額は店舗合計です。スタッフ個人には割り付けません（原則5）。
+                </p>
               </div>
             </Card>
 
