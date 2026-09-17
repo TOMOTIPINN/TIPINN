@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
@@ -11,8 +12,14 @@ import { resolveSalonRole } from "@/lib/display-role";
 /**
  * 11 店長 Inbox（画面マップ11・サロンUI世界）。ルート: /manager/inbox
  *
- * 同サロンの感想を新着順に一覧（最新50件）。各行には **お客様が選んだ公開範囲
+ * 同サロンの感想を新着順に一覧。各行には **お客様が選んだ公開範囲
  * （reviews.share_scope）** を表示する。**店長はこれを変更できない**。
+ *
+ * ★§17（2026-09-17）で公開範囲の絞り込みを足した★
+ *   上部の件数ピルが [全部 / 店長のみ / お店のスタッフに] のフィルタになる。
+ *   状態は URL（`?scope=`）に持つ＝リロード・戻るでそのまま復元でき、リンクで共有できる。
+ *   **絞り込みはサーバー側の `eq` で行う**（件数と行が同じ条件から出る）。
+ *   → docs/40_decisions.md §17
  *
  * ★§16（2026-09-17）で店長のキュレーションを廃止した★
  *   以前は各行に [全員に共有 / 店長控え] のトグルがあり reviews.visibility を更新していたが、
@@ -57,7 +64,34 @@ const jstStamp = new Intl.DateTimeFormat("ja-JP", {
   minute: "2-digit",
 });
 
-export default async function ManagerInboxPage() {
+/**
+ * 上部のピル＝公開範囲フィルタ（§17）。'all' が既定。
+ *
+ * 'all' 以外の文言は `@/lib/review` の SHARE_SCOPES をそのまま使う
+ * （お客様が感想フォームで見た文字列と同一にする・§16）。ここで言い換えない。
+ */
+const INBOX_SCOPES = [
+  { value: "all", label: "全部" },
+  ...SHARE_SCOPES.map((s) => ({ value: s.value as string, label: s.label })),
+] as const;
+
+type InboxScope = (typeof INBOX_SCOPES)[number]["value"];
+
+/** 不正値・未指定は既定の 'all' に落とす（エラー画面は出さない）。 */
+function parseScope(raw: string | undefined): InboxScope {
+  return INBOX_SCOPES.some((s) => s.value === raw)
+    ? (raw as InboxScope)
+    : "all";
+}
+
+export default async function ManagerInboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ scope?: string }>;
+}) {
+  const { scope: rawScope } = await searchParams;
+  const scope = parseScope(rawScope);
+
   const session = await getSession();
   if (!session) {
     redirect(
@@ -100,17 +134,28 @@ export default async function ManagerInboxPage() {
     );
   }
 
-  // 一覧は新着50件（ページングは持たない・§16 で範囲外とした）。
+  // 一覧は新着50件（§17 のステップ2で「もっと見る」を足す）。
   // share_scope は 0001 からある中核列なので、フォールバックの再取得はしない
   // （/staff も @/lib/review-server も同様にそのまま select している）。
-  const res = await supabaseAdmin
+  //
+  // ★並びは created_at だけでなく id まで指定する★
+  //   created_at は一意ではない（同一秒の挿入がありうる）。一意キーまで
+  //   order に含めないと、ページを跨いだときに境界の行が重複/欠落しうる
+  //   （src/lib/fetch-all-rows.ts:20-21 と同じ規約）。
+  const rowsQuery = supabaseAdmin
     .from("reviews")
     .select(
       "id, body, rating, created_at, share_scope, staff(name), customers(display_name)",
     )
     .eq("salon_id", salonId)
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .limit(50);
+
+  // 'all' は絞り込まない（= share_scope が null / either の行もここに出る・§16）。
+  const res = await (scope === "all"
+    ? rowsQuery
+    : rowsQuery.eq("share_scope", scope));
 
   const rawRows = (res.data ?? []) as unknown as Row[];
 
@@ -125,28 +170,34 @@ export default async function ManagerInboxPage() {
   }));
 
   /**
-   * 上部の件数は **サロン全体** を数える（一覧の50件ではない・§16 決定3）。
-   *   一覧は limit(50) なので、そこを母集団にすると 53 件あるサロンでも「50」と出続け、
+   * 上部の件数は **サロン全体** を数える（一覧に出ている行数ではない・§16 決定3）。
+   *   一覧は limit があるので、そこを母集団にすると 53 件あるサロンでも「50」と出続け、
    *   SQL と永久に一致しない（この食い違いが §16 の発端）。全体を数えれば
    *   `select share_scope, count(*) … group by 1` とそのまま突き合わせられる。
    *   本文は引かないので head:true の件数のみ（/staff の集計と同じパターン）。
    *
-   * **既知の2値を明示的に数える**（`neq` で二分しない）。合計が全件に届かなければ
-   * 未知の share_scope（`either` 等）が残っているサインになる → HANDOFF 食い違い#1。
+   * **3つを独立に数える**（`neq` で二分しない・'all' を引き算で出さない）。
+   *   「全部」が他の2つの合計より多ければ、**未知の share_scope（`either` / null）が
+   *   実データにある**というサインになる → HANDOFF 食い違い#1。
    */
-  const countByScope = (scope: string) =>
-    supabaseAdmin
+  const countScoped = (value: string | null) => {
+    const q = supabaseAdmin
       .from("reviews")
       .select("id", { count: "exact", head: true })
-      .eq("salon_id", salonId)
-      .eq("share_scope", scope);
+      .eq("salon_id", salonId);
+    return value === null ? q : q.eq("share_scope", value);
+  };
 
-  const [everyoneRes, managerOnlyRes] = await Promise.all([
-    countByScope("everyone"),
-    countByScope("manager_only"),
+  const [allRes, managerOnlyRes, everyoneRes] = await Promise.all([
+    countScoped(null),
+    countScoped("manager_only"),
+    countScoped("everyone"),
   ]);
-  const everyoneCount = everyoneRes.count ?? 0;
-  const managerOnlyCount = managerOnlyRes.count ?? 0;
+  const counts: Record<string, number> = {
+    all: allRes.count ?? 0,
+    manager_only: managerOnlyRes.count ?? 0,
+    everyone: everyoneRes.count ?? 0,
+  };
 
   const displayRole = await resolveSalonRole(ctx);
 
@@ -159,20 +210,33 @@ export default async function ManagerInboxPage() {
           <h1 className="headline">{salon.name} ・ 感想の一覧</h1>
         </header>
 
-        <div className="inbox-stat-row">
-          {SHARE_SCOPES.map((s) => (
-            <span className="inbox-stat" key={s.value}>
-              <span className="inbox-stat-label">{s.label}</span>
-              <span className="inbox-stat-value">
-                {s.value === "manager_only" ? managerOnlyCount : everyoneCount}
-              </span>
-            </span>
-          ))}
-        </div>
+        {/* 公開範囲フィルタ（§17）。クライアント JS を足さず Link 遷移で切り替える。
+            アクティブはミント（30_design.md §2 が「アクティブタブ」をミントの許可用途に挙げている）。
+            バッジをグレーに統一した §16 と矛盾しない＝あちらは状態表示・こちらは選択中のタブ。 */}
+        <nav className="inbox-stat-row" aria-label="公開範囲で絞り込む">
+          {INBOX_SCOPES.map((s) => {
+            const active = s.value === scope;
+            return (
+              <Link
+                key={s.value}
+                href={s.value === "all" ? "/manager/inbox" : `/manager/inbox?scope=${s.value}`}
+                className={`inbox-stat${active ? " is-active" : ""}`}
+                aria-current={active ? "page" : undefined}
+              >
+                <span className="inbox-stat-label">{s.label}</span>
+                <span className="inbox-stat-value">{counts[s.value] ?? 0}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
         <Card>
           {rows.length === 0 ? (
-            <p className="muted center-text">まだ感想は届いていません。</p>
+            <p className="muted center-text">
+              {scope === "all"
+                ? "まだ感想は届いていません。"
+                : "この公開範囲の感想はまだありません。"}
+            </p>
           ) : (
             <InboxList rows={rows} />
           )}
