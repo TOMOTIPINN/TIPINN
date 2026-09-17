@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
-import { REVIEW_RATINGS, SHARE_SCOPES } from "@/lib/review";
+import { REVIEW_RATINGS, SHARE_SCOPES, type ShareScope } from "@/lib/review";
 import InboxList, { type InboxRow } from "./InboxList";
 import SalonNav from "@/components/SalonNav";
 import { resolveSalonRole } from "@/lib/display-role";
@@ -70,12 +70,42 @@ const jstStamp = new Intl.DateTimeFormat("ja-JP", {
  * 'all' 以外の文言は `@/lib/review` の SHARE_SCOPES をそのまま使う
  * （お客様が感想フォームで見た文字列と同一にする・§16）。ここで言い換えない。
  */
-const INBOX_SCOPES = [
-  { value: "all", label: "全部" },
-  ...SHARE_SCOPES.map((s) => ({ value: s.value as string, label: s.label })),
-] as const;
+type InboxScope = "all" | ShareScope;
 
-type InboxScope = (typeof INBOX_SCOPES)[number]["value"];
+const INBOX_SCOPES: { value: InboxScope; label: string }[] = [
+  { value: "all", label: "全部" },
+  ...SHARE_SCOPES.map((s) => ({ value: s.value, label: s.label })),
+];
+
+/** 1回に読み込む件数。初回もこの数で、「もっと見る」1回につきこの数だけ増える。 */
+const INBOX_PAGE_SIZE = 50;
+
+/**
+ * take の上限。PostgREST は max-rows（既定 1000）を超えると
+ * **エラーにならず静かに切り捨てる**ため、その手前で止める
+ * （src/lib/fetch-all-rows.ts:3-5）。実運用で到達する想定は無い。
+ */
+const INBOX_MAX_TAKE = 1000;
+
+/**
+ * `?take=` を読む。不正値・未指定は 1ページ目。
+ * ページサイズの倍数に切り上げ、上限で丸める（URL を直接いじられても壊れない）。
+ */
+function parseTake(raw: string | undefined): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= INBOX_PAGE_SIZE) return INBOX_PAGE_SIZE;
+  const rounded = Math.ceil(n / INBOX_PAGE_SIZE) * INBOX_PAGE_SIZE;
+  return Math.min(rounded, INBOX_MAX_TAKE);
+}
+
+/** フィルタと読み込み深さを URL に載せる。scope=all・1ページ目はクエリ無しの素の URL にする。 */
+function inboxHref(scope: InboxScope, take: number): string {
+  const params = new URLSearchParams();
+  if (scope !== "all") params.set("scope", scope);
+  if (take !== INBOX_PAGE_SIZE) params.set("take", String(take));
+  const q = params.toString();
+  return q ? `/manager/inbox?${q}` : "/manager/inbox";
+}
 
 /** 不正値・未指定は既定の 'all' に落とす（エラー画面は出さない）。 */
 function parseScope(raw: string | undefined): InboxScope {
@@ -87,10 +117,11 @@ function parseScope(raw: string | undefined): InboxScope {
 export default async function ManagerInboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scope?: string }>;
+  searchParams: Promise<{ scope?: string; take?: string }>;
 }) {
-  const { scope: rawScope } = await searchParams;
+  const { scope: rawScope, take: rawTake } = await searchParams;
   const scope = parseScope(rawScope);
+  const take = parseTake(rawTake);
 
   const session = await getSession();
   if (!session) {
@@ -134,7 +165,7 @@ export default async function ManagerInboxPage({
     );
   }
 
-  // 一覧は新着50件（§17 のステップ2で「もっと見る」を足す）。
+  // 一覧は新着 take 件（既定 50・「もっと見る」で +50 ずつ・§17）。
   // share_scope は 0001 からある中核列なので、フォールバックの再取得はしない
   // （/staff も @/lib/review-server も同様にそのまま select している）。
   //
@@ -150,7 +181,7 @@ export default async function ManagerInboxPage({
     .eq("salon_id", salonId)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
-    .limit(50);
+    .limit(take);
 
   // 'all' は絞り込まない（= share_scope が null / either の行もここに出る・§16）。
   const res = await (scope === "all"
@@ -199,6 +230,16 @@ export default async function ManagerInboxPage({
     everyone: everyoneRes.count ?? 0,
   };
 
+  /**
+   * まだ続きがあるか。**いま選んでいる scope の全件数**と、実際に描いた行数を比べる。
+   *   件数は同じ salon_id・同じ share_scope 条件で数えた exact count なので、
+   *   `rows.length < 全件数` はそのまま「続きがある」を意味する。
+   *   take+1 件を引いて判定する必要はない（件数をもう持っているため）。
+   * take の上限に達したときも打ち切る（PostgREST の静かな切り捨てを避ける）。
+   */
+  const scopedCount = counts[scope] ?? 0;
+  const hasMore = rows.length < scopedCount && take < INBOX_MAX_TAKE;
+
   const displayRole = await resolveSalonRole(ctx);
 
   return (
@@ -219,7 +260,7 @@ export default async function ManagerInboxPage({
             return (
               <Link
                 key={s.value}
-                href={s.value === "all" ? "/manager/inbox" : `/manager/inbox?scope=${s.value}`}
+                href={inboxHref(s.value, INBOX_PAGE_SIZE)}
                 className={`inbox-stat${active ? " is-active" : ""}`}
                 aria-current={active ? "page" : undefined}
               >
@@ -242,8 +283,22 @@ export default async function ManagerInboxPage({
           )}
         </Card>
 
+        {rows.length > 0 &&
+          (hasMore ? (
+            <Link
+              href={inboxHref(scope, take + INBOX_PAGE_SIZE)}
+              className="btn btn-quiet btn-block"
+            >
+              もっと見る
+            </Link>
+          ) : (
+            <p className="note-fine center-text">
+              すべて表示しました（{rows.length}件）
+            </p>
+          ))}
+
         <p className="note-fine">
-          件数はこのサロンの全件です。一覧は新着50件まで表示します。
+          上の件数はこのサロンの全件です。{INBOX_PAGE_SIZE}件ずつ読み込みます。
           公開範囲はお客様が選んだもので、店長は変更できません。金額はこの画面では扱いません（原則5）。
         </p>
       </div>
