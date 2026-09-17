@@ -1893,6 +1893,23 @@ textarea.field {
   white-space: nowrap;
 }
 
+/* 静かなバッジ（褪せグレー）。見た目は .tag-care と同じだが**意味を分ける**:
+   .tag-care は「気づきの声」（低評価）専用。.tag-quiet は低評価とは無関係の
+   中立なラベル（例: 店長Inbox の公開範囲「店長のみ」・docs/40_decisions.md §16）。
+   同じ画面に低評価の行も並ぶため、クラス名を共有すると意味が混線する。
+   赤/amberは使わない（docs/30_design.md §2・§6）。 */
+.tag-quiet {
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  color: var(--g25-soft);
+  padding: 0.18rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full);
+  background: var(--card);
+  white-space: nowrap;
+}
+
 /* 感想本文のカード（最小フィル・淡いミント地・角丸）。
    タグ行（.staff-tag-row）との距離が近すぎないよう、上に余白を足して分離する。 */
 .voice-card {
