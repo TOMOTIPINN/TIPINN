@@ -44,7 +44,10 @@ const SCOPE_LABEL = new Map<string, string>(
  *   二分法にすると未知の値が黙ってどちらかに寄り、画面が食い違いを隠してしまう。
  *   出さないことで異常が見えるようにする。
  *
- * 色: everyone=ミント / manager_only=褪せグレー（.tag-quiet）。**赤は使わない**（30_design §2）。
+ * 色は **両方とも同じ褪せグレー（.tag-quiet）**。
+ *   お客様の選択に優劣をつけないため、`everyone` を目立たせない。
+ *   ミントは「ブランド＋好調/上昇」の差し色（docs/30_design.md §2）で、
+ *   公開範囲はどちらが good でもないので使わない。**赤も使わない**（同§2）。
  *
  * 位置は **常に名前の下の段（.inbox-scope）**。上段（.inbox-meta）に混ぜると
  * 名前の長さで横に並んだり下に落ちたりして、行ごとに位置が変わる。
@@ -54,9 +57,7 @@ function ScopeBadge({ scope }: { scope: string | null }) {
   if (!label) return null;
   return (
     <div className="inbox-scope">
-      <span className={scope === "manager_only" ? "tag-quiet" : "tag-mint"}>
-        {label}
-      </span>
+      <span className="tag-quiet">{label}</span>
     </div>
   );
 }
