@@ -988,7 +988,7 @@ LINE はそのまま残し、`/mypage` に補助の導線を置く。
 | 流入元の列を追加（`reviews` / `rating_purchases`） | 効果測定が目的化する。migration コスト |
 | 「評価スタンプを送る」を感想から切り離す（スタッフを選んで直接購入） | `00_philosophy.md` と §13 決定3「**言葉のない送金を防ぐ**」に反する |
 
-### 実装メモ（2026-09-16 調査より・**未実装**）
+### 実装メモ（2026-09-16 調査より・**2026-09-17 実装済み**）
 
 - **新規1**（例: `src/lib/` に `getMypageActionsMap`）＋ `mypage/page.tsx` の**第2波**
   （`:160-172`）への追加＋スタイル。**DB 変更なし。**
@@ -1006,13 +1006,90 @@ LINE はそのまま残し、`/mypage` に補助の導線を置く。
   （`loadReviewForPurchase` は review_id 前提）。新設する場合も条件をクエリに書き写すだけにせず、
   **最後に `isPurchasableReview` を通す**こと（`src/lib/review-purchase.ts:4-10` の単一ソース原則）。
 
+### 実装（2026-09-17）
+
+**判定は `getMypageActionsMap`（`src/lib/review-server.ts`）に閉じた。**
+
+- **置き場所を新規ファイルにしなかった理由**: JST ヘルパー（`jstToday` /
+  `jstDateMinusDays` / `jstDayStartISO`）は `review-server.ts` の非 export 関数で、
+  別ファイルに置くと **export を増やすか書き写すか**になり、受付期間の境界が2実装に分かれる。
+- **クエリは4本で固定**（サロン数によらない・`getSalonRewardsMap` と同じ `.in()` + `Map` 返し）:
+  `visits` / `notification_outbox` / `reviews` / `rating_purchases`。
+  **購入は必ず感想より後に起きる**（購入 `created_at` >= 対象の感想 `created_at` >= 窓の開始）ので、
+  購入も感想と同じ窓で絞れば取りこぼさない＝**4本を並列にできる**。
+- **`body` も `rating` も取らない**（`loadReviewForPurchase` と同じ方針）。
+  取ってこなければ、この場で本文を出したり閾値を書き足したりする余地も生まれない。
+- **購入可否は `isPurchasableReview` を最後に必ず通す。** クエリに条件を書き写すと、
+  条件がクエリと純粋関数の2か所に分かれる（`review-purchase.ts:4-10` の単一ソース原則）。
+- **`canReview` の2段判定は `hasReviewedForLatestVisit` と同じ手順**
+  （受付期間内の最終来店日 → その日の JST 0 時以降に感想があるか）＝ RPC 0046 の
+  `already_submitted` と揃う。
+
+**`notify_at` 前と outbox 無しの扱い（重要）**
+
+- **`outbox` は「通知の台帳」であって受付可否の正ではない。**
+  行が無い来店（同日2回目・来店軸 OFF・`0014` 適用前の古い来店）はふつうにある。
+  その場合は **`reviewDue=false`（目立たせない）に倒すだけ**で、
+  **`canReview` は「受付期間内の来店」と「未送信」だけで決める。**
+- **`notify_at` より前でもボタンは出す**（`.btn-quiet` で控えめ）。
+  決定2 は「目立たせる」条件であって「出す」条件ではない。来店直後に書きたい人の入口を塞がない。
+- **`status`（sent / skipped / failed）は見ない。** LINE が届かなかった人ほどこの導線が要る。
+
+**遷移先**（§15 未対応2 をここで確定）
+
+- 「感想を送る」→ **`/review?salon=<id>`**（LINE リマインドと同じ・`line-push/route.ts:203`）。
+  **スタッフ指定は入らない。**
+- 「評価スタンプを送る」→ **`ratingHref()`（`src/lib/review.ts`）**が組み立てる
+  `/rating?salon=&staff=&reviewed=1&review=`。購入画面は **salon / staff / review の3点**を要求する
+  （`isPurchasableReview` が staff 宛てを見るため）。`reviewed=1` は決済キャンセルで戻ったときに
+  「感想だけ送る」を再表示しないためのフラグ。
+  ※ `/review/complete` も同じ形の URL を組み立てているが、**あちらは購入導線の一部**なので
+  §15 では触っていない（寄せ替えるなら別途）。
+
+**目立たせ方**
+
+- **ミントを使わない。** `30_design.md` §2 のミントの用途は「ブランド＋好調/上昇」で、
+  **「やることがある」という促しは好調でも上昇でもない**（§16 でバッジからミントを外したのと同じ理由）。
+  **赤も使わない**（同 §2）。
+- 色を足さず**既存ボタンの強弱だけ**で表す:
+  通知時刻を過ぎた「感想を送る」＝ `.btn-outline` / それ以前＝ `.btn-quiet` /
+  「評価スタンプを送る」＝ 常に `.btn-quiet`（**金額を主役にしない**・`00_philosophy.md` §4.6）。
+- **CSS は追加していない**（`.btn-outline` / `.btn-quiet` / `.btn-block` は既存）。
+
+**命名の注意**: `/mypage` の既存 `reviews` / `reviewRows` / `reviewMap` は
+**`earned_stamps`（感想スタンプの累計）**で、`reviews` テーブルではない。
+今回足したものは `mypageActionsMap` / `actions` と別名にした。
+
+### 実装 commit
+
+`84c101a`（`ratingHref`）/ `03cd43a`（`getMypageActionsMap`）/ `b39d9f1`（`/mypage` の導線）
+
+`npm run lint` の指摘は変更前と**同一**（9 errors / 3 warnings、いずれも既存分）。
+`npm run build` は成功。**DB 変更なし**（§15 決定5・流入元を記録しない）。
+
+### 触っていないもの
+
+`src/app/staff/**`・`src/lib/review-purchase.ts`（**import して使うだけ**）・
+`src/lib/review-visibility.ts`・`src/app/api/checkout/**`・`src/app/api/stripe/**`（決済経路）・
+**`src/app/api/cron/line-push/**`（LINE リマインドの判定は範囲外）**・
+`src/app/review/complete/page.tsx`・`src/app/manager/inbox/**`・`src/app/dashboard/**`。
+
+### 範囲外（今回やらない）
+
+- **LINE リマインドの判定の変更**（`hasReviewAndPurchase` も送信条件も触らない）
+- **流入元の記録**（決定5・migration を足さない）
+- 購入そのものへの期限追加（決定4・**期間外でも既存の導線から買える状態は変えない**）
+
 ### 未対応・確認事項
 
-1. **実装は未着手。着手は §14 の本番実機確認が終わってから。**
-2. 「感想を送る」ボタンの遷移先は `/review?salon=`（LINE リマインドと同じ・`route.ts:203`）で
-   よいか未確定。**スタッフ指定は入らない。**
-3. 受付期間の二重管理は未解消（`src/lib/review.ts:17` と RPC 0046 の `v_window_days`）。
+1. **本番実機確認が未実施**（来店→通知時刻前後→感想送信→購入→3日経過の順に見る）。
+2. 受付期間の二重管理は未解消（`src/lib/review.ts:17` と RPC 0046 の `v_window_days`）。
    §14 から持ち越し。
+3. `notify_at` 前でもボタンを出す挙動を採った。**LINE と同時に出したい**のであれば
+   「出さない」に倒せる（`reviewDue` で分岐している場所を1か所変えるだけ）。実運用の声を見て判断する。
+4. 「評価スタンプを送る」は**購入可能な最新1件**にだけリンクする。受付期間内に
+   購入可能な感想が複数ある（＝別々のスタッフ宛てに送った）場合、**古い方には導線が出ない**。
+   既存の `/review/complete` からは引き続き買える（購入そのものに期限は無い・決定4）。
 
 ---
 
