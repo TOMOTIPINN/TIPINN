@@ -1008,6 +1008,10 @@ textarea.field {
   grid-template-columns: repeat(3, 1fr);
   gap: var(--space-md);
 }
+/* 先行指標が4枚のときの並び（§18・日次タブ）。3列固定だと 3+1 で最後の1枚が孤立する。
+   〜520px: 1列（下の既存メディアクエリが後勝ちで効く）/ 〜900px: 2×2 / 900px〜: 4列。
+   HR サマリー（3枚）は素の .metric-grid のままなので影響しない。 */
+.metric-grid-4 { grid-template-columns: repeat(2, 1fr); }
 .metric-card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -1042,6 +1046,9 @@ textarea.field {
 }
 @media (max-width: 520px) {
   .metric-grid { grid-template-columns: 1fr; }
+}
+@media (min-width: 900px) {
+  .metric-grid-4 { grid-template-columns: repeat(4, 1fr); }
 }
 
 /* Your appreciation（画面12）：期間×種類のマトリクス（期間=行 / 種類=列）。

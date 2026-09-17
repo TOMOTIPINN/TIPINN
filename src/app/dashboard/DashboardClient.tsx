@@ -92,8 +92,6 @@ export default function DashboardClient({
   const [view, setView] = useState<"daily" | "hr">("daily");
 
   const { label } = data;
-  const evalCount = data.totalCountCur;
-  const evalCountPrev = data.totalCountPrev;
   const salonRev = data.salonRevenueCur;
   const salonRevPrev = data.salonRevenuePrev;
 
@@ -149,27 +147,34 @@ export default function DashboardClient({
           />
         ) : (
           <>
-            {/* 2. 先行指標。評価件数・店舗合計¥は期間連動。VIPは累計（期間非連動）。 */}
-            <div className="metric-grid">
+            {/* 2. 先行指標（4枚）。感想・評価スタンプ・店舗合計¥は期間連動。VIPは累計（期間非連動）。
+                ★感想とスタンプを合算しない（§18 B・2026-09-17 修正）★
+                  合算の前期間比では「どちらが増えたか」が読めない。前期間比も
+                  それぞれの数字どうしで比べる（前期間の定義は変えない＝直前の同じ長さの窓）。
+                並びは**期間連動の3枚を先に、期間非連動の VIP を最後**に置く。 */}
+            <div className="metric-grid metric-grid-4">
               <div className="metric-card">
-                <p className="metric-label">評価件数（対象期間）</p>
-                <p className="metric-value">{evalCount}件</p>
-                {/* 内訳（§18 B）。「評価件数」は感想＋評価スタンプの合算で、
-                    1つの感想にスタンプが付くと 2 件になる。引き算させずここに出す。 */}
-                <p className="metric-delta">
-                  感想 {data.reviewCountCur} ・ 評価スタンプ {data.ratingCountCur}
-                </p>
+                <p className="metric-label">感想（対象期間）</p>
+                <p className="metric-value">{data.reviewCountCur}件</p>
                 <p className="metric-delta">
                   対象期間 {label}（{data.curRangeLabel}）・前期間比{" "}
-                  <DeltaPct prev={evalCountPrev} cur={evalCount} />
+                  <DeltaPct
+                    prev={data.reviewCountPrev}
+                    cur={data.reviewCountCur}
+                  />
                   （前期間 {data.prevRangeLabel}）
                 </p>
               </div>
               <div className="metric-card">
-                <p className="metric-label">VIP顧客数（累計）</p>
-                <p className="metric-value">{data.vipTotal}人</p>
+                <p className="metric-label">評価スタンプ（対象期間）</p>
+                <p className="metric-value">{data.ratingCountCur}件</p>
                 <p className="metric-delta">
-                  現在VIPのお客様の総数・期間フィルタとは独立
+                  対象期間 {label}（{data.curRangeLabel}）・前期間比{" "}
+                  <DeltaPct
+                    prev={data.ratingCountPrev}
+                    cur={data.ratingCountCur}
+                  />
+                  （前期間 {data.prevRangeLabel}）
                 </p>
               </div>
               <div className="metric-card">
@@ -179,6 +184,13 @@ export default function DashboardClient({
                   対象期間 {label}（{data.curRangeLabel}）・前期間比{" "}
                   <DeltaPct prev={salonRevPrev} cur={salonRev} />
                   （前期間 {data.prevRangeLabel}）
+                </p>
+              </div>
+              <div className="metric-card">
+                <p className="metric-label">VIP顧客数（累計）</p>
+                <p className="metric-value">{data.vipTotal}人</p>
+                <p className="metric-delta">
+                  現在VIPのお客様の総数・期間フィルタとは独立
                 </p>
               </div>
             </div>

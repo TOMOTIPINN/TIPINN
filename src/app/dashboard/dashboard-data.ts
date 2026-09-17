@@ -61,12 +61,17 @@ export type DashboardData = {
   prev: Record<string, StaffAgg>;
   salonRevenueCur: number;
   salonRevenuePrev: number;
-  totalCountCur: number;
-  totalCountPrev: number;
-  /** 店舗の感想件数（当期）。「評価件数」の内訳として出す（§18 B・引き算させない）。 */
+  /**
+   * 店舗の感想件数・評価スタンプ件数（当期と前期間）。
+   *
+   * ★合算（旧「評価件数」）は持たない（§18 B・2026-09-17 修正）★
+   *   合算の前期間比では**感想とスタンプのどちらが増えたか読めない**。
+   *   カードを2枚に分け、前期間比もそれぞれの数字どうしで比べる。
+   */
   reviewCountCur: number;
-  /** 店舗の評価スタンプ件数（当期）。同上。reviewCountCur + ratingCountCur = totalCountCur。 */
+  reviewCountPrev: number;
   ratingCountCur: number;
+  ratingCountPrev: number;
   /** 当期・前期間の日付範囲（JST・M/D 表記）。**定義は変えず表示だけ足す**（§18 5節）。 */
   curRangeLabel: string;
   prevRangeLabel: string;
@@ -274,10 +279,8 @@ export async function getDashboardData(
   /**
    * 店舗合計（全行・null staff 含む＝総件数を正確に）。¥は amount 合計。
    *
-   * 感想とスタンプを**分けて返す**（§18 B）。
-   *   「評価件数」は両者の合算で、1つの感想にスタンプが付くと 2 件になる。
-   *   内訳を画面に出すために、合計だけでなく内訳もここで確定させる
-   *   （表示側で引き算しない＝数字の出どころを1か所にする）。
+   * 感想とスタンプを**分けて返す**（§18 B）。合算は返さない
+   *   ＝画面が「感想＋スタンプ」を1つの数にまとめない（2026-09-17 修正）。
    */
   function salonTotals(startMs: number, endMs: number) {
     let reviewCount = 0;
@@ -292,7 +295,7 @@ export async function getDashboardData(
         revenue += rp.amount;
       }
     }
-    return { count: reviewCount + ratingCount, reviewCount, ratingCount, revenue };
+    return { reviewCount, ratingCount, revenue };
   }
   const curTot = salonTotals(curStartMs, curEndMs);
   const prevTot = salonTotals(prevStartMs, prevEndMs);
@@ -414,10 +417,10 @@ export async function getDashboardData(
     prev,
     salonRevenueCur: curTot.revenue,
     salonRevenuePrev: prevTot.revenue,
-    totalCountCur: curTot.count,
-    totalCountPrev: prevTot.count,
     reviewCountCur: curTot.reviewCount,
+    reviewCountPrev: prevTot.reviewCount,
     ratingCountCur: curTot.ratingCount,
+    ratingCountPrev: prevTot.ratingCount,
     curRangeLabel: jstRangeLabel(curStartMs, curEndMs, nowMs),
     prevRangeLabel: jstRangeLabel(prevStartMs, prevEndMs, nowMs),
     tierBreakdown,
