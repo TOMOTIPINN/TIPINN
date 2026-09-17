@@ -1964,7 +1964,10 @@ textarea.field {
 .team-voice-time { margin-left: auto; font-size: 0.8rem; color: var(--g25); white-space: nowrap; }
 .team-voice-body { font-size: 0.9rem; color: var(--ink-soft); line-height: 1.8; }
 
-/* 店長 Inbox の集計ピル（未処理/処理済み）。 */
+/* 店長 Inbox の件数ピル。§17 で **公開範囲フィルタのリンク**になった
+   （全部 / 店長のみ / お店のスタッフに）。件数はサロン全体。
+   アクティブ＝ミントは 30_design.md §2 が許可する用途（アクティブタブ）。
+   バッジをグレーに統一した §16 とは役割が違う（あちらは状態表示・こちらは選択中）。 */
 .inbox-stat-row { display: flex; gap: var(--space-md); flex-wrap: wrap; }
 .inbox-stat {
   display: inline-flex;
@@ -1974,6 +1977,17 @@ textarea.field {
   border: 1px solid var(--line);
   border-radius: var(--radius-full);
   background: var(--card);
+  text-decoration: none;
+  transition: var(--transition);
+}
+a.inbox-stat:hover { border-color: var(--line-strong); }
+.inbox-stat.is-active {
+  background: var(--mint-tint);
+  border-color: var(--mint-line);
+}
+.inbox-stat.is-active .inbox-stat-label,
+.inbox-stat.is-active .inbox-stat-value {
+  color: color-mix(in srgb, var(--mint-deep) 82%, var(--ink));
 }
 .inbox-stat-label { font-size: 0.78rem; letter-spacing: 0.04em; color: var(--g25); }
 .inbox-stat-value { font-family: var(--font-sans); font-weight: 700; font-size: 1rem; color: var(--ink); }
