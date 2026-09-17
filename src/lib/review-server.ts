@@ -10,7 +10,10 @@
  */
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { REVIEW_WINDOW_DAYS } from "@/lib/review";
-import type { PurchasableReviewRow } from "@/lib/review-purchase";
+import {
+  isPurchasableReview,
+  type PurchasableReviewRow,
+} from "@/lib/review-purchase";
 
 /** JST は UTC+9 固定（サマータイム無し）。dashboard-data / staff-stats と同じ前提。 */
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
@@ -113,4 +116,152 @@ export async function loadReviewForPurchase(
     return null;
   }
   return (data as PurchasableReviewRow | null) ?? null;
+}
+
+/* ---- /mypage の補助導線（§15） ---- */
+
+/** 1サロンぶんの「いま出す導線」。どちらも出ないこともある。 */
+export type MypageActions = {
+  /** 「感想を送る」を出すか（受付期間内に来店があり、その来店ぶんが未送信）。 */
+  canReview: boolean;
+  /** 目立たせるか（canReview かつ通知予定時刻を過ぎている）。**出すかどうかとは別**。 */
+  reviewDue: boolean;
+  /** 「評価スタンプを送る」の宛先（購入可能な最新1件）。無ければ null。 */
+  purchase: { reviewId: string; staffId: string } | null;
+};
+
+type ReviewCandidateRow = PurchasableReviewRow & { created_at: string };
+
+/**
+ * `/mypage` のサロンカードに出す補助導線を、**サロンぶん一括で**判定する（§15）。
+ *
+ * `getSalonRewardsMap` / `getConsumableRewardStatesMap` と同じ作法:
+ *   `.in("salon_id", ids)` で引いて `Map` を返す。**クエリ本数はサロン数によらず4本で固定**（N+1 回避）。
+ *
+ * ★判定の正は他所にある★
+ *   ・受付期間 … REVIEW_WINDOW_DAYS（@/lib/review）。日数をここに書き写さない。
+ *   ・購入可否 … isPurchasableReview（@/lib/review-purchase）。**クエリで条件を書き写さず、
+ *                 最後に必ずこの純粋関数を通す**（条件がクエリと関数の2か所に分かれるのを防ぐ）。
+ *   ・通知時刻 … notification_outbox.notify_at。
+ *
+ * ★LINE リマインドの判定（line-push の hasReviewAndPurchase）とは共有しない★
+ *   あちらは「感想**と**購入の**両方**がその来店日にあるとき送らない」で、**別の問いに答える関数**。
+ *   共有するのは REVIEW_WINDOW_DAYS と notify_at だけ（docs/40_decisions.md §15）。
+ *
+ * ★outbox は「通知の台帳」であって受付可否の正ではない★
+ *   行が無い来店（同日2回目・来店軸 OFF・0014 適用前の古い来店）はふつうにある。
+ *   その場合は **reviewDue=false（目立たせない）に倒すだけ**で、canReview は来店と未送信で決める。
+ *   status（sent/skipped/failed）は見ない。LINE が届かなかった人ほどこの導線が要る。
+ *
+ * 本文（body）も rating も取らない（loadReviewForPurchase と同じ方針）。
+ * 取ってこなければ、この場で本文を出したり閾値を書き足したりする余地も生まれない。
+ */
+export async function getMypageActionsMap(
+  customerId: string,
+  salonIds: string[],
+): Promise<Map<string, MypageActions>> {
+  const map = new Map<string, MypageActions>();
+  const ids = Array.from(new Set(salonIds)).filter(Boolean);
+  if (!customerId || ids.length === 0) return map;
+
+  const today = jstToday();
+  const windowStart = jstDateMinusDays(REVIEW_WINDOW_DAYS);
+  const windowStartIso = jstDayStartISO(windowStart);
+  const nowMs = Date.now();
+
+  // 購入は必ず感想より後に起きるので、感想と同じ窓で絞れば取りこぼさない
+  // （購入 created_at >= 対象の感想 created_at >= windowStart）。＝4本を並列にできる。
+  const [visitRes, outboxRes, reviewRes, purchaseRes] = await Promise.all([
+    supabaseAdmin
+      .from("visits")
+      .select("salon_id, visited_on")
+      .eq("customer_id", customerId)
+      .in("salon_id", ids)
+      .gte("visited_on", windowStart)
+      .lte("visited_on", today),
+    supabaseAdmin
+      .from("notification_outbox")
+      .select("salon_id, visited_on, notify_at")
+      .eq("customer_id", customerId)
+      .in("salon_id", ids)
+      .eq("kind", "visit_review_request")
+      .gte("visited_on", windowStart),
+    supabaseAdmin
+      .from("reviews")
+      .select("id, customer_id, salon_id, staff_id, share_scope, created_at")
+      .eq("customer_id", customerId)
+      .in("salon_id", ids)
+      .gte("created_at", windowStartIso)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("rating_purchases")
+      .select("review_id")
+      .eq("customer_id", customerId)
+      .in("salon_id", ids)
+      .gte("created_at", windowStartIso),
+  ]);
+
+  // 受付期間内の「最終来店日」（visited_on は date 型なので文字列比較でよい）。
+  const lastVisitOn = new Map<string, string>();
+  for (const v of (visitRes.data ?? []) as { salon_id: string; visited_on: string }[]) {
+    const prev = lastVisitOn.get(v.salon_id);
+    if (!prev || v.visited_on > prev) lastVisitOn.set(v.salon_id, v.visited_on);
+  }
+
+  // 通知予定時刻は (サロン, 来店日) で引く。
+  const notifyAt = new Map<string, string>();
+  for (const o of (outboxRes.data ?? []) as {
+    salon_id: string;
+    visited_on: string;
+    notify_at: string;
+  }[]) {
+    notifyAt.set(`${o.salon_id}|${o.visited_on}`, o.notify_at);
+  }
+
+  // 感想はサロンごとに新しい順で持つ（上で created_at desc に並べてある）。
+  const reviewsBySalon = new Map<string, ReviewCandidateRow[]>();
+  for (const r of (reviewRes.data ?? []) as unknown as ReviewCandidateRow[]) {
+    const list = reviewsBySalon.get(r.salon_id);
+    if (list) list.push(r);
+    else reviewsBySalon.set(r.salon_id, [r]);
+  }
+
+  const purchasedReviewIds = new Set<string>();
+  for (const p of (purchaseRes.data ?? []) as { review_id: string | null }[]) {
+    if (p.review_id) purchasedReviewIds.add(p.review_id);
+  }
+
+  for (const salonId of ids) {
+    const visitedOn = lastVisitOn.get(salonId);
+    const salonReviews = reviewsBySalon.get(salonId) ?? [];
+
+    // 1) 感想を送れるか＝受付期間内に来店があり、その来店日以降に感想が無い
+    //    （hasReviewedForLatestVisit と同じ2段判定＝RPC 0046 の already_submitted と揃える）。
+    const canReview = visitedOn
+      ? !salonReviews.some(
+          (r) => r.created_at >= jstDayStartISO(visitedOn),
+        )
+      : false;
+
+    // 2) 目立たせるか＝通知予定時刻を過ぎているか。outbox が無ければ目立たせない。
+    const at = visitedOn ? notifyAt.get(`${salonId}|${visitedOn}`) : undefined;
+    const reviewDue = canReview && at !== undefined && Date.parse(at) <= nowMs;
+
+    // 3) 購入可能な最新1件。**条件はクエリに書き写さず isPurchasableReview に通す。**
+    let purchase: MypageActions["purchase"] = null;
+    for (const r of salonReviews) {
+      if (purchasedReviewIds.has(r.id)) continue;
+      const staffId = r.staff_id;
+      // staff_id が null の感想（お店のみんなへ）は購入不可。先に弾いて staffId を絞る。
+      if (!staffId) continue;
+      if (isPurchasableReview(r, { customerId, salonId, staffId })) {
+        purchase = { reviewId: r.id, staffId };
+        break;
+      }
+    }
+
+    if (canReview || purchase) map.set(salonId, { canReview, reviewDue, purchase });
+  }
+
+  return map;
 }
