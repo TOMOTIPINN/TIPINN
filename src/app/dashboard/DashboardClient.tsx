@@ -146,8 +146,6 @@ export default function DashboardClient({
             flows={data.flows}
             monthLabels={data.monthLabels}
             staffRole={data.staffRole}
-            salonRev={salonRev}
-            label={label}
           />
         ) : (
           <>

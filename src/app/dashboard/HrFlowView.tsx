@@ -1,7 +1,7 @@
 "use client";
 
 import { Card } from "@/components/ui";
-import { yen, type FlowStatus, type StaffFlow } from "./eval-data";
+import { type FlowStatus, type StaffFlow } from "./eval-data";
 
 /**
  * HR月次ビュー（echo flow・画面マップ14系）。集計は server（dashboard-data.ts）が行い、
@@ -14,7 +14,13 @@ import { yen, type FlowStatus, type StaffFlow } from "./eval-data";
  *  - おすすめアクションは定型（ルールベース。AI分析ではない）。お客様の声は生のまま表示。
  *
  * 配色（§12）: 好調/上昇＝ミント / 安定＝グレー / 要ケア＝褪せグレー（赤は使わない）。
- * 規制ガード: ¥は「店舗合計」のみ（個人に割り付けない・原則5）。賞与は機械的連動なし（原則6）。
+ * 規制ガード: 賞与は機械的連動なし（原則6）。
+ *
+ * ★§18 D で ¥ をこのタブから外した★
+ *   このタブは「常に直近3ヶ月」と注記しているのに、売上カードだけが上部で選んだ
+ *   集計期間に連動していて、**同じタブの中で期間の意味が2つ混在**していた。
+ *   売上は日次タブに同じカードがあるので情報は失われない。HR を
+ *   「非金銭の指標だけ」に寄せる（docs/00_philosophy.md §4.6 / docs/40_decisions.md §18）。
  */
 
 const STATUS_LABEL: Record<FlowStatus, string> = {
@@ -41,14 +47,10 @@ export default function HrFlowView({
   flows,
   monthLabels,
   staffRole,
-  salonRev,
-  label,
 }: {
   flows: StaffFlow[];
   monthLabels: string[];
   staffRole: Record<string, string>;
-  salonRev: number;
-  label: string;
 }) {
   // サマリー: 承認が届いている人数（要ケアでなく活動あり）／要ケア人数／チーム評価件数（直近月）。
   // 退職者は在籍者の指標に混ぜない（自然な減少で偽の「要ケア」を出さないため・方針①）。
@@ -62,9 +64,11 @@ export default function HrFlowView({
 
   return (
     <div className="stack">
-      {/* HR（月次）は選択中の集計期間に連動しない＝常に直近3ヶ月（トレンド判定の設計・§12）。 */}
+      {/* HR（月次）は選択中の集計期間に連動しない＝常に直近3ヶ月（トレンド判定の設計・§12）。
+          §18 D で ¥ を外したので、このタブの数字は**すべて**直近3ヶ月で揃っている。 */}
       <p className="note-fine">
         ※HR（月次）は上部で選択した集計期間に関わらず、常に直近3ヶ月で表示します。
+        金額は日次タブに表示します。
       </p>
 
       {/* 1. サマリー3枚 */}
@@ -97,18 +101,7 @@ export default function HrFlowView({
         </div>
       )}
 
-      {/* 3. 店舗合計¥（既存値を再利用・個人には割り付けない・原則5。色を付けず中立の明朝） */}
-      <Card>
-        <div className="stack-sm center-text">
-          <p className="metric-label">評価スタンプ売上（店舗合計・{label}）</p>
-          <p className="metric-value font-elegant">{yen(salonRev)}</p>
-          <p className="note-fine">
-            店舗の売上です。スタッフ個人には割り付けません（原則5）。
-          </p>
-        </div>
-      </Card>
-
-      {/* 4. echo flow 一覧（直近3ヶ月の評価件数スパークライン＋ステータス＋ボイス＋定型アクション） */}
+      {/* 3. echo flow 一覧（直近3ヶ月の評価件数スパークライン＋ステータス＋ボイス＋定型アクション） */}
       <Card>
         <div className="stack-md">
           <h2 className="headline-sm">echo flow（月次の評価の流れ）</h2>
