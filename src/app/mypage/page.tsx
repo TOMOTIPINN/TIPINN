@@ -11,7 +11,7 @@ import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import { computeVisitProgress } from "@/lib/visit";
 import { getSalonRewardsMap, getConsumableRewardStatesMap } from "@/lib/rewards";
 import { getMypageActionsMap } from "@/lib/review-server";
-import { ratingHref } from "@/lib/review";
+import { ratingHref, REVIEW_WINDOW_CALENDAR_DAYS } from "@/lib/review";
 import { getCustomerMigrationDeltas } from "@/lib/stamp-adjustments";
 import { getTier } from "@/lib/rating-tiers";
 
@@ -378,19 +378,29 @@ export default async function MyPage() {
                         LINE 側（cron/line-push）は一切変えていない。
                         促す期間は感想の受付期間（REVIEW_WINDOW_DAYS）と揃えてある
                         ＝期間を過ぎると両方消える。購入そのものに期限は無い（§15 決定4）。
-                        色は足さない（ミントは「好調/上昇」の差し色・30_design §2／赤は使わない）。
-                        強弱だけで表す: 通知時刻を過ぎたら btn-outline、それ以前は btn-quiet。 */}
+                        目立たせ方は「/review/complete の『評価スタンプを送る』と同じ塗りつぶし
+                        （btn-mint）」にそろえる＝お客様が学習済みの「次にやること」の形を再利用する。
+                        新しい色やクラスは作らない。通知時刻より前は btn-quiet で控えめに出すだけ
+                        （出す/出さないは来店と未送信で決める。§15）。赤は使わない。 */}
                     {(actions?.canReview || actions?.purchase) && (
                       <div className="stack stack-sm">
                         {actions.canReview && (
-                          <Link
-                            href={`/review?salon=${encodeURIComponent(id)}`}
-                            className={`btn btn-block ${
-                              actions.reviewDue ? "btn-outline" : "btn-quiet"
-                            }`}
-                          >
-                            感想を送る
-                          </Link>
+                          <>
+                            <Link
+                              href={`/review?salon=${encodeURIComponent(id)}`}
+                              className={`btn btn-block ${
+                                actions.reviewDue ? "btn-mint" : "btn-quiet"
+                              }`}
+                            >
+                              感想を送る
+                            </Link>
+                            {/* 日数は REVIEW_WINDOW_CALENDAR_DAYS（= REVIEW_WINDOW_DAYS + 1）から
+                                組み立てる。判定が between（両端を含む）なので暦日では +1 になる。
+                                数字を書き写すと、定数を変えたとき文言だけ取り残される。 */}
+                            <p className="note-fine">
+                              {`ご来店後${REVIEW_WINDOW_CALENDAR_DAYS}日間のみ感想をお送りいただけます`}
+                            </p>
+                          </>
                         )}
                         {actions.purchase && (
                           <>

@@ -16,6 +16,22 @@
  */
 export const REVIEW_WINDOW_DAYS = 3;
 
+/**
+ * 受付期間を**暦日数**で言い直したもの（お客様向けの文言用）。
+ *
+ * 判定は `visited_on between today - REVIEW_WINDOW_DAYS and today`（RPC 0046 の
+ * `v_window_days` / `review-server.ts` の window）で、**両端を含む**。
+ * したがって来店当日を1日目と数えると **REVIEW_WINDOW_DAYS + 1 暦日**になる。
+ *   例: 9/17 に来店 → 9/17・18・19・20 の 4 日間（最終日 9/20）。
+ *
+ * ★数字を書き写さない★ 画面の文言はこの定数から組み立てる。
+ *   `REVIEW_WINDOW_DAYS` を変えたときに、判定だけ動いて文言が取り残されるのを防ぐ。
+ *
+ * ※ `ReviewForm` のエラー文言は「ご来店から N 日以内」＝**差分**で数えており（3）、
+ *   こちらは**暦日数**（4）。同じ制限を別の数え方で言っているだけで、どちらも正しい。
+ */
+export const REVIEW_WINDOW_CALENDAR_DAYS = REVIEW_WINDOW_DAYS + 1;
+
 /* ---- コメント本文（trim後の文字数で判定） ---- */
 export const REVIEW_BODY_MIN = 15;
 export const REVIEW_BODY_MAX = 300;
