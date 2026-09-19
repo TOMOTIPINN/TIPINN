@@ -1589,9 +1589,39 @@ CARTA・今月（カード分割後の版）で確認した。
    「お客様の名前・ティア・rating」を届ける。**
    **本文とタグは、`everyone` かつ `rating>=3` 以外では届けない。**
 3. **`review-visibility` は `manager_only` を rating 判定より前に打ち切り、`full` を返しえない形にする。**
+   **★`full` は allow-list にする（2026-09-19 追記）★**
+   判定は「`manager_only` を除外する」ではなく「**`share_scope === 'everyone'` のときだけ `full`**」と書く。
+   それ以外（`manager_only` / `null` / `either` / 未知の値）は**すべて rating を見ずに**
+   「**購入あり → `stamp_only` ／ 購入なし → `hidden`**」に落とす。
+   ＝ **本文には未知の値を通さず、名前・ティア・rating には通す。**
+   理由: 決定1 で購入条件から `share_scope` が消えるため、**`null` / `either` の感想も購入できる**
+   （`either` は `10_domain.md` が廃止済みとするが RPC 0046 は今も受理・HANDOFF 食い違い#1）。
+   ここを「`everyone` と `manager_only` **以外は hidden**」にすると、
+   **購入されたのに届かないが別ルートで復活する**（§13 が条件5 を入れた元の問題）。
+   未知の値を「危険な方向（本文）には通さず、安全な方向（名前・ティア・rating）には通す」
+   ＝ `InboxList.tsx:41-46`「未知の値を既知の値に寄せない」と同じ向きに倒す。
 4. **`myHighQuery`・Team voices の `share_scope='everyone'` 絞り込みは変えない。**
 5. **`/staff` 一覧の stamp_only 行は従来どおり日付＋「評価スタンプが届きました」のみ。**
    名前・ティア・rating は**詳細画面だけ**（§13 決定2 を維持）。
+6. **commit は4本に分け、購入条件（決定1）を必ず最後にする**（2026-09-19 追加・§6.4）。
+
+   | # | commit | 変更ファイル | 実機で見るもの |
+   |---|---|---|---|
+   | 1 | 表示判定を allow-list 化（決定3） | `review-visibility.ts` | **回帰のみ。** 確認 7・8・10 と、`everyone`＋rating 1＋購入が従来どおり |
+   | 2 | 詳細画面に rating を届ける（決定2 表示側） | `staff/received/[reviewId]/page.tsx` | **確認11。§14 の残置データ（CARTA `b64be72e`）で合格判定が取れる** |
+   | 3 | 一覧の母集団を `full` の補集合に | `staff/page.tsx`（`myLowQuery` のみ） | **見た目が変わらないこと＝回帰。** 行数・並びが commit 2 時点と同一・重複行なし |
+   | 4 | 購入条件から `share_scope` を外す（決定1） | `review-purchase.ts` ＋ `review-server.ts` | **確認 1〜6。** ここが唯一お客様から見える変化 |
+
+   **★commit 4 は必ず最後★**
+   先行させると、**表示側が未実装のまま `manager_only` の購入が成立し、
+   課金されたのにスタッフに何も届かない**（§13 が条件5 を入れた元の理由）が**本番で発生する**。
+
+   **commit 1〜3 は `manager_only` の購入がまだ存在しないため、本番の見た目を変えない**
+   （＝安全な no-op）。どこで止めても本番は無傷で、1本ずつ戻せる。
+   commit 1 と 3 は「`full` の定義」を共有しており**片方だけ間違えると一覧と詳細が食い違う**ので、
+   分けたうえで commit 3 の回帰確認を「行数が変わっていないか」に絞れるようにする。
+
+   **各 commit で `npm run lint` が変更前と同数（9 errors / 3 warnings）・`npm run build` 成功も見る。**
 
 ### 理由
 
@@ -1635,16 +1665,68 @@ return hasPurchase ? "stamp_only" : "hidden";      // :62
 | `src/lib/review-server.ts` | `loadReviewForPurchase` の select を5列→4列（`share_scope` を落とす） |
 | `src/lib/review-visibility.ts` | 決定3。`manager_only` を rating 判定より前に打ち切る |
 | `src/app/staff/received/[reviewId]/page.tsx` | `mood`（rating の絵文字）を `stamp_only` でも算出する（`:196-198`）。**`:256` は案A＝気分・タグ・本文を要素ごとに出し分け、タグと本文は `full` のみ。** 罫線の二重化に注意 |
-| `src/app/staff/page.tsx` | `myLowQuery`（`:246-255`）の `.eq(share_scope, everyone)` を外し `manager_only` も拾う。**body は select しない**まま。`myHighQuery`・Team voices は**変更しない**（決定4） |
+| `src/app/staff/page.tsx` | `myLowQuery`（`:247-255`）を **`myHighQuery` の補集合**にする（**2026-09-19 修正。「`.eq(share_scope, everyone)` を外す」では不足**・下記★）。**body は select しない**まま（`select("id, created_at")` 不変）。`myHighQuery`・Team voices は**変更しない**（決定4） |
 | — | **migration 不要。** `/manager/inbox`・`/dashboard`・`/mypage`・`/api/checkout`・`/rating`・`/review/complete`・webhook・LINE リマインドは**変更不要**（判定を関数に委ねているため追従する） |
 
 **挙動が変わる副作用（意図どおり）**: `manager_only` を選んだ直後の `/review/complete` と
 `/mypage` にも「評価スタンプを送る」が出る（§14 で低評価に出るようにしたのと同じ構図）。
 
+#### ★`myLowQuery` は「`manager_only` を足す」ではなく「`full` 以外を全部」と書く（2026-09-19）★
+
+**初版の「`.eq(share_scope, everyone)` を外す」では欠落が出る。**
+現在の rating 条件は `.or("rating.lt.3, rating.is.null")` なので、`.eq` を外すだけだと
+**`manager_only` ＋ `rating 4` ＋ 購入あり**が
+
+- `myLowQuery` に入らない（`rating.lt.3` も `rating.is.null` も false）
+- `myHighQuery` にも入らない（`.eq(share_scope,'everyone')` で弾かれる）
+- **どちらの一覧にも出ないのに、詳細画面は `stamp_only` を返す**
+
+＝ **「課金されたのに `/staff` に出ない」が残る**（§19 が潰すはずの当のバグ）うえ、
+URL 直打ちでだけ見える行ができて `staff/page.tsx:364-371` の
+「`canOpen` は detail の `canView` と**厳密に同条件**」という不変条件も壊れる。
+
+**正しくは `myHighQuery` の述語の補集合にする。**
+
+```
+High = share_scope = 'everyone' AND rating >= 3
+Low  = NOT(High)
+     = share_scope <> 'everyone' OR share_scope IS NULL OR rating < 3 OR rating IS NULL
+```
+
+```ts
+.or(
+  [
+    `share_scope.neq.${STAFF_VISIBLE_SHARE_SCOPE}`,
+    "share_scope.is.null",
+    `rating.lt.${STAFF_BODY_MIN_RATING}`,
+    "rating.is.null",
+  ].join(","),
+)
+```
+
+**★`IS NULL` の2項を明示しないと、その行がどちらの一覧にも入らず消える★**
+PostgREST の `neq` / `lt` は SQL の `<>` / `<` で、**3値論理により NULL に対して TRUE を返さない**
+（`share_scope IS NULL` の行は `share_scope.neq.everyone` で拾えない。rating も同じ）。
+PostgREST は TRUE の行しか返さないので、NULL 項を落とすと High からも Low からも漏れる。
+
+**「`manager_only` を足す」ではなく「`full` 以外を全部」と書くことで、排他かつ網羅が
+構造的に保証される**（`manager_only` が `.eq(everyone)` で弾かれるから**偶然**排他、ではなく、
+**述語が互いに補集合だから**排他になる）。決定3 の allow-list と同じ考え方を一覧側にも適用する。
+
 ### 排他性の確認（実装時）
 
 `myHighQuery`（`everyone` かつ `rating>=3`）と新しい `myLowQuery` が**同じ行を二重に拾わない**こと。
-`manager_only` は `myHighQuery` の `.eq(everyone)` で必ず弾かれるので理屈上は排他だが、実機で確認する。
+上の補集合の形にすれば**どの行もちょうど一方にだけ入る**（排他かつ網羅）が、実機で確認する。
+
+**二重取得したときの見え方**（実機で気づくために）:
+`staff/page.tsx:349-362` は High（`mode:"full"`）と Low（`mode:"stamp_only"`）を連結 →
+`created_at` 降順 → `slice(0,5)`。同じ行が両方に入ると
+
+- **同じ日付の行が2つ隣り合う**（`created_at` が同一なので必ず隣接）。
+  一方は本文つき、もう一方は「評価スタンプが届きました」＋日付だけ。リンク先は同じ id。
+- **5件枠を2つ消費する**ため、本来5番目の行が押し出される（**目では分からない静かな欠落**）。
+- React の `key` は `v.id` なので**重複キー警告**が出るが、`/staff` は**サーバーコンポーネント**のため
+  警告は**ブラウザの devtools ではなく `next dev` のターミナル／Vercel の Function ログ**に出る。
 
 ### 法務
 
@@ -1673,11 +1755,31 @@ return hasPurchase ? "stamp_only" : "hidden";      // :62
 | 4 | スタッフ本人の `/staff` | 日付＋「評価スタンプが届きました」の行のみ（名前・ティア・rating は出ない・決定5） |
 | 5 | その行から詳細へ | **名前＋ティア＋気分（最高）**。**本文・タグは出ない** |
 | 6 | `manager_only`＋rating 1 で同じ手順 | 詳細で**気分（改善）まで出て、本文は出ない**（決定2 の核心） |
-| 7 | `manager_only`＋購入なし | 一覧に出ない・詳細は **404** |
+| 7 | `manager_only`＋購入なし | 一覧に出ない・詳細は **404** ⚠️ **確認3（購入）の前に差し込む**（2026-09-19 修正・下記「実行順」） |
 | 8 | Team voices | `manager_only` は**出ない**（決定4・staff 経路も manager 経路も） |
 | 9 | 店長の `/manager/inbox`・`/dashboard` | 従来どおり本文が読める（変化なし） ⚠️ **§20（2026-09-19）実装後は「変化なし」ではない**（ティアバッジ・詳細への導線・顧客名が増える）。**§19 の確認は §20 より先に行う**か、§20 実装後なら「本文の読み取りが変わらないこと」だけを見る |
 | 10 | `everyone`＋rating 4 | 従来どおり本文まで（`full`・回帰） |
 | 11 | `everyone`＋rating 1＋購入 | **rating（改善）が出る**。本文は出ない（§14 決定3 の rating 部分を上書きした結果） |
+| **12** | **排他性**（未対応3） | 同じ日付の行が**2つ並んでいない**こと ＋ `next dev` / Vercel の Function ログに**重複キー警告が無い**こと。**サーバーコンポーネントなのでブラウザの devtools には出ない**（→ 上記「二重取得したときの見え方」） |
+| **13** | **`share_scope` の分布**（食い違い#1） | **Niii で `select share_scope, count(*) from reviews where salon_id=… group by 1` を1回流す。** CARTA に `null` / `either` が無いことは §17 で確認済み。あれば決定3 の allow-list のとおり「購入あり → `stamp_only`」になることを1件見る |
+
+#### 実行順（2026-09-19 確定）
+
+**確認7 を確認3（購入）の前に差し込む。** 同じ1行が「**購入なし → 404**」「**購入あり → `stamp_only`**」と
+変わるのを観察でき、**別の感想で試すより結論が強くなる**。**感想も1件節約できる**
+（そうしないと `manager_only`＋購入なし用に3件目の感想＝3件目の来店が要る）。
+
+**1・2 →(購入前に) 7 → 3 → 4 → 5**、`manager_only`＋rating 1 で **6**。
+**8・9・10・11・12 は既存データだけで足りる**ので、commit 1・2 の直後に前倒しできる
+（→ 決定6 の commit 表）。
+
+**必要な新規データ**: 来店2・感想2・購入2（Thank you ¥100 ×2 ＝ **¥200**）。
+CARTA（`manager_only`＋rating 4・歩夢宛て）と Niii（`manager_only`＋rating 1・藤原和音宛て）に割れば
+**1日で通せる**（`unique(customer_id, salon_id, visited_on)` と 1来店1感想のため、
+同一サロンで2件目は翌日以降になる）。
+スタッフ本人の経路は §14 と同じ `staff.role='staff'` のアカウント（**CARTA 歩夢 / Niii 藤原和音**）を使う。
+**SELNI は使わない**（staff アカウントが無く、運営者は店長を兼ねるため staff 経路に落ちない・§13 未対応2）。
+実決済は §13・§14 と同じく**返金しない・削除しない**。Niii は **VIP 特典が再発動する可能性**がある。
 
 `npm run lint` が変更前と同数・`npm run build` 成功も各ステップで確認する。
 
@@ -1699,7 +1801,15 @@ return hasPurchase ? "stamp_only" : "hidden";      // :62
 2. `review-visibility.ts` の判定順（上の「罠」）を実装時に必ず確認する。
    `manager_only`＋`rating 4`＋購入ありで**本文が出ないこと**を本番確認 6 の前に単体で確かめる。
 3. `myHighQuery` と `myLowQuery` の排他性（同じ行を二重に拾わないか）。
-4. `docs/00_philosophy.md` §4.8 は §19 に合わせて一般化済み（「本人に見せない本文」）。
+   **補集合の形にすれば構造的に保証されるが、実機（確認12）でも見る。**
+4. **`LOW_RATING_SCAN = 20`（`staff/page.tsx:87`）の母集団が `manager_only` 全件に広がる**
+   （2026-09-19 追加）。これまでは「低評価の中から購入済みを探す走査幅」だったが、
+   補集合化により **`full` 以外すべて**が母集団になる。
+   **`manager_only` を多く受けているスタッフでは、20件の窓から古い購入済み行がこぼれうる。**
+   **消えるのは一覧（「あなたに届いた声」）だけで、詳細画面は URL があれば従来どおり開ける。**
+   **CARTA は全53件のため当面は問題にならない。** 定数名も実態と合わなくなる
+   （「低評価の走査幅」ではない）。commit 3 の回帰確認で「行数が変わっていないか」を見る理由がこれ。
+5. `docs/00_philosophy.md` §4.8 は §19 に合わせて一般化済み（「本人に見せない本文」）。
    実装時にコード内コメント（`review-visibility.ts` / `review-purchase.ts` /
    `staff/page.tsx` / `staff/received/[reviewId]/page.tsx`）の典拠も §19 に揃えること。
 
