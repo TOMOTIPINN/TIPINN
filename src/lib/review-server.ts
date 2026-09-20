@@ -88,10 +88,10 @@ export async function hasReviewedForLatestVisit(
  * **取得と判定を分ける**: 判定は @/lib/review-purchase の isPurchasableReview（純粋関数）。
  * ここは「判定に必要な列だけを引いてくる」責務に閉じる。
  *
- * select は判定に使う5列のみ。**body は取らない**
+ * select は判定に使う4列のみ。**body は取らない**
  * （感想本文は購入可否の判断に不要で、取らなければ取り違えて表示することもない）。
- * **rating も取らない**（§14 で購入条件から外した）。取ってこなければ、この場で
- * 閾値を書き足すこともできない。
+ * **rating も share_scope も取らない**（§14 ／ §19 で購入条件から外した）。
+ * 取ってこなければ、この場で閾値や共有範囲の条件を書き足すこともできない。
  *
  * 見つからない・取得に失敗した場合は null を返す（呼び出し側で「購入不可」に倒す）。
  * reviewId はクライアント由来の値なので、**所有者確認は必ず判定側で行うこと**
@@ -103,7 +103,7 @@ export async function loadReviewForPurchase(
 ): Promise<PurchasableReviewRow | null> {
   const { data, error } = await supabaseAdmin
     .from("reviews")
-    .select("id, customer_id, salon_id, staff_id, share_scope")
+    .select("id, customer_id, salon_id, staff_id")
     .eq("id", reviewId)
     .maybeSingle();
 

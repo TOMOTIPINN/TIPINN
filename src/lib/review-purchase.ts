@@ -9,15 +9,22 @@
  *   が生まれる。判定はここ1か所に閉じ、DB 取得は @/lib/review-server に置く
  *   （supabaseAdmin をクライアントバンドルに巻き込まない・review.ts / review-server.ts と同じ分離）。
  *
- * 購入できるのは「**本人が・担当スタッフ宛てに・お店のスタッフへ共有する形で送った感想**」:
+ * 購入できるのは「**本人が・担当スタッフ宛てに送った感想**」:
  *   有料スタンプはスタッフ個人への評価として届く（/staff/received/[reviewId]）。
- *   本人に何も届かない感想に課金できると「課金されたのにスタッフに届かない」状態になる。
- *   `manager_only` を外すのはこのため（「店長にだけ伝えたい」という選択を課金で覆さない）。
+ *
+ * ★share_scope は見ない（§19・2026-09-17 で条件から外した）★
+ *   お客様が `manager_only` で選んだのは **本文の届け先**であって、
+ *   **応援を贈らないこと**ではない。
+ *   かつて条件に入れていた理由（「課金されたのにスタッフに届かない」）は
+ *   **表示側（@/lib/review-visibility）で解いた**＝購入があれば share_scope によらず
+ *   **お客様の名前・ティア・rating** が本人に届く（本文とタグは everyone かつ rating>=3 のみ）。
+ *   → docs/40_decisions.md §19 決定1・2・3
  *
  * ★rating は見ない（§14・2026-09-16 で条件から外した）★
  *   rating<=2 の感想にも評価スタンプを贈れる。贈られた場合は本人に
- *   **お客様の表示名とティアだけ**が届く（本文と rating は出さない）。
- *   → docs/00_philosophy.md §4.8 / docs/40_decisions.md §14 / @/lib/review-visibility
+ *   **お客様の表示名・ティア・rating** が届く（本文とタグは出さない。
+ *   rating を届ける点は §19 決定2 で §14 決定3 を上書きした）。
+ *   → docs/00_philosophy.md §4.8 / docs/40_decisions.md §14・§19 / @/lib/review-visibility
  *
  * ★表示側の閾値とこのモジュールは無関係★
  *   本文を見せる下限（STAFF_BODY_MIN_RATING）は @/lib/review-visibility にある。
@@ -25,20 +32,17 @@
  *   同じ定数を共有すると、購入の都合で本文の可視性が黙って動く。
  */
 
-/** 購入可能と見なす share_scope。'manager_only' は本人に届かないので対象外。 */
-export const PURCHASE_SHARE_SCOPE = "everyone";
-
 /**
  * 判定に必要な reviews の列だけ（body は含めない＝取得側で select を絞れる）。
- * **rating は入れない**（§14 で購入条件から外した）。列として残すと、後から
- * この場に閾値を書き戻す余地が生まれる。
+ * **rating は入れない**（§14 で購入条件から外した）。
+ * **share_scope も入れない**（§19 で購入条件から外した）。列として残すと、後から
+ * この場に閾値や共有範囲の条件を書き戻す余地が生まれる。
  */
 export type PurchasableReviewRow = {
   id: string;
   customer_id: string;
   salon_id: string;
   staff_id: string | null;
-  share_scope: string | null;
 };
 
 /** 誰が・どのサロンの・どのスタッフ宛てとして購入しようとしているか。 */
@@ -61,9 +65,10 @@ export type PurchaseTarget = {
  *   4. **宛先が個人**（staff_id が非 null）かつ指定スタッフと一致
  *      … 「お店のみんなへ」（staff_id null）は個人に届かないので対象外。
  *        null === null で素通りしないよう、非 null を先に確かめる。
- *   5. share_scope が 'everyone'（'manager_only' は不可）
  *
- * **rating は条件に入らない**（§14）。低評価の感想にも贈れる。
+ * **rating も share_scope も条件に入らない**（§14 ／ §19）。
+ * 低評価の感想にも `manager_only` の感想にも贈れる。
+ * 「未購入」は**この関数の外**（一意インデックス 0047 と呼び出し側）で担保する。
  */
 export function isPurchasableReview(
   review: PurchasableReviewRow | null | undefined,
@@ -74,6 +79,5 @@ export function isPurchasableReview(
   if (review.salon_id !== target.salonId) return false;
   if (review.staff_id === null) return false;
   if (review.staff_id !== target.staffId) return false;
-  if (review.share_scope !== PURCHASE_SHARE_SCOPE) return false;
   return true;
 }
