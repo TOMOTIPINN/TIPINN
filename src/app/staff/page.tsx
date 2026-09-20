@@ -242,15 +242,35 @@ export default async function StaffHomePage() {
     .order("created_at", { ascending: false })
     .limit(MY_VOICES_LIMIT);
 
-  // rating が null の行も低評価側に入れる（本文を出してよい根拠が無いため）。
-  // staffViewMode（@/lib/review-visibility）の null 扱いと揃えること。
+  /**
+   * (2) 本文を出さない側。**★条件は myHighQuery の補集合にする★**（§19 決定3）。
+   *
+   * ★「manager_only を足す」ではなく「`full` 以外を全部」と書く★
+   *   `full` は allow-list（everyone かつ rating>=3・staffViewMode と同じ形）なので、
+   *   その否定＝「everyone でない **or** rating>=3 でない」を4項で書き下す。
+   *   述語が互いに補集合だから**排他かつ網羅**になる（`.eq` で偶然弾ける、ではない）。
+   *
+   * ★`is.null` の2項を明示しないと、その行がどちらの一覧にも入らず消える★
+   *   PostgREST の neq / lt は SQL の `<>` / `<` で、**3値論理により NULL には TRUE を
+   *   返さない**（`share_scope IS NULL` も `rating IS NULL` も両方の一覧から漏れる）。
+   *
+   *   `.eq("share_scope", …)` を外すだけでも不足で、**manager_only ＋ rating 4 ＋ 購入あり**が
+   *   High（everyone でない）にも Low（rating>=3）にも入らず、
+   *   **詳細だけ stamp_only を返す＝「課金されたのに /staff に出ない」**が残る
+   *   （§13 が購入条件に share_scope を入れた元の問題）。
+   *
+   * rating が null の行も本文なし側に入れる（本文を出してよい根拠が無いため）。
+   * staffViewMode（@/lib/review-visibility）の null 扱いと揃えること。
+   * ⚠️ 母集団が「`full` 以外すべて」に広がるため LOW_RATING_SCAN の窓の意味も変わる（§19 未対応4）。
+   */
   const myLowQuery = supabaseAdmin
     .from("reviews")
     .select("id, created_at")
     .eq("salon_id", ctx.salon_id)
     .eq("staff_id", ctx.staff_id)
-    .eq("share_scope", STAFF_VISIBLE_SHARE_SCOPE)
-    .or(`rating.lt.${STAFF_BODY_MIN_RATING},rating.is.null`)
+    .or(
+      `share_scope.neq.${STAFF_VISIBLE_SHARE_SCOPE},share_scope.is.null,rating.lt.${STAFF_BODY_MIN_RATING},rating.is.null`,
+    )
     .order("created_at", { ascending: false })
     .limit(LOW_RATING_SCAN);
 
