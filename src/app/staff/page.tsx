@@ -76,8 +76,49 @@ type MyVoiceRow =
   | ({ mode: "full" } & MyHighRow)
   | ({ mode: "stamp_only" } & MyLowRow);
 
-/** 「あなたに届いた声」に出す最大件数。 */
-const MY_VOICES_LIMIT = 5;
+/**
+ * 「あなたに届いた声」の1回の読み込み件数。初回もこの数で、
+ * 「もっと見る」1回につきこの数だけ増える（§22 決定3・Inbox の INBOX_PAGE_SIZE と同じ役割）。
+ */
+const MY_VOICES_PAGE_SIZE = 5;
+
+/**
+ * take の上限。PostgREST は max-rows（既定 1000）を超えると
+ * **エラーにならず静かに切り捨てる**ため、その手前で止める（`src/lib/fetch-all-rows.ts:3-5`）。
+ * Inbox の `INBOX_MAX_TAKE` と**同じ理由・同じ値**。実運用で到達する想定は無い。
+ */
+const MY_VOICES_MAX_TAKE = 1000;
+
+/**
+ * Team voices（同サロンの新着）の表示件数。
+ * ★ここには「もっと見る」を付けない★（§22 決定5。眺める面であってアーカイブではない。
+ * 全件を読み切る役割は /manager/inbox＝§17 が持つ）。
+ * MY_VOICES_PAGE_SIZE と**偶然同じ値**なので、片方だけ動かす事故を防ぐため定数を分けてある。
+ */
+const TEAM_VOICES_LIMIT = 5;
+
+/**
+ * `?take=` を読む。不正値・未指定は1ページ目。
+ * ページサイズの倍数に切り上げ、上限で丸める（URL を直接いじられても壊れない）。
+ * **`manager/inbox` の `parseTake` と同じ作法**（§22 決定3）。
+ */
+function parseTake(raw: string | undefined): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= MY_VOICES_PAGE_SIZE) return MY_VOICES_PAGE_SIZE;
+  const rounded = Math.ceil(n / MY_VOICES_PAGE_SIZE) * MY_VOICES_PAGE_SIZE;
+  return Math.min(rounded, MY_VOICES_MAX_TAKE);
+}
+
+/**
+ * 読み込み深さを URL に載せる。**1ページ目はクエリ無しの素の `/staff`** にする。
+ * ★載せるのは take だけ★ `?salon=` は受け取らない（サロンは ctx.salon_id 固定・§22 決定4・§8）。
+ */
+function staffHref(take: number): string {
+  const params = new URLSearchParams();
+  if (take !== MY_VOICES_PAGE_SIZE) params.set("take", String(take));
+  const q = params.toString();
+  return q ? `/staff?${q}` : "/staff";
+}
 
 /** 集計スコープ: あなたへ（staff_id 一致）／お店全体（salon_id のみ・staff_id 不問＝あなた宛も含む全レビュー）。 */
 type CountScope = { staffId: string } | { salonId: string; wholeSalon: true };
@@ -166,7 +207,14 @@ const jstDate = new Intl.DateTimeFormat("ja-JP", {
   day: "numeric",
 });
 
-export default async function StaffHomePage() {
+export default async function StaffHomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ take?: string }>;
+}) {
+  const { take: rawTake } = await searchParams;
+  const take = parseTake(rawTake);
+
   const session = await getSession();
   if (!session) {
     redirect(`/api/auth/line/login?returnTo=${encodeURIComponent("/staff")}`);
@@ -233,7 +281,20 @@ export default async function StaffHomePage() {
     .eq("share_scope", STAFF_VISIBLE_SHARE_SCOPE)
     .gte("rating", STAFF_BODY_MIN_RATING)
     .order("created_at", { ascending: false })
-    .limit(MY_VOICES_LIMIT);
+    .limit(take);
+
+  /**
+   * (1) の件数（`hasMore` の判定用・§22 決定3）。**myHighQuery と同条件**にすること。
+   * 一覧側は limit があるので母集団にできない（§17 の Inbox と同じ理由）。
+   * low 側は決定1 により**全件取れている**ので数える必要がない（`lowRows.length` がそのまま件数）。
+   */
+  const myHighCountQuery = supabaseAdmin
+    .from("reviews")
+    .select("id", { count: "exact", head: true })
+    .eq("salon_id", ctx.salon_id)
+    .eq("staff_id", ctx.staff_id)
+    .eq("share_scope", STAFF_VISIBLE_SHARE_SCOPE)
+    .gte("rating", STAFF_BODY_MIN_RATING);
 
   /**
    * (2) の材料: **自分宛ての有料スタンプを先に引く**（§22 決定1）。
@@ -265,6 +326,7 @@ export default async function StaffHomePage() {
     shopRvQ,
     voicesRes,
     myHighRes,
+    myHighCountRes,
     myPurchasesRes,
   ] = await Promise.all([
     countRows("reviews", youScope, weekStart),
@@ -273,8 +335,9 @@ export default async function StaffHomePage() {
     countRows("reviews", salonScope, weekStart),
     countRows("reviews", salonScope, monthStart),
     countRows("reviews", salonScope, quarterStart),
-    voicesQuery.order("created_at", { ascending: false }).limit(5),
+    voicesQuery.order("created_at", { ascending: false }).limit(TEAM_VOICES_LIMIT),
     myHighQuery,
+    myHighCountQuery,
     myPurchasesQuery,
   ]);
 
@@ -374,7 +437,7 @@ export default async function StaffHomePage() {
 
   const lowRows = (myLowRes?.data ?? []) as MyLowRow[];
 
-  // 2本を新着順にマージして上位 MY_VOICES_LIMIT 件。
+  // 2本を新着順にマージして上位 take 件（既定 MY_VOICES_PAGE_SIZE・「もっと見る」で +5 ずつ）。
   // ★limit はマージ後に掛ける★ クエリ側で5件ずつ取って後から混ぜると順序が壊れる。
   const myVoices: MyVoiceRow[] = [
     ...((myHighRes.data ?? []) as MyHighRow[]).map((v) => ({
@@ -389,7 +452,18 @@ export default async function StaffHomePage() {
       (a, b) =>
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
     )
-    .slice(0, MY_VOICES_LIMIT);
+    .slice(0, take);
+
+  /**
+   * まだ続きがあるか（§17 と同じ判定・`take+1` 件を引かない）。
+   *   母集団 = (1) の exact count ＋ (2) の件数。
+   *   **(2) は決定1 で「表示できる行」だけを全件取っている**ので、`lowRows.length` が
+   *   そのまま件数になる（走査窓が無いので「取り切れていないかも」を考えなくてよい）。
+   * take の上限に達したときも打ち切る（PostgREST の静かな切り捨てを避ける）。
+   */
+  const myVoicesTotal = (myHighCountRes.count ?? 0) + lowRows.length;
+  const hasMore =
+    myVoices.length < myVoicesTotal && take < MY_VOICES_MAX_TAKE;
 
   /**
    * その行を /staff/received/[id] で開けるか。
@@ -509,6 +583,20 @@ export default async function StaffHomePage() {
                 })}
               </div>
             )}
+
+            {myVoices.length > 0 &&
+              (hasMore ? (
+                <Link
+                  href={staffHref(take + MY_VOICES_PAGE_SIZE)}
+                  className="btn btn-quiet btn-block"
+                >
+                  もっと見る
+                </Link>
+              ) : (
+                <p className="note-fine center-text">
+                  すべて表示しました（{myVoices.length}件）
+                </p>
+              ))}
 
             {/* 上のマトリクス（絞り込み無しの件数）とこの一覧（everyone かつ rating>=3）は
                 母集団が違うため数が合わない。責めない・理由を伏せない・赤を使わない書き方で
