@@ -28,11 +28,13 @@ import {
  *   金額列（rating_purchases.amount）は **select しない**（¥がスタッフ画面に漏れないことを構造で担保・§2/§4）。
  *
  * 認証（方式B / [[auth-method-line-b]]）: ログイン中の LINE から getStaffContext() を解決。
- *   未ログイン → returnTo付きで LINE ログインへ。表示は3段階（§14 決定1・3）:
+ *   未ログイン → returnTo付きで LINE ログインへ。表示は3段階（§14 決定1・3 ／ §19 決定2）:
  *   ・manager   : 同サロンの声すべて（従来どおり絞らない）→ **full**
  *   ・staff full: 本人宛て・share_scope='everyone'・rating>=3 → 従来どおり本文まで
- *   ・staff stamp_only: 本人宛て・everyone・rating<=2 **かつ有料スタンプあり**
- *       → **お客様の表示名とティアだけ**。本文・その時の気分・タグは出さない
+ *   ・staff stamp_only: 本人宛ての **full 以外**（manager_only / null / either / 未知の値、
+ *       または everyone で rating<=2・null）**かつ有料スタンプあり**
+ *       → **お客様の表示名・ティア・その時の気分（rating）**。**本文とタグは出さない**
+ *       （§19 決定2 で rating を届けるようにした＝§14 決定3 の「rating も出さない」を上書き）
  *   それ以外は存在を伏せて notFound()＝**HTTP 404**（他人の評価は見せない）。
  *   「存在しない」と「権限が無い」を区別しない（403 を返さない）のは意図的で、
  *   区別するとレビューIDの総当たりで実在を判別できるオラクルになるため。
@@ -140,10 +142,11 @@ export default async function StaffReceivedPage({
    *      店長は /manager/inbox で全件を受け止める役割なので、ここは絞らない＝常に full。
    *  ・staff  : @/lib/review-visibility の staffViewMode に委ねる（3値）。
    *      full       … everyone かつ rating>=3。従来どおり本文まで
-   *      stamp_only … everyone かつ rating<=2 で、その感想に有料スタンプがある。
-   *                   低評価の言葉は店長が口頭で伝える（docs/00_philosophy.md §4.8）ので
-   *                   本文は出さないが、**誰からの応援かは本人に届けてよい**
-   *      hidden     … それ以外（manager_only / 低評価で購入なし / 他人宛て）
+   *      stamp_only … full 以外で、その感想に有料スタンプがある。
+   *                   本人に見せない本文は店長が口頭で伝える（docs/00_philosophy.md §4.8）
+   *                   ので本文とタグは出さないが、**誰からの応援か**と
+   *                   **その時の気分（rating）**は本人に届けてよい（§19 決定2）
+   *      hidden     … それ以外（full 以外で購入なし / 他人宛て）
    *      判定条件をここに書き写さない（/staff の一覧と食い違うため）。
    *
    * 弾いた場合は存在を伏せて 404（下の notFound()）。403 とは区別しない。
@@ -163,14 +166,17 @@ export default async function StaffReceivedPage({
     notFound();
   }
 
-  // stamp_only は「ティアを届ける」ためだけのモード。tier を解決できない（未知の tier 文字列など）
-  // ときは出すものが何も残らないので、空の画面を見せずに hidden と同じ 404 に倒す。
+  // stamp_only は「誰からの応援か（ティア）」を届けるためのモード。tier を解決できない
+  // （未知の tier 文字列など）ときは主役が残らないので、空の画面を見せずに 404 に倒す。
+  // §19 決定2 で気分（rating）も届けるようになったが、**このガードは維持する**
+  // ＝気分だけが残っても「誰からの応援か」が伝わらないため（hidden と同じ 404）。
   if (mode === "stamp_only" && !tierDef) {
     notFound();
   }
 
   /**
-   * 名前とティアだけを届けるモード（§14 決定3）。本文・その時の気分・タグを出さない。
+   * 名前・ティア・その時の気分（rating）を届けるモード（§14 決定3 → **§19 決定2**）。
+   * **本文とタグは出さない**（タグは本文相当の情報とみなす・§19 範囲外）。
    * ⚠️ review.body は select 済みだが **描画しない**。サーバーコンポーネントは
    *   描画された出力しかクライアントへ送らないため、本文はブラウザに渡らない。
    *   ここに本文を足す変更をするときは §14 決定1（本文は店長のみ）に戻ること。
@@ -193,10 +199,9 @@ export default async function StaffReceivedPage({
       : "感想が届きました";
 
   // お客様の「その時の気分」＝絵文字評価（最高/よい/普通/改善）。Review セクション側に添える。
-  // stamp_only では rating を出さないので算出もしない（§14 決定3）。
-  const mood = isStampOnly
-    ? null
-    : (REVIEW_RATINGS.find((r) => r.value === review.rating) ?? null);
+  // **stamp_only でも算出する**（§19 決定2。4段階の絵文字は「言葉」ではないので、
+  // 本文を届けない感想でも気分までは本人に届ける）。rating が null / 範囲外なら null。
+  const mood = REVIEW_RATINGS.find((r) => r.value === review.rating) ?? null;
 
   // 蓄積（件数のみ・フッター用）。累計=今週 / ランク=通算（仮閾値）。
   const [weekCount, totalCount] = staffId
@@ -250,10 +255,13 @@ export default async function StaffReceivedPage({
 
         <hr className="rule" />
 
-        {/* Review（その時の気分＋タグ＋本文カード）。
-            stamp_only では**セクションごと出さない**（後続の細罫線も一緒に畳んで
-            罫線が二重にならないようにする）。 */}
-        {!isStampOnly && (
+        {/* Review（その時の気分＋タグ＋本文カード）。**要素ごとに出し分ける**（§19 決定2）。
+            ・気分（mood）… full でも stamp_only でも出す
+            ・タグと本文  … **!isStampOnly の内側だけ**（本文をこの外へ出さない）
+            stamp_only で気分も無い（rating が null / 範囲外）ときは**セクションごと出さない**
+            ＝見出しだけの空セクションを作らない。後続の細罫線も同じ条件で一緒に畳むので
+            罫線は二重にならない。 */}
+        {(!isStampOnly || mood !== null) && (
           <>
             <section className="stack-sm">
               <Eyebrow className="eyebrow-mint">Review</Eyebrow>
@@ -267,16 +275,20 @@ export default async function StaffReceivedPage({
                   </span>
                 </div>
               )}
-              {tags.length > 0 && (
-                <div className="staff-tag-row">
-                  {tags.map((t) => (
-                    <span key={t} className="tag-mint">
-                      {t}
-                    </span>
-                  ))}
-                </div>
+              {!isStampOnly && (
+                <>
+                  {tags.length > 0 && (
+                    <div className="staff-tag-row">
+                      {tags.map((t) => (
+                        <span key={t} className="tag-mint">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="voice-card">「{review.body}」</div>
+                </>
               )}
-              <div className="voice-card">「{review.body}」</div>
             </section>
 
             <hr className="rule" />
