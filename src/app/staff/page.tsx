@@ -79,13 +79,6 @@ type MyVoiceRow =
 /** 「あなたに届いた声」に出す最大件数。 */
 const MY_VOICES_LIMIT = 5;
 
-/**
- * rating<=2 側の走査件数。購入の有無は別テーブルなので、先に多めに取ってから絞る。
- * MY_VOICES_LIMIT だけ取ると「直近5件がすべて購入なし」のときに、
- * その少し前にある購入済みの1件を取りこぼす。
- */
-const LOW_RATING_SCAN = 20;
-
 /** 集計スコープ: あなたへ（staff_id 一致）／お店全体（salon_id のみ・staff_id 不問＝あなた宛も含む全レビュー）。 */
 type CountScope = { staffId: string } | { salonId: string; wholeSalon: true };
 
@@ -219,18 +212,18 @@ export default async function StaffHomePage() {
       : voicesBase.neq("share_scope", "manager_only");
 
   /**
-   * 「あなたに届いた声」= 自分宛て（staff_id 一致）・everyone の感想。
-   * manager_only は本人に出さない（「店長にだけ伝えたい」というお客様の選択）。
+   * 「あなたに届いた声」= 自分宛て（staff_id 一致）の感想。
    * salon_id は staff_id から一意に決まるが、越境の保険として二重スコープにする。
    *
-   * §14 決定3 でクエリを**2本に分けた**:
-   *   (1) rating>=3        … 従来どおり本文つきで出す
-   *   (2) rating<=2 / null … 有料スタンプが贈られたものだけ、**本文なし**の行で出す
+   * §14 決定3 でクエリを**2本に分けた**（§19 で (2) の母集団が広がった）:
+   *   (1) `full`      … `everyone` かつ rating>=3。従来どおり本文つきで出す
+   *   (2) `full` 以外 … 有料スタンプが贈られたものだけ、**本文なし**の行で出す
+   *                     （`manager_only` / `null` / `either` / 未知の値 ＋ `everyone` の低評価・null）
    *
    * ★(2) で body を select しない★
-   *   低評価の本文をスタッフ本人に見せない設計（docs/00_philosophy.md §4.8）を、
+   *   本人に見せない本文（docs/00_philosophy.md §4.8）を、
    *   「画面で出さない」ではなく「**取ってこない**」ことで担保する。
-   *   1本のクエリにまとめると本文を取らざるを得なくなるので、あえて分けている。
+   *   **1本のクエリにまとめない**＝まとめると本文を取らざるを得なくなる（§22 決定2）。
    */
   const myHighQuery = supabaseAdmin
     .from("reviews")
@@ -243,36 +236,24 @@ export default async function StaffHomePage() {
     .limit(MY_VOICES_LIMIT);
 
   /**
-   * (2) 本文を出さない側。**★条件は myHighQuery の補集合にする★**（§19 決定3）。
+   * (2) の材料: **自分宛ての有料スタンプを先に引く**（§22 決定1）。
    *
-   * ★「manager_only を足す」ではなく「`full` 以外を全部」と書く★
-   *   `full` は allow-list（everyone かつ rating>=3・staffViewMode と同じ形）なので、
-   *   その否定＝「everyone でない **or** rating>=3 でない」を4項で書き下す。
-   *   述語が互いに補集合だから**排他かつ網羅**になる（`.eq` で偶然弾ける、ではない）。
+   * ★「`full` 以外を N 件取ってから購入で絞る」と、何件取れば何件表示できるか決められない★
+   *   購入は別テーブルにあるので歩留まりが事前に分からない。旧実装は走査幅
+   *   （LOW_RATING_SCAN = 20）で誤魔化していたが、**窓から溢れた古い購入済み行は
+   *   購入判定にすら載らなかった**（§19 で母集団が「`full` 以外すべて」に広がり当たりやすくなった）。
+   *   **購入を先に引けば (2) は最初から「表示できる行」と一致する**＝
+   *   走査幅と表示上限の二重管理が消える（§19 未対応4 の解消）。
    *
-   * ★`is.null` の2項を明示しないと、その行がどちらの一覧にも入らず消える★
-   *   PostgREST の neq / lt は SQL の `<>` / `<` で、**3値論理により NULL には TRUE を
-   *   返さない**（`share_scope IS NULL` も `rating IS NULL` も両方の一覧から漏れる）。
-   *
-   *   `.eq("share_scope", …)` を外すだけでも不足で、**manager_only ＋ rating 4 ＋ 購入あり**が
-   *   High（everyone でない）にも Low（rating>=3）にも入らず、
-   *   **詳細だけ stamp_only を返す＝「課金されたのに /staff に出ない」**が残る
-   *   （§13 が購入条件に share_scope を入れた元の問題）。
-   *
-   * rating が null の行も本文なし側に入れる（本文を出してよい根拠が無いため）。
-   * staffViewMode（@/lib/review-visibility）の null 扱いと揃えること。
-   * ⚠️ 母集団が「`full` 以外すべて」に広がるため LOW_RATING_SCAN の窓の意味も変わる（§19 未対応4）。
+   * ★amount は select しない★（¥がスタッフ画面に漏れない構造を崩さない・§2/§4）。
+   *   tier も表示はしない。**詳細が開けるか**の判定にだけ使う。
+   * `review_id` が null の行（§13 決定6 の過去分・遡及しない）は感想に結びつかないので除く。
    */
-  const myLowQuery = supabaseAdmin
-    .from("reviews")
-    .select("id, created_at")
-    .eq("salon_id", ctx.salon_id)
+  const myPurchasesQuery = supabaseAdmin
+    .from("rating_purchases")
+    .select("review_id, tier")
     .eq("staff_id", ctx.staff_id)
-    .or(
-      `share_scope.neq.${STAFF_VISIBLE_SHARE_SCOPE},share_scope.is.null,rating.lt.${STAFF_BODY_MIN_RATING},rating.is.null`,
-    )
-    .order("created_at", { ascending: false })
-    .limit(LOW_RATING_SCAN);
+    .not("review_id", "is", null);
 
   // 感想（reviews）: あなたへ／お店への各グループ×今週/今月/今期 ＋ Team voices。
   const [
@@ -284,7 +265,7 @@ export default async function StaffHomePage() {
     shopRvQ,
     voicesRes,
     myHighRes,
-    myLowRes,
+    myPurchasesRes,
   ] = await Promise.all([
     countRows("reviews", youScope, weekStart),
     countRows("reviews", youScope, monthStart),
@@ -294,7 +275,7 @@ export default async function StaffHomePage() {
     countRows("reviews", salonScope, quarterStart),
     voicesQuery.order("created_at", { ascending: false }).limit(5),
     myHighQuery,
-    myLowQuery,
+    myPurchasesQuery,
   ]);
 
   const youReviews: PeriodCounts = {
@@ -340,29 +321,58 @@ export default async function StaffHomePage() {
   const voices = (voicesRes.data ?? []) as VoiceRow[];
 
   /**
-   * 低評価側のうち「有料スタンプが贈られたもの」だけを残す（§14 決定3）。
+   * 購入のうち**詳細を開けるもの**だけに絞る。
    * ★詳細（/staff/received/[reviewId]）の stamp_only 条件と厳密に一致させる★
    *   向こうは tier を解決できないものを 404 に倒すので、ここでも getTier で絞る。
    *   緩めるとリンク先が 404 になり、締めると届いたスタンプに辿り着けない。
-   * ★amount は select しない★（¥がスタッフ画面に漏れない構造を崩さない）。
-   *   tier も表示はしない。ここでは「詳細が開けるか」の判定にだけ使う。
    */
-  const lowRows = (myLowRes.data ?? []) as MyLowRow[];
-  let stampedLowIds = new Set<string>();
-  if (lowRows.length > 0) {
-    const { data: purchased } = await supabaseAdmin
-      .from("rating_purchases")
-      .select("review_id, tier")
-      .in(
-        "review_id",
-        lowRows.map((r) => r.id),
-      );
-    stampedLowIds = new Set(
-      (purchased ?? [])
-        .filter((p) => getTier(p.tier))
-        .map((p) => p.review_id as string),
-    );
-  }
+  const stampedLowIds = new Set(
+    ((myPurchasesRes.data ?? []) as { review_id: string | null; tier: string | null }[])
+      .filter((p) => p.review_id && getTier(p.tier))
+      .map((p) => p.review_id as string),
+  );
+  const stampedIds = Array.from(stampedLowIds);
+
+  /**
+   * (2) 本文を出さない側。**★条件は myHighQuery の補集合にする★**（§19 決定3）。
+   *
+   * ★「manager_only を足す」ではなく「`full` 以外を全部」と書く★
+   *   `full` は allow-list（everyone かつ rating>=3・staffViewMode と同じ形）なので、
+   *   その否定＝「everyone でない **or** rating>=3 でない」を4項で書き下す。
+   *   述語が互いに補集合だから**排他かつ網羅**になる（`.eq` で偶然弾ける、ではない）。
+   *
+   * ★`is.null` の2項を明示しないと、その行がどちらの一覧にも入らず消える★
+   *   PostgREST の neq / lt は SQL の `<>` / `<` で、**3値論理により NULL には TRUE を
+   *   返さない**（`share_scope IS NULL` も `rating IS NULL` も両方の一覧から漏れる）。
+   *
+   *   `.eq("share_scope", …)` を外すだけでも不足で、**manager_only ＋ rating 4 ＋ 購入あり**が
+   *   High（everyone でない）にも Low（rating>=3）にも入らず、
+   *   **詳細だけ stamp_only を返す＝「課金されたのに /staff に出ない」**が残る
+   *   （§13 が購入条件に share_scope を入れた元の問題）。
+   *
+   * rating が null の行も本文なし側に入れる（本文を出してよい根拠が無いため）。
+   * staffViewMode（@/lib/review-visibility）の null 扱いと揃えること。
+   *
+   * ★`.in("id", stampedIds)` で母集団を購入のあるものに閉じた（§22 決定1）★
+   *   走査幅（旧 LOW_RATING_SCAN）は不要になった。件数はそのスタッフの購入数が上限なので
+   *   **limit を置かない**（PostgREST の max-rows 1000 に届く規模ではない）。
+   *   購入が0件ならクエリ自体を投げない（`in.()` を PostgREST に送らない）。
+   */
+  const myLowRes =
+    stampedIds.length === 0
+      ? null
+      : await supabaseAdmin
+          .from("reviews")
+          .select("id, created_at")
+          .eq("salon_id", ctx.salon_id)
+          .eq("staff_id", ctx.staff_id)
+          .in("id", stampedIds)
+          .or(
+            `share_scope.neq.${STAFF_VISIBLE_SHARE_SCOPE},share_scope.is.null,rating.lt.${STAFF_BODY_MIN_RATING},rating.is.null`,
+          )
+          .order("created_at", { ascending: false });
+
+  const lowRows = (myLowRes?.data ?? []) as MyLowRow[];
 
   // 2本を新着順にマージして上位 MY_VOICES_LIMIT 件。
   // ★limit はマージ後に掛ける★ クエリ側で5件ずつ取って後から混ぜると順序が壊れる。
@@ -438,8 +448,9 @@ export default async function StaffHomePage() {
         </section>
 
         {/* あなたに届いた声（自分宛て・新着5件）。各行が 13 スタッフ通知（/staff/received/[id]）へ。
-            絞り込みは Team voices の staff 経路と同一条件のため、上のマトリクスの件数より
-            少なく見えることがある（manager_only / rating<=2 は出さない）。 */}
+            ⚠️ **Team voices の staff 経路とは条件が違う**（§19 以後）。こちらは
+            「`full`（everyone かつ rating>=3）」＋「**それ以外でも購入があれば** stamp_only」で、
+            購入の無い `full` 以外は出ない。上のマトリクスの件数より少なく見えることがある。 */}
         <Card>
           <div className="stack-md">
             <h2 className="headline-sm">あなたに届いた声</h2>
