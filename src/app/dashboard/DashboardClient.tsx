@@ -272,7 +272,10 @@ export default function DashboardClient({
               />
             </Card>
 
-            {/* 6. 最近の評価（時刻・顧客名・スタッフ名・ティア・§20 決定3）。並びは時刻順・ティアの色は変えない */}
+            {/* 6. 最近の評価（時刻・顧客名・スタッフ名・ティア・§20 決定3）。並びは時刻順・ティアの色は変えない。
+                スマホ幅（<=520px）では2段: 1段目「日付・ティア」／2段目「○○様 → スタッフ名」（§20 追加決定2）。
+                .recent-who はパソコン幅では display: contents（包みが無いのと同じ）で、1段の並びは従来のまま。
+                矢印（.recent-arrow）はスマホ幅でだけ出す。 */}
             <Card>
               <div className="stack-md">
                 <h2 className="headline-sm">最近の評価</h2>
@@ -283,8 +286,13 @@ export default function DashboardClient({
                     data.recent.map((r, i) => (
                       <div key={i} className="recent-row">
                         <span className="recent-time">{r.time}</span>
-                        <span className="recent-customer">{r.customer}様</span>
-                        <span className="recent-name">{r.staff}</span>
+                        <span className="recent-who">
+                          <span className="recent-customer">{r.customer}様</span>
+                          <span className="recent-arrow" aria-hidden="true">
+                            →
+                          </span>
+                          <span className="recent-name">{r.staff}</span>
+                        </span>
                         <span className="recent-tier">{r.tier}</span>
                       </div>
                     ))

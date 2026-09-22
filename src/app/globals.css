@@ -1551,6 +1551,43 @@ textarea.field {
   font-size: 0.95rem;
   color: var(--ink);
 }
+/* 顧客名とスタッフ名の包み。パソコン幅では箱を作らない（子が .recent-row の flex に直接並ぶ＝従来の1段）。 */
+.recent-who { display: contents; }
+/* 「○○様 → スタッフ名」の矢印。パソコン幅では出さない（従来の1段に矢印は無い）。 */
+.recent-arrow { display: none; }
+
+/* スマホ幅は2段（§20 追加決定2・2026-09-22）。1段目「日付・ティア」／2段目「○○様 → スタッフ名」。
+   日付を足した1段では名前の列が1〜2文字まで削られて読めなかった（commit 3b の本番確認）。
+   2段目は画面幅いっぱいを名前に使い、それでも収まらない極端に長い名前のときだけ ellipsis。
+   ブレークポイントはダッシュボードの .metric-grid・SalonNav と同じ 520px。 */
+@media (max-width: 520px) {
+  .recent-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "time tier"
+      "who  who";
+    row-gap: var(--space-xs);
+    column-gap: var(--space-md);
+  }
+  .recent-time { grid-area: time; width: auto; }
+  .recent-tier { grid-area: tier; }
+  .recent-who {
+    grid-area: who;
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-xs);
+    min-width: 0;
+  }
+  .recent-customer,
+  .recent-name { flex: 0 1 auto; }
+  .recent-arrow {
+    display: inline;
+    flex: none;
+    font-size: 0.85rem;
+    color: var(--g25);
+  }
+}
 
 /* ============================================================
    VIP のお客様（画面マップ14系・Phase 5-a / デモmock）
