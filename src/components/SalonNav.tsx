@@ -32,7 +32,8 @@ const PRIMARY: PrimaryNavItem[] = [
   },
   {
     href: "/manager/inbox",
-    // /manager/inbox が読むのは reviews のみ（rating_purchases は参照0件）＝実態は感想の一覧。
+    // /manager/inbox の主役は reviews＝実態は感想の一覧。rating_purchases は各行のティアバッジ用に
+    // review_id, tier だけを引く（§20 決定1・金額は引かない）。
     // ドメイン用語も「感想 = reviews」で確定している（docs/10_domain.md）。
     label: "感想",
     // 既に2文字で最短。フル/短縮は同一（型の一貫性のため short は省略しない）。

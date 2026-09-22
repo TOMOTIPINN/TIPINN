@@ -5,6 +5,7 @@ import { getSession } from "@/lib/session";
 import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import { REVIEW_RATINGS, SHARE_SCOPES, type ShareScope } from "@/lib/review";
+import { getTier } from "@/lib/rating-tiers";
 import InboxList, { type InboxRow } from "./InboxList";
 import SalonNav from "@/components/SalonNav";
 import { resolveSalonRole } from "@/lib/display-role";
@@ -29,6 +30,13 @@ import { resolveSalonRole } from "@/lib/display-role";
  *   低評価の言葉は店長が受け止め（docs/00_philosophy.md §4.8）、`manager_only` はお客様の選択で
  *   すでに担保されている。表示条件に「店長の判断」という3つ目の軸を足さない。
  *   → docs/40_decisions.md §16。**visibility 列は DB に残すが読み書きしない。**
+ *
+ * ★§20 決定1（2026-09-22）で各行にティアバッジを足した★
+ *   その感想に紐づく評価スタンプ（rating_purchases.tier）を、公開範囲の隣に
+ *   **同じ褪せグレー（.tag-quiet）**で出す。取るのは review_id, tier だけで、
+ *   **amount は select しない**（金額はこの画面では扱わない・原則5）。
+ *   並び・件数・ページングは変えない（ティア順に並べ替えない・集計しない＝§20 ガードレール）。
+ *   過去21件の購入は review_id が null（§13 決定6）なので、新しい購入にしかバッジは付かない。
  *
  * トーン: 暖色＋ミント・ゴシック・**¥なし**（金額は select しない・§4）。
  *
@@ -86,6 +94,45 @@ const INBOX_PAGE_SIZE = 50;
  * （src/lib/fetch-all-rows.ts:3-5）。実運用で到達する想定は無い。
  */
 const INBOX_MAX_TAKE = 1000;
+
+/**
+ * rating_purchases を `.in("review_id", …)` で引くときの1回あたりの件数。
+ * take は最大 1000 件で、UUID を 1000 個並べると URL 長の上限に当たりうるため
+ * 100 件ずつに分けて引く（§20 実装前の判断3・未対応3）。
+ * 埋め込み（`rating_purchases(tier)`）は本番の外部キーに依存するので使わない。
+ */
+const TIER_IN_CHUNK = 100;
+
+/**
+ * 表示中の感想に紐づく評価スタンプの tier を review_id → tier の Map で返す。
+ * 0047 の部分一意インデックスにより、1つの感想に付く購入は最大1件。
+ * 取るのは review_id, tier だけ（**amount は取らない**・原則5）。
+ */
+async function fetchTierMap(
+  salonId: string,
+  reviewIds: string[],
+): Promise<Map<string, string>> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < reviewIds.length; i += TIER_IN_CHUNK) {
+    chunks.push(reviewIds.slice(i, i + TIER_IN_CHUNK));
+  }
+  const results = await Promise.all(
+    chunks.map((ids) =>
+      supabaseAdmin
+        .from("rating_purchases")
+        .select("review_id, tier")
+        .eq("salon_id", salonId)
+        .in("review_id", ids),
+    ),
+  );
+  const map = new Map<string, string>();
+  for (const res of results) {
+    for (const p of (res.data ?? []) as { review_id: string | null; tier: string }[]) {
+      if (p.review_id) map.set(p.review_id, p.tier);
+    }
+  }
+  return map;
+}
 
 /**
  * `?take=` を読む。不正値・未指定は 1ページ目。
@@ -190,6 +237,12 @@ export default async function ManagerInboxPage({
 
   const rawRows = (res.data ?? []) as unknown as Row[];
 
+  // 表示中の行に紐づく tier（§20 決定1）。行の並び・件数には影響しない。
+  const tierMap = await fetchTierMap(
+    salonId,
+    rawRows.map((r) => r.id),
+  );
+
   const rows: InboxRow[] = rawRows.map((r) => ({
     id: r.id,
     emoji: RATING_EMOJI.get(r.rating ?? -1) ?? "♥",
@@ -198,6 +251,7 @@ export default async function ManagerInboxPage({
     time: jstStamp.format(new Date(r.created_at)),
     body: r.body,
     shareScope: r.share_scope,
+    tierLabel: getTier(tierMap.get(r.id))?.label ?? null,
   }));
 
   /**

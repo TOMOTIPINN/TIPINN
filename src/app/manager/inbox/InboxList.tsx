@@ -17,6 +17,12 @@ import { SHARE_SCOPES } from "@/lib/review";
  * 選択肢とまったく同じ文字列を店長にも見せる）。'everyone' を「全体に公開」等と
  * 言い換えない — 外部公開ではないため（review.ts の SHARE_SCOPES 直上のコメント）。
  *
+ * ★§20 決定1（2026-09-22）でティアバッジを足した★
+ *   その感想に付いた評価スタンプのティア名（Thank you 等）を、公開範囲の隣に出す。
+ *   色は公開範囲と**同じ褪せグレー（.tag-quiet）**で、ティアによって出し分けない
+ *   （高ティアを強調しない＝§20 ガードレール3。ティアはどれが good でもない）。
+ *   受け取るのはラベル文字列だけで、金額は受け取らない。
+ *
  * 視覚は globals.css のトークンのみ（インラインstyle禁止・30_design §7）。
  * ¥は受け取らない・表示しない（原則5）。
  */
@@ -29,6 +35,8 @@ export type InboxRow = {
   body: string;
   /** お客様が選んだ公開範囲。'everyone' | 'manager_only' 以外（null / 'either'）もあり得る。 */
   shareScope: string | null;
+  /** その感想に付いた評価スタンプのティア名。購入なし・過去21件（review_id null）は null。 */
+  tierLabel: string | null;
 };
 
 const SCOPE_LABEL = new Map<string, string>(
@@ -36,7 +44,7 @@ const SCOPE_LABEL = new Map<string, string>(
 );
 
 /**
- * 公開範囲のバッジ。
+ * 公開範囲とティアのバッジの段。
  *
  * **既知の値だけを明示的に判定し、それ以外はバッジを出さない。**
  *   `10_domain.md` は `either` を廃止済みとするが RPC 0046 は今も受理する
@@ -51,13 +59,24 @@ const SCOPE_LABEL = new Map<string, string>(
  *
  * 位置は **常に名前の下の段（.inbox-scope）**。上段（.inbox-meta）に混ぜると
  * 名前の長さで横に並んだり下に落ちたりして、行ごとに位置が変わる。
+ *
+ * ティア（§20 決定1）も同じ段・同じ .tag-quiet で公開範囲の隣に並べる。
+ * **どちらも無い行では段そのものを描かない**（空の段を描くと .inbox-row の gap の分だけ
+ * 行が高くなる）。
  */
-function ScopeBadge({ scope }: { scope: string | null }) {
-  const label = scope ? SCOPE_LABEL.get(scope) : undefined;
-  if (!label) return null;
+function RowBadges({
+  scope,
+  tierLabel,
+}: {
+  scope: string | null;
+  tierLabel: string | null;
+}) {
+  const scopeLabel = scope ? SCOPE_LABEL.get(scope) : undefined;
+  if (!scopeLabel && !tierLabel) return null;
   return (
     <div className="inbox-scope">
-      <span className="tag-quiet">{label}</span>
+      {scopeLabel && <span className="tag-quiet">{scopeLabel}</span>}
+      {tierLabel && <span className="tag-quiet">{tierLabel}</span>}
     </div>
   );
 }
@@ -75,7 +94,7 @@ export default function InboxList({ rows }: { rows: InboxRow[] }) {
             <span className="inbox-customer">{r.customerName}様</span>
             <span className="inbox-time">{r.time}</span>
           </div>
-          <ScopeBadge scope={r.shareScope} />
+          <RowBadges scope={r.shareScope} tierLabel={r.tierLabel} />
           <p className="inbox-body">「{r.body}」</p>
         </div>
       ))}

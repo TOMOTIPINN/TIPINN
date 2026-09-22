@@ -2051,8 +2051,8 @@ a.inbox-stat:hover { border-color: var(--line-strong); }
   color: var(--g25);
   white-space: nowrap;
 }
-/* 公開範囲バッジの段（名前の直下・左揃え固定）。 */
-.inbox-scope { display: flex; align-items: center; }
+/* 公開範囲バッジの段（名前の直下・左揃え固定）。§20 でティアバッジが隣に並ぶので gap を持つ。 */
+.inbox-scope { display: flex; align-items: center; gap: var(--space-sm); }
 .inbox-body { font-size: 0.9rem; color: var(--ink-soft); line-height: 1.8; }
 
 /* ============================================================
