@@ -22,7 +22,7 @@ import {
  *
  * 構造（デッキP8厳守・docs/archive/phase5b_staff_screens.md §6）:
  *   ヘッダー → hero（Your work echoes./評価が届きました/from 〇〇様）
- *   → あなたへの評価 ＋N件 → Review（タグ＋本文カード）→ 累計／ランク
+ *   → あなたへの評価 ＋N件 → Review（タグ＋本文カード）→ 今週／ランク
  *
  * トーン: サロンUI世界（暖色＋ミント）。ゴシック・明朝不可・細罫線・**¥は一切表示しない**。
  *   金額列（rating_purchases.amount）は **select しない**（¥がスタッフ画面に漏れないことを構造で担保・§2/§4）。
@@ -186,7 +186,7 @@ export default async function StaffReceivedPage({
   const customer = one(review.customers);
   const fromName = customer?.display_name ?? "お客様";
   const staffId = review.staff_id;
-  // サロン全体宛（staff_id null）＝「お店のみんなへ」。個人指標（累計/ランク）は出さない。
+  // サロン全体宛（staff_id null）＝「お店のみんなへ」。個人指標（今週/ランク）は出さない。
   const isSalonWide = staffId === null;
 
   // hero は「お客様が送った評価スタンプ（tier）」の絵柄＋tier名のみ。ムード顔文字は hero に出さない。
@@ -203,7 +203,8 @@ export default async function StaffReceivedPage({
   // 本文を届けない感想でも気分までは本人に届ける）。rating が null / 範囲外なら null。
   const mood = REVIEW_RATINGS.find((r) => r.value === review.rating) ?? null;
 
-  // 蓄積（件数のみ・フッター用）。累計=今週 / ランク=通算（仮閾値）。
+  // 蓄積（件数のみ・フッター用）。今週=JST 月曜0時以降の件数 / ランク=通算（仮閾値）。
+  // 通算の件数は表示しない（スタッフ同士の比較につながる・§18 A）。
   const [weekCount, totalCount] = staffId
     ? await Promise.all([
         countEvals(staffId, jstPeriodStartISO("week")),
@@ -295,14 +296,14 @@ export default async function StaffReceivedPage({
           </>
         )}
 
-        {/* 累計（今週件数）／ランク。個人指標のためサロン全体宛では丸ごと非表示。
+        {/* 今週（JST 月曜0時以降の件数）／ランク。個人指標のためサロン全体宛では丸ごと非表示。
             ランク（A/B/C/D）はさらに RANK_ENABLED のときのみ＝現在は常に非表示。
             ⚠️ この RANK_ENABLED は**ティア（👍☕🍰💐👑）とは無関係**。ティアは上の
             hero と「あなたへの評価」で無条件に表示している（→ docs/40_decisions.md §4.5）。 */}
         {!isSalonWide && (
           <div className="received-foot">
             <span>
-              <span className="received-foot-label">累計</span>
+              <span className="received-foot-label">今週</span>
               <span className="received-foot-value">{weekCount}</span>
             </span>
             {RANK_ENABLED && (
