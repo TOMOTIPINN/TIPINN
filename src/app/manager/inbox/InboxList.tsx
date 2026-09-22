@@ -29,6 +29,8 @@ import { SHARE_SCOPES } from "@/lib/review";
  *   行全体を Link にする（/staff の Team voices の行と同じ作り）。リンクの色・下線は
  *   グローバルの `a { color: inherit; text-decoration: none; }` でリセット済みで、
  *   **ミントにはしない**。詳細画面は manager なら同サロンで full（権限判定は変えていない）。
+ *   リンクには `?from=inbox` を付ける＝詳細画面の「戻る」を /manager/inbox にするためだけの印
+ *   （§20 実装前の判断1）。権限判定には使われない。
  *
  * 視覚は globals.css のトークンのみ（インラインstyle禁止・30_design §7）。
  * ¥は受け取らない・表示しない（原則5）。
@@ -94,7 +96,7 @@ export default function InboxList({ rows }: { rows: InboxRow[] }) {
       {rows.map((r) => (
         <Link
           key={r.id}
-          href={`/staff/received/${r.id}`}
+          href={`/staff/received/${r.id}?from=inbox`}
           className="inbox-row"
         >
           <div className="inbox-meta">

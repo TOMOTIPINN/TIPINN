@@ -44,12 +44,19 @@ import {
  *   /staff の「あなたに届いた声」セクション。リンク可否は下の mode と厳密に一致させる。
  *   **§20 決定2（2026-09-22）で /manager/inbox の各行からも開けるようにした。**
  *
- * ★閲覧者が manager のときだけ変える表示（§20 実装前の判断1）★
- *   ・見出し「あなたへの評価」→「○○さんへの評価」（担当スタッフ名）。
- *     サロン全体宛て（staff_id null）は「お店への評価」。
- *   ・戻るボタンと「ホームへ」の行き先 /staff → /manager/inbox。
+ * ★見出しと戻り先の決め方（§20 実装前の判断1・2026-09-22 改訂）★
+ *   ・見出しは **その感想が誰宛てか** で決める（閲覧者が店長かどうかでは決めない）。
+ *       本人宛て（review.staff_id === ctx.staff_id）→「あなたへの評価」（従来どおり）
+ *       他のスタッフ宛て → 「○○さんへの評価」（担当スタッフ名・引けなければ「担当スタッフさんへの評価」）
+ *       サロン全体宛て（staff_id null）→「お店への評価」
+ *   ・戻るボタンと「ホームへ」は **どこから来たか** で決める。manager かつ `?from=inbox`
+ *     のときだけ /manager/inbox、それ以外は従来どおり /staff。
+ *   ・**`?from=` は戻り先の表示にだけ使い、権限判定（mode・staffViewMode）には一切使わない。**
+ *     値は "inbox" と完全一致したときだけ有効、それ以外は無視する。
  *   ・「今週 N」（担当スタッフの今週の件数）は残す（店長は §5 で全数字を見る側）。
- *   **スタッフ本人（role='staff'）の表示は一切変えない。** 権限判定（下の mode）にも触れない。
+ *   兼任店長（原・さがべぇ）が /staff から自分宛てを開いたときはスタッフの画面のまま
+ *   （ec197da は閲覧者のロールで分岐していたため店長向けの表示になっていた）。
+ *   スタッフ本人は staffViewMode により自分宛てしか開けないので、表示は従来と変わらない。
  */
 
 type ReviewRow = {
@@ -89,10 +96,15 @@ function one<T>(v: T | T[] | null): T | null {
 
 export default async function StaffReceivedPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ reviewId: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { reviewId } = await params;
+  // 戻り先の表示にだけ使う（権限判定には使わない）。"inbox" と完全一致のときだけ有効。
+  const { from } = await searchParams;
+  const fromInbox = from === "inbox";
 
   const session = await getSession();
   if (!session) {
@@ -194,7 +206,7 @@ export default async function StaffReceivedPage({
   const customer = one(review.customers);
   const fromName = customer?.display_name ?? "お客様";
   const staffId = review.staff_id;
-  // サロン全体宛（staff_id null）＝「お店のみんなへ」。個人指標（今週/ランク）は出さない。
+  // サロン全体宛（staff_id null）＝見出し「お店への評価」（§20）。個人指標（今週/ランク）は出さない。
   const isSalonWide = staffId === null;
 
   // hero は「お客様が送った評価スタンプ（tier）」の絵柄＋tier名のみ。ムード顔文字は hero に出さない。
@@ -225,26 +237,26 @@ export default async function StaffReceivedPage({
 
   const displayRole = await resolveSalonRole(ctx);
 
-  // 閲覧者が manager のときだけ見出しと戻り先を変える（§20 実装前の判断1）。
-  // staff の経路では staff を引かず、見出し・戻り先も従来の値のまま。
-  const viewerIsManager = ctx.role === "manager";
-  let managerStaffName: string | null = null;
-  if (viewerIsManager && staffId) {
+  // 見出しは「誰宛てか」で決める（§20 実装前の判断1）。ここは表示だけで、mode は上で確定済み。
+  // 担当スタッフ名は「他のスタッフ宛て」のときだけ引く（本人宛て・サロン全体宛てでは引かない）。
+  const isOwnReview = staffId !== null && staffId === ctx.staff_id;
+  let otherStaffName: string | null = null;
+  if (staffId && !isOwnReview) {
     const { data: staffRow } = await supabaseAdmin
       .from("staff")
       .select("name")
       .eq("id", staffId)
       .maybeSingle();
-    managerStaffName = (staffRow?.name as string | undefined) ?? null;
+    otherStaffName = (staffRow?.name as string | undefined) ?? null;
   }
-  const evalLabel = viewerIsManager
-    ? isSalonWide
-      ? "お店への評価"
-      : `${managerStaffName ?? "担当スタッフ"}さんへの評価`
-    : isSalonWide
-      ? "お店のみんなへ"
-      : "あなたへの評価";
-  const backHref = viewerIsManager ? "/manager/inbox" : "/staff";
+  const evalLabel = isSalonWide
+    ? "お店への評価"
+    : isOwnReview
+      ? "あなたへの評価"
+      : `${otherStaffName ?? "担当スタッフ"}さんへの評価`;
+  // 戻り先は「どこから来たか」で決める。manager かつ ?from=inbox のときだけ Inbox へ。
+  const backHref =
+    ctx.role === "manager" && fromInbox ? "/manager/inbox" : "/staff";
 
   return (
     <main className="page page-top" data-role={displayRole}>
@@ -259,7 +271,7 @@ export default async function StaffReceivedPage({
           <span aria-hidden="true" />
         </div>
 
-        {/* hero（お客様が送った評価スタンプの絵柄のみ。tier名は「あなたへの評価」直下に置く） */}
+        {/* hero（お客様が送った評価スタンプの絵柄のみ。tier名は見出し（evalLabel）の直下に置く） */}
         <section className="stack-sm center-text">
           <p className="received-mark" aria-hidden="true">
             {heroEmoji}
@@ -271,7 +283,7 @@ export default async function StaffReceivedPage({
 
         <hr className="rule" />
 
-        {/* あなたへの評価 → tier名（件数ではなく評価スタンプの種類を主役にする） */}
+        {/* 見出し（誰宛てか・§20）→ tier名（件数ではなく評価スタンプの種類を主役にする） */}
         <section className="stack-sm center-text">
           <p className="received-count-label">{evalLabel}</p>
           {tierDef ? (
