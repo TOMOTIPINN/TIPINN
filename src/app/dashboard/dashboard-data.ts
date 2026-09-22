@@ -9,7 +9,8 @@
  *  - すべて salon_id でスコープ（越境しない）。
  *  - ¥は「店舗合計（rating_purchases.amount 合計）」のみ。per-staff の ¥ は client に一切出さない
  *    （StaffAgg.revenue は常に 0 で返す）。
- *  - 顧客名は VIP 一覧のみ（レジ判別補助・原則7）。最近の評価には顧客名を含めない。
+ *  - 顧客名は VIP 一覧（レジ判別補助）と最近の評価（§20 決定3）のみ。どちらも同サロンの店長にだけ
+ *    表示する（§13 追加決定「名前＋ティアは同サロンの店長にも表示される」と整合・原則7）。
  *
  * 日付基準（JST / Asia/Tokyo）:
  *  - reviews / rating_purchases は created_at（timestamptz）。JST境界の ISO で範囲比較する
@@ -48,7 +49,8 @@ const jstTime = new Intl.DateTimeFormat("ja-JP", {
   hour12: false,
 });
 
-export type RecentEval = { time: string; staff: string; tier: Tier };
+/** 最近の評価1行。**amount は持たない**（金額は店舗合計でのみ出す・原則5）。 */
+export type RecentEval = { time: string; customer: string; staff: string; tier: Tier };
 export type VipCustomer = { name: string; stampCount: number; voice: string | null };
 
 export type DashboardData = {
@@ -94,6 +96,7 @@ type ReviewRow = {
 };
 type RatingRow = {
   staff_id: string | null;
+  customer_id: string;
   tier: string;
   amount: number;
   created_at: string;
@@ -189,7 +192,7 @@ export async function getDashboardData(
       (from, to) =>
         supabaseAdmin
           .from("rating_purchases")
-          .select("staff_id, tier, amount, created_at")
+          .select("staff_id, customer_id, tier, amount, created_at")
           .eq("salon_id", salonId)
           .gte("created_at", spanStartISO)
           .order("created_at", { ascending: true })
@@ -324,17 +327,21 @@ export async function getDashboardData(
     revenue: breakdownRevenue[label],
   }));
 
-  // 最近の評価（当期・最新5件・顧客名は含めない＝原則7）。
-  const recent: RecentEval[] = ratings
+  /**
+   * 最近の評価（当期・最新5件）。行は「時刻・顧客名・スタッフ名・ティア」（§20 決定3）。
+   *
+   * ★顧客名を出す（§20 決定3 で「顧客名は含めない」を撤回した）★
+   *   同サロンの店長に「誰がどのティアを送ったか」を見せることは §13 追加決定
+   *   （名前＋ティアは同サロンの店長にも表示される）で既に決まっている。この画面は
+   *   manager 専用ガード済み（page.tsx）。顧客名は下の wave 2 で VIP と**まとめて1回で**引く。
+   *   並びは時刻の新しい順のまま（ティア順にしない）・amount は持たせない（§20 ガードレール）。
+   *   rating_purchases を直接読むので、review_id が null の過去21件にも顧客名とティアが出る。
+   */
+  const recentRows = ratings
     .filter((rp) => inWindow(Date.parse(rp.created_at), curStartMs, curEndMs))
     .filter((rp) => SLUG_TO_LABEL[rp.tier])
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-    .slice(0, 5)
-    .map((rp) => ({
-      time: jstTime.format(new Date(rp.created_at)),
-      staff: (rp.staff_id && idToName.get(rp.staff_id)) || "サロン全体",
-      tier: SLUG_TO_LABEL[rp.tier],
-    }));
+    .slice(0, 5);
 
   // echo flow（直近3ヶ月・月次件数＝感想＋評価スタンプ）。
   const flowCounts: Record<string, number[]> = {};
@@ -378,13 +385,18 @@ export async function getDashboardData(
   const vipTop = [...vipRows].sort((a, b) => b.count - a.count).slice(0, 6);
   const vipIds = new Set(vipTop.map((v) => v.customer_id));
 
-  // wave 2: VIP の表示名（原則7の例外＝レジ判別補助）。
+  // wave 2: VIP（レジ判別補助）と最近の評価（§20 決定3）の表示名を**1回で**引く。
+  // 同サロンの店長にだけ出す（原則7）。クエリはどちらか一方でもあるときの1本だけ。
   const nameById = new Map<string, string>();
-  if (vipTop.length) {
+  const nameIds = new Set<string>([
+    ...vipIds,
+    ...recentRows.map((rp) => rp.customer_id),
+  ]);
+  if (nameIds.size) {
     const { data: custData } = await supabaseAdmin
       .from("customers")
       .select("id, display_name")
-      .in("id", [...vipIds]);
+      .in("id", [...nameIds]);
     for (const c of (custData ?? []) as { id: string; display_name: string | null }[]) {
       nameById.set(c.id, c.display_name ?? "お客様");
     }
@@ -401,6 +413,13 @@ export async function getDashboardData(
       vipVoice[r.customer_id] = r.body;
     }
   }
+  const recent: RecentEval[] = recentRows.map((rp) => ({
+    time: jstTime.format(new Date(rp.created_at)),
+    customer: nameById.get(rp.customer_id) ?? "お客様",
+    staff: (rp.staff_id && idToName.get(rp.staff_id)) || "サロン全体",
+    tier: SLUG_TO_LABEL[rp.tier],
+  }));
+
   const vipCustomers: VipCustomer[] = vipTop.map((v) => ({
     name: nameById.get(v.customer_id) ?? "お客様",
     stampCount: v.count,

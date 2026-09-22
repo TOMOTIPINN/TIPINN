@@ -25,7 +25,7 @@ import type { PeriodKey } from "./period";
  * 規制ガード（原則5・6・7）:
  *  - ¥は「店舗合計」としてのみ表示（個人に割り付けない・per-staff の ¥ は集計層で 0 化済）。
  *  - スタッフ個人は件数・ティア内訳・ボイス・前期間比のみ（StaffPeriodView）。
- *  - 顧客名は VIP 一覧のみ（レジ判別補助・原則7）。最近の評価には顧客名を出さない。
+ *  - 顧客名は VIP 一覧（レジ判別補助）と最近の評価（§20 決定3）のみ。この画面は manager 専用（原則7）。
  */
 
 // 前期間比（0除算ガード。符号付き整数%）。
@@ -272,7 +272,7 @@ export default function DashboardClient({
               />
             </Card>
 
-            {/* 6. 最近の評価（顧客名は出さない・原則7） */}
+            {/* 6. 最近の評価（時刻・顧客名・スタッフ名・ティア・§20 決定3）。並びは時刻順・ティアの色は変えない */}
             <Card>
               <div className="stack-md">
                 <h2 className="headline-sm">最近の評価</h2>
@@ -283,6 +283,7 @@ export default function DashboardClient({
                     data.recent.map((r, i) => (
                       <div key={i} className="recent-row">
                         <span className="recent-time">{r.time}</span>
+                        <span className="recent-customer">{r.customer}様</span>
                         <span className="recent-name">{r.staff}</span>
                         <span className="recent-tier">{r.tier}</span>
                       </div>
