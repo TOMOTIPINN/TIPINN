@@ -6,6 +6,7 @@ import { getStaffContext } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import { REVIEW_RATINGS, SHARE_SCOPES, type ShareScope } from "@/lib/review";
 import { getTier } from "@/lib/rating-tiers";
+import { jstMonthDayTime } from "@/lib/jst-format";
 import InboxList, { type InboxRow } from "./InboxList";
 import SalonNav from "@/components/SalonNav";
 import { resolveSalonRole } from "@/lib/display-role";
@@ -63,14 +64,6 @@ function one<T>(v: T | T[] | null): T | null {
 const RATING_EMOJI = new Map<number, string>(
   REVIEW_RATINGS.map((r) => [r.value, r.emoji]),
 );
-
-const jstStamp = new Intl.DateTimeFormat("ja-JP", {
-  timeZone: "Asia/Tokyo",
-  month: "numeric",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 /**
  * 上部のピル＝公開範囲フィルタ（§17）。'all' が既定。
@@ -248,7 +241,7 @@ export default async function ManagerInboxPage({
     emoji: RATING_EMOJI.get(r.rating ?? -1) ?? "♥",
     staffName: one(r.staff)?.name ?? "サロン全体",
     customerName: one(r.customers)?.display_name ?? "お客様",
-    time: jstStamp.format(new Date(r.created_at)),
+    time: jstMonthDayTime.format(new Date(r.created_at)),
     body: r.body,
     shareScope: r.share_scope,
     tierLabel: getTier(tierMap.get(r.id))?.label ?? null,

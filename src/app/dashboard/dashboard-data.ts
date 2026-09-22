@@ -23,6 +23,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { RATING_TIERS } from "@/lib/rating-tiers";
 import { computeVipProgress } from "@/lib/vip";
+import { jstMonthDayTime } from "@/lib/jst-format";
 import {
   TIER_ORDER,
   emptyTiers,
@@ -40,14 +41,6 @@ const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 const SLUG_TO_LABEL: Record<string, Tier> = Object.fromEntries(
   RATING_TIERS.map((t) => [t.tier, t.label as Tier]),
 );
-
-// 最近の評価の時刻表示（JST・HH:MM）。
-const jstTime = new Intl.DateTimeFormat("ja-JP", {
-  timeZone: "Asia/Tokyo",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
 
 /** 最近の評価1行。**amount は持たない**（金額は店舗合計でのみ出す・原則5）。 */
 export type RecentEval = { time: string; customer: string; staff: string; tier: Tier };
@@ -413,8 +406,9 @@ export async function getDashboardData(
       vipVoice[r.customer_id] = r.body;
     }
   }
+  // 時刻は Inbox と同じ「M/D HH:mm」（§20 追加決定）。別の日が混ざっても並び順が読める。
   const recent: RecentEval[] = recentRows.map((rp) => ({
-    time: jstTime.format(new Date(rp.created_at)),
+    time: jstMonthDayTime.format(new Date(rp.created_at)),
     customer: nameById.get(rp.customer_id) ?? "お客様",
     staff: (rp.staff_id && idToName.get(rp.staff_id)) || "サロン全体",
     tier: SLUG_TO_LABEL[rp.tier],
