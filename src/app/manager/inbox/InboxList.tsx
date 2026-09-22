@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SHARE_SCOPES } from "@/lib/review";
 
 /**
@@ -22,6 +23,12 @@ import { SHARE_SCOPES } from "@/lib/review";
  *   色は公開範囲と**同じ褪せグレー（.tag-quiet）**で、ティアによって出し分けない
  *   （高ティアを強調しない＝§20 ガードレール3。ティアはどれが good でもない）。
  *   受け取るのはラベル文字列だけで、金額は受け取らない。
+ *
+ * ★§20 決定2（2026-09-22）で各行を詳細（/staff/received/[reviewId]）へのリンクにした★
+ *   §16・§17 が範囲外としていた「Inbox の行から詳細への導線」を解消する。
+ *   行全体を Link にする（/staff の Team voices の行と同じ作り）。リンクの色・下線は
+ *   グローバルの `a { color: inherit; text-decoration: none; }` でリセット済みで、
+ *   **ミントにはしない**。詳細画面は manager なら同サロンで full（権限判定は変えていない）。
  *
  * 視覚は globals.css のトークンのみ（インラインstyle禁止・30_design §7）。
  * ¥は受け取らない・表示しない（原則5）。
@@ -85,7 +92,11 @@ export default function InboxList({ rows }: { rows: InboxRow[] }) {
   return (
     <div>
       {rows.map((r) => (
-        <div key={r.id} className="inbox-row">
+        <Link
+          key={r.id}
+          href={`/staff/received/${r.id}`}
+          className="inbox-row"
+        >
           <div className="inbox-meta">
             <span className="inbox-emoji" aria-hidden="true">
               {r.emoji}
@@ -96,7 +107,7 @@ export default function InboxList({ rows }: { rows: InboxRow[] }) {
           </div>
           <RowBadges scope={r.shareScope} tierLabel={r.tierLabel} />
           <p className="inbox-body">「{r.body}」</p>
-        </div>
+        </Link>
       ))}
     </div>
   );

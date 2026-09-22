@@ -42,6 +42,14 @@ import {
  *
  * 到達導線: /staff の Team voices の各行（自分宛て or 同サロンの manager のみリンク化）と、
  *   /staff の「あなたに届いた声」セクション。リンク可否は下の mode と厳密に一致させる。
+ *   **§20 決定2（2026-09-22）で /manager/inbox の各行からも開けるようにした。**
+ *
+ * ★閲覧者が manager のときだけ変える表示（§20 実装前の判断1）★
+ *   ・見出し「あなたへの評価」→「○○さんへの評価」（担当スタッフ名）。
+ *     サロン全体宛て（staff_id null）は「お店への評価」。
+ *   ・戻るボタンと「ホームへ」の行き先 /staff → /manager/inbox。
+ *   ・「今週 N」（担当スタッフの今週の件数）は残す（店長は §5 で全数字を見る側）。
+ *   **スタッフ本人（role='staff'）の表示は一切変えない。** 権限判定（下の mode）にも触れない。
  */
 
 type ReviewRow = {
@@ -217,13 +225,34 @@ export default async function StaffReceivedPage({
 
   const displayRole = await resolveSalonRole(ctx);
 
+  // 閲覧者が manager のときだけ見出しと戻り先を変える（§20 実装前の判断1）。
+  // staff の経路では staff を引かず、見出し・戻り先も従来の値のまま。
+  const viewerIsManager = ctx.role === "manager";
+  let managerStaffName: string | null = null;
+  if (viewerIsManager && staffId) {
+    const { data: staffRow } = await supabaseAdmin
+      .from("staff")
+      .select("name")
+      .eq("id", staffId)
+      .maybeSingle();
+    managerStaffName = (staffRow?.name as string | undefined) ?? null;
+  }
+  const evalLabel = viewerIsManager
+    ? isSalonWide
+      ? "お店への評価"
+      : `${managerStaffName ?? "担当スタッフ"}さんへの評価`
+    : isSalonWide
+      ? "お店のみんなへ"
+      : "あなたへの評価";
+  const backHref = viewerIsManager ? "/manager/inbox" : "/staff";
+
   return (
     <main className="page page-top" data-role={displayRole}>
       <div className="container stack animate-in">
         <RoleBar role={displayRole} />
         {/* ヘッダー（← 戻る ＋ 中央タイトル ＋ 細罫線） */}
         <div className="staff-topbar">
-          <Link href="/staff" className="staff-back" aria-label="戻る">
+          <Link href={backHref} className="staff-back" aria-label="戻る">
             ←
           </Link>
           <span className="staff-topbar-title">Received</span>
@@ -244,9 +273,7 @@ export default async function StaffReceivedPage({
 
         {/* あなたへの評価 → tier名（件数ではなく評価スタンプの種類を主役にする） */}
         <section className="stack-sm center-text">
-          <p className="received-count-label">
-            {isSalonWide ? "お店のみんなへ" : "あなたへの評価"}
-          </p>
+          <p className="received-count-label">{evalLabel}</p>
           {tierDef ? (
             <p className="received-tier-name">{tierDef.label}</p>
           ) : (
@@ -315,7 +342,7 @@ export default async function StaffReceivedPage({
           </div>
         )}
 
-        <Link href="/staff" className="btn btn-quiet btn-block">
+        <Link href={backHref} className="btn btn-quiet btn-block">
           ホームへ
         </Link>
       </div>
