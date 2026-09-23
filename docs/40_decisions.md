@@ -2189,18 +2189,23 @@ Niii の **`manager_only`＋rating 4 の感想**と、その **Thank you ¥100 �
 | 1 | **0048**（`organizations` / `organization_members` / `salons.org_id` / `salon_invites.org_id`） | **2026-09-23 適用済み**（`cd825c3`） |
 | 2 | オーナー表示の差し替え（`display-role.ts` を `organization_members` 由来にする） | **2026-09-23 完了**（`aa4a6bd`。前準備として `a8cdbc1`） |
 | 3 | `/owner` の閲覧 | **着手（3a `1a81c82` まで完了）**。内訳は下の「コミット3 の設計」 |
-| 4 | サロン作成処理の**組織指定必須化**と**入口チェック**（既存 staff 行を持つ人を入口で弾く） | 未着手 |
+| 4 | サロン作成処理の**組織指定必須化**と**入口チェック**（既存 staff 行を持つ人を入口で弾く） | **2026-09-23 完了**（4a `0c0cc38` / 4b `f920527` / 4c `1611308`。**4c は本番未検証**・下記） |
 | 5 | オーナー招待（方式 P / Q を決めてから） | 未着手 |
 
-#### ★運用上の制約（コミット4 を本番に出すまで有効）★
+#### ~~★運用上の制約（コミット4 を本番に出すまで有効）★~~ → **解除（2026-09-23）**
 
-**新しいサロン招待コードを発行しない。**
+> ~~**新しいサロン招待コードを発行しない。**
+> `salons.org_id` が NOT NULL になったのに対し、`/api/manager/salon/new` の
+> `salons` INSERT は `org_id` を渡していない（`route.ts:143-150`）。
+> **このままサロンを作ると INSERT が落ちる**（`error=save` でロールバック）。
+> 2026-09-23 時点で**未消費かつ期限内の招待コードは0件**なので、今すぐ壊れるものは無い。~~
 
-`salons.org_id` が NOT NULL になったのに対し、`/api/manager/salon/new` の
-`salons` INSERT は `org_id` を渡していない（`route.ts:143-150`）。
-**このままサロンを作ると INSERT が落ちる**（`error=save` でロールバック）。
+**解除**: コミット4c（`1611308`）の push をもって解除。
+`salons` の INSERT に `org_id`（招待コードの行から読んだ値）が入るようになり、
+**組織が指定された正しいコードならサロンを作れる**状態になった。
+組織未指定の招待は `invite_no_org` で弾かれる（`salons` の INSERT より前）。
 
-2026-09-23 時点で**未消費かつ期限内の招待コードは0件**なので、今すぐ壊れるものは無い。
+⚠️ ただし **4c は本番未検証**（下記）。初めて実際に作られるのはコミット5 のとき。
 
 #### 列名の記録（§8.1 / §21 本文との差）
 
@@ -2272,7 +2277,10 @@ Niii の **`manager_only`＋rating 4 の感想**と、その **Thank you ¥100 �
 | 3c | `/owner/[salonId]/inbox` | `507ee5f` | **本番確認済み** |
 | 3d-1 | 店舗一覧に今月の数字と前月比（店舗単位の比較） | `5eb99ad` | **本番確認済み** |
 | 3d-2 | 業態でまとめる（店舗に「業態」を持たせ、オーナーが `/owner` で選ぶ） | — | **未着手・実装時期は未定** |
-| 4 | サロン作成処理の組織指定必須化と入口チェック | — | 未着手 |
+| 4a | 入口チェック（staff 行を持つ人を弾く） | `0c0cc38` | **本番確認済み** |
+| 4b | 招待コードの発行で組織を指定 | `f920527` | **本番確認済み** |
+| 4c | サロン作成で招待コードの組織を必須化 | `1611308` | **実装済み・★本番未検証★** |
+| 4d | サロン作成のレート制限 | — | 未着手 |
 | 5 | オーナー招待（方式 P / Q を決めてから） | — | 未着手 |
 
 **対照群の確認**（本番でオーナーは原のみのため、他の人の実機で確認した）:
@@ -2440,6 +2448,135 @@ Niii の **`manager_only`＋rating 4 の感想**と、その **Thank you ¥100 �
 - **並びが登録順**で、**赤がどこにも無い**
 - **既存の `/dashboard` の前期間比の表示が変わっていない**（`DeltaPct` の切り出しによる退行なし）
 - **他組織の店舗 ID は 404 のまま**（3b から変わらない）
+
+#### コミット4 の決定（サロン作成の組織指定必須化＋入口チェック・2026-09-23）
+
+- **スタッフ行を持つ人は、サロン作成の入口で弾く。**
+  **manager もオーナーも含む。退職済み（`archived_at` あり）の行も含む。**
+  退職済みを含めるのは、本番の **`uq_staff_line_user_id` が archived 条件を持たない**
+  部分 unique index だから（`60_incidents.md` 2026-09-02 の★訂正★）。
+  退職済みの行だけを持つ人も `staff` の INSERT で必ず unique 違反になるので、
+  **在籍だけを見る `resolveStaffByLineUserId` では弾けない**。
+  → 判定は `hasAnyStaffRow`（`archived_at` で絞らない・取得失敗は fail closed）。
+
+  ★置く位置★ **フォームの読み取り・ロゴのアップロード・`salons` の INSERT より前**。
+  以前は `staff` INSERT（`salons` INSERT の後）で落ちており、補償トランザクションが
+  失敗すると**店長不在の孤児サロンが残りうる**経路だった。入口で弾けばその経路が消える。
+
+- **文言**（どちらも echo 運営への問い合わせを案内し、内部事情は書かない）:
+
+  | 場面 | 文言 |
+  |---|---|
+  | すでにスタッフ行がある | このアカウントはすでにスタッフとして登録されているため、新しいサロンを作れません。サロンを追加したい場合は、echo 運営（info@echo-thanks.jp）までご連絡ください。 |
+  | 招待コードに組織が未指定 | この招待コードは使用できません。お手数ですが、echo 運営（info@echo-thanks.jp）までご連絡ください。 |
+
+- **招待コードの発行で組織を必須にする**（`/admin/invites`）。
+  選択肢は `organizations` を `created_at` 昇順。ラベルに**サロン数**を添える（§8.1）。
+  API は **`organizations` に実在するかをサーバー側で確認**してから INSERT し、
+  入れるのは DB から引き直した id（フォームの文字列をそのまま使わない）。
+  **`salon_invites.org_id` は NOT NULL にしない**＝既存3行（`org_id` が null）の履歴を
+  書き換えないため。**使えるかどうかはアプリ側（`checkInviteCode`）で判定する。**
+
+- **サロンの `org_id` は招待コードの行から読んだ値だけを使う。**
+  `checkInviteCode` が返した `orgId` を `salons.org_id` に入れる。
+  **フォーム・クエリからは絶対に受け取らない。組織の自動作成もしない**（§21 決定6）。
+  **招待の消費（`consumeInvite`）の WHERE にも同じ `org_id` を入れる**＝事前確認と消費の間に
+  招待の組織が変わっていたら消費に失敗させ、既存の `invite_race` 経路でロールバックする
+  （`salons` に入れた組織と招待の組織が食い違ったまま確定させない）。
+
+- **レート制限（4d）は別コミット。** `/api/manager/salon/new` にだけ
+  `login_attempts` の絞りが無い件（`50_security.md` §5-5）は、コミット4 に混ぜると
+  「弾かれたのは入口チェックか制限か」が切り分けにくいため分けた。
+
+#### コミット4 の実装と本番確認（2026-09-23）
+
+| commit | 内容 | 確認 |
+|---|---|---|
+| `0c0cc38`（4a） | 入口チェック（`hasAnyStaffRow`） | **本番確認済み** |
+| `f920527`（4b） | 招待コードの発行で組織を指定 | **本番確認済み** |
+| `1611308`（4c） | サロン作成で招待コードの組織を必須化 | **★本番未検証★**（下記） |
+
+**4a の本番確認**（原のアカウント）:
+- `/manager/salon/new` で**フォームが出ず**、上の文言が表示される
+- **API に直接送っても `error=already_staff` で止まる**（`salons` の INSERT に到達しない）
+
+**4b の本番確認**（原のアカウント）:
+- 組織の選択肢と**サロン数の表示**が出る
+- **未選択では発行できない**
+- **echo Labs 指定のコード（`ZVGG-0441-R45K`）を発行**でき、一覧に組織名が出る
+- **存在しない組織 ID は `error=org` で弾かれ、コードが増えない**
+
+#### ★4c は本番未検証（「実機確認してから push」の例外）★
+
+**原のアカウントでは 4c の経路に到達できない。** 4a の入口チェックで先に止まるため
+（原は CARTA の staff 行を持つ）。**staff 行を1つも持たない LINE アカウントでしか
+通らない経路**で、それを本番で用意する手段が今は無い。
+
+- **確認したこと**: コードレビュー。`org_id` の出所と経路
+  （`salon_invites.org_id` → `checkInviteCode` の `select` → `invite.orgId` →
+  `salons.org_id` の INSERT → `consumeInvite` の WHERE）と、
+  route が `form.get("org_id")` を**読んでいない**こと。
+- **確認していないこと**: 実際にサロンが作られること。作られた行の `org_id`。
+- **いつ確認するか**: **コミット5 で新しいオーナーが初めてサロンを作るとき。**
+
+§6.4「一度に一つの変更を実機で確認してから次へ進む」の**例外として記録する**。
+例外にした理由は「本番で確認する手段が無い」ことであって、確認を省いたのではない。
+
+##### コミット5 で初めてサロンが作られたときに確認すること
+
+**A. 作成の直後に画面で**
+
+1. 完了画面（`?created=`）に店名と店頭QRが出る
+2. `/admin/invites` でそのコードが「登録済」になり、**組織**と**サロン名**が入る
+3. `/admin/salons` に新しいサロンが1行増える
+
+**B. SQL で `org_id` の一致を確かめる（本命）**
+
+`/admin/invites` は招待側の `org_id` しか見せないので、`salons` 側との突き合わせは SQL で行う。
+
+```sql
+-- 招待コードの組織と、そのコードで作られたサロンの組織が一致しているか
+select i.code,
+       io.name  as 招待の組織,
+       s.name   as サロン名,
+       so.name  as サロンの組織,
+       (i.org_id = s.org_id) as 一致,
+       i.used_at
+  from public.salon_invites i
+  join public.salons s         on s.id = i.salon_id
+  join public.organizations io on io.id = i.org_id
+  join public.organizations so on so.id = s.org_id
+ order by i.used_at desc nulls last;
+
+-- 組織に属さないサロンが無いこと（NOT NULL なので 0 件が正）
+select count(*) as org_id_null from public.salons where org_id is null;
+
+-- 新しいサロンの中身（作成者の staff 行が1件・role=manager か）
+select s.name, s.org_id, o.name as 組織,
+       (select count(*) from public.staff st where st.salon_id = s.id) as staff数,
+       (select count(*) from public.staff st where st.salon_id = s.id and st.role = 'manager') as manager数
+  from public.salons s
+  join public.organizations o on o.id = s.org_id
+ order by s.created_at desc
+ limit 3;
+```
+
+**「一致」が `true` であること**が確認点。`i.org_id` が null の古い行は join で落ちるので、
+出てくるのは 4b 以降に発行したコードだけになる。
+
+**C. 作成したオーナーの見え方**
+
+4. そのオーナーの `/staff`・`/dashboard` に店長として入れる（`role=manager`）
+5. **そのオーナーの `/owner`** — `organization_members` に行が無ければ `/staff` へ飛ぶ。
+   **作成しただけではオーナーにならない。**
+   ⚠️ ここは**コミット5 の設計判断そのもの**（方式 P / Q が未決）なので、
+   **期待値を先に決めてから**確認すること。
+6. 原の `/owner` — echo Labs 組織のサロンなら**出ない**。carta 指定で作った場合は一覧に増える。
+
+**D. 失敗側（片付けが要らないので、余裕があれば）**
+
+7. **組織未指定の古いコード**（期限切れの1件を「復旧」して使う）→ `error=invite_no_org`。
+   **`salons` が増えない**（INSERT より前で弾いている）。
 
 ### 未対応・確認事項
 
