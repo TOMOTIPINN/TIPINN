@@ -1,15 +1,16 @@
+import Link from "next/link";
 import { requireOwnerPage } from "@/lib/owner-guard";
-import { Eyebrow, Card } from "@/components/ui";
+import { Card } from "@/components/ui";
 import RoleBar from "@/components/RoleBar";
 
 /**
- * オーナートップ（/owner・§21 コミット3a）。
+ * オーナートップ（/owner・§21 コミット3a → 3b でリンク化）。
  *
- * ★3a は認可の骨格だけ★
- *   出すのは**組織名と配下の店舗名だけ**。数字・リンク・スタッフ情報は一切出さない。
- *   店舗単位の比較（§21 決定3）は**コミット3d**、店舗ごとの中身は
- *   `/owner/[salonId]/dashboard` ・ `/owner/[salonId]/inbox`（**コミット3b 以降**）で作る。
- *   ここで数字を出さないのは、ガードの挙動だけを本番で確かめられるようにするため（§6.4）。
+ * ★出すのは組織名と配下の店舗名だけ★
+ *   数字・スタッフ情報はここには出さない。店舗単位の比較（§21 決定3）は**コミット3d**。
+ *   店舗名は `/owner/[salonId]/dashboard` へのリンク（コミット3b）。
+ *   `/owner/[salonId]/inbox` はコミット3c。
+ *   **`/manager/*` ・ `/staff/*` への導線はこの画面から出さない。**
  *
  * 認可: `requireOwnerPage()`（未ログイン→LINEログイン／非オーナー→/staff）。
  *   判定は `organization_members` のみで、`staff.role` は見ない（§21 決定2）。
@@ -33,11 +34,11 @@ export default async function OwnerHomePage() {
       <div className="container stack animate-in">
         <RoleBar role="owner" />
 
+        {/* ロール表示は RoleBar（"Owner"）が担う。ここに Eyebrow で "Owner" を重ねない。 */}
         <header className="stack-sm">
-          <Eyebrow className="eyebrow-mint">Owner</Eyebrow>
           <h1 className="headline">{ctx.org_name}</h1>
           <p className="muted">
-            この会社が運営している店舗です。店舗ごとの数字はこのあと見られるようになります。
+            この会社が運営している店舗です。店舗名を選ぶと、その店舗の数字を見られます。
           </p>
         </header>
 
@@ -48,11 +49,16 @@ export default async function OwnerHomePage() {
             </p>
           ) : (
             <div className="stack-sm">
-              {/* 並びは salons.created_at 昇順（暫定）。正式な並び順は §21 コミット3d で決める。 */}
+              {/* 並びは salons.created_at 昇順（暫定）。正式な並び順は §21 コミット3d で決める。
+                  リンク先は /owner/[salonId]/dashboard のみ。/manager/* ・ /staff/* へは出さない。 */}
               {ctx.salons.map((salon) => (
-                <p key={salon.id} className="headline-sm">
+                <Link
+                  key={salon.id}
+                  href={`/owner/${salon.id}/dashboard`}
+                  className="headline-sm"
+                >
                   {salon.name}
-                </p>
+                </Link>
               ))}
             </div>
           )}

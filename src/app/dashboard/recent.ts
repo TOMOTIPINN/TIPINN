@@ -44,6 +44,11 @@ export function parseRecentTake(raw: string | undefined): number {
 export function dashboardHref(
   period: { key: PeriodKey; from?: string; to?: string },
   take: number,
+  /**
+   * リンク先のベースパス。既定は `/dashboard`（店長画面・従来どおり）。
+   * `/owner/[salonId]/dashboard` から流用するときだけ差し替える（§21 コミット3b）。
+   */
+  basePath: string = "/dashboard",
 ): string {
   const params = new URLSearchParams();
   if (period.key !== "month") params.set("period", period.key);
@@ -53,5 +58,5 @@ export function dashboardHref(
   }
   if (take !== RECENT_PAGE_SIZE) params.set("take", String(take));
   const q = params.toString();
-  return q ? `/dashboard?${q}` : "/dashboard";
+  return q ? `${basePath}?${q}` : basePath;
 }

@@ -28,10 +28,16 @@ export default function PeriodSelector({
   periodKey,
   from,
   to,
+  basePath = "/dashboard",
 }: {
   periodKey: PeriodKey;
   from?: string;
   to?: string;
+  /**
+   * 遷移先のベースパス。既定は `/dashboard`（店長画面・従来どおり）。
+   * `/owner/[salonId]/dashboard` から流用するときだけ差し替える（§21 コミット3b）。
+   */
+  basePath?: string;
 }) {
   const router = useRouter();
   // カスタム月入力（"YYYY-MM"）。custom で開いていれば URL 由来の値をプリフィル。
@@ -42,13 +48,13 @@ export default function PeriodSelector({
   const [currentYM] = useState<string>(jstNowYM);
 
   function goPreset(key: Exclude<PeriodKey, "custom">) {
-    router.push(`/dashboard?period=${key}`);
+    router.push(`${basePath}?period=${key}`);
   }
 
   function applyCustom() {
     if (!fromMonth || !toMonth) return;
     const params = new URLSearchParams({ period: "custom", from: fromMonth, to: toMonth });
-    router.push(`/dashboard?${params.toString()}`);
+    router.push(`${basePath}?${params.toString()}`);
   }
 
   return (

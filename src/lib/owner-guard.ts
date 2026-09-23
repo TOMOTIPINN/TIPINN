@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
 
@@ -124,4 +124,46 @@ export async function requireOwnerPage(returnTo: string): Promise<OwnerContext> 
   }
 
   return ctx;
+}
+
+/** uuid（8-4-4-4-12）。パスから受け取った salonId の形だけを見る。 */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * `/owner/[salonId]/**` 用ガード。オーナー本人であることに加えて、
+ * **その salonId が自分の組織配下であること**をサーバー側で検証する（§21 コミット3b）。
+ *
+ * ★salonId はパスに入っていてもクライアント入力★
+ *   `50_security.md` §1.1「body / query の salon_id は絶対に信用しない」は
+ *   パスパラメータでも同じ。照合は **DB から引いた `ctx.salons`** に対して行い、
+ *   `salonId` で直接クエリしない（越境の余地を作らない）。
+ *
+ * ★配下でない／uuid として不正 → notFound()（404）★
+ *   403 にすると「そのサロンは存在するが見せない」ことが分かり、
+ *   **他の組織の店舗の存在確認に使える**。404 なら「存在しない」と区別が付かない
+ *   （`/staff/received/[reviewId]` が他人の評価を 404 で伏せているのと同じ作法）。
+ *   uuid として不正な値も同じ 404 に畳む（形式の違いを応答に出さない）。
+ *
+ * ★redirect() / notFound() を try/catch で囲まない★
+ *   どちらも内部的に例外を投げて Next が拾う仕組みなので、catch すると
+ *   リダイレクトも 404 も効かなくなる（そのまま通過してしまう）。
+ */
+export async function requireOwnerSalon(
+  salonId: string,
+  returnTo: string,
+): Promise<{ ctx: OwnerContext; salon: OwnerSalon }> {
+  // 未ログイン→ログイン／非オーナー→/staff は requireOwnerPage が畳む。
+  const ctx = await requireOwnerPage(returnTo);
+
+  if (!UUID_RE.test(salonId)) {
+    notFound();
+  }
+
+  const salon = ctx.salons.find((s) => s.id === salonId);
+  if (!salon) {
+    notFound();
+  }
+
+  return { ctx, salon };
 }

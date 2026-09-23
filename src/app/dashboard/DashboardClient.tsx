@@ -49,7 +49,10 @@ function DeltaPct({ prev, cur }: { prev: number; cur: number }) {
 
 // Stripe 連携状態の表示（Phase 2）。決済可＝控えめな1行／未連携・審査中＝導線カード。
 // 導線は /api/manager/stripe/onboard への native form POST（連結アカウント再利用→Account Link 生成→303）。
-function StripeStatusCard({ status }: { status: StripeStatus }) {
+function StripeStatusCard({ status }: { status: StripeStatus | null }) {
+  // null＝カードごと出さない。/owner は店舗の設定を行わない（§8.1）ので、
+  // /api/manager/stripe/onboard への form POST を持つこのカードを描画しない（§21 コミット3b）。
+  if (status === null) return null;
   if (status === "enabled") {
     return (
       <p className="note-fine">
@@ -89,13 +92,26 @@ export default function DashboardClient({
   period,
   recentTake,
   stripeStatus,
+  basePath = "/dashboard",
+  nav,
 }: {
   data: DashboardData;
   role: SalonRole;
   period: { key: PeriodKey; from?: string; to?: string };
   /** 「最近の評価」の読み込み深さ（URL の ?take= 由来・§20 決定4）。 */
   recentTake: number;
-  stripeStatus: StripeStatus;
+  /** null なら Stripe 連携カードを出さない（/owner 用・§21 コミット3b）。 */
+  stripeStatus: StripeStatus | null;
+  /**
+   * 期間切替・「もっと見る」の遷移先ベースパス。既定は `/dashboard`（従来どおり）。
+   * `/owner/[salonId]/dashboard` はここを自分のパスにして、同じ画面を別サロンで使う。
+   */
+  basePath?: string;
+  /**
+   * 画面上部のナビ。既定（未指定）は従来どおり `<SalonNav />`。
+   * `/owner` は `/manager/*`・`/staff/*` への導線を出さないため、自前のナビを渡す（§21 コミット3b）。
+   */
+  nav?: React.ReactNode;
 }) {
   // ビュー切替: 日次（今の状態）/ HR月次（echo flow トレンド）。§12 の2タブ構成。
   const [view, setView] = useState<"daily" | "hr">("daily");
@@ -107,7 +123,7 @@ export default function DashboardClient({
   return (
     <main className="page page-top" data-role={role}>
       <div className="container container-wide stack animate-in">
-        <SalonNav role={role} />
+        {nav ?? <SalonNav role={role} />}
         {/* 1. ヘッダー */}
         <header className="dash-head">
           <div className="stack-sm">
@@ -123,7 +139,12 @@ export default function DashboardClient({
         <StripeStatusCard status={stripeStatus} />
 
         {/* 集計期間の選択（プリセット＋カスタム暦区間）。URL遷移で server 再フェッチ。 */}
-        <PeriodSelector periodKey={period.key} from={period.from} to={period.to} />
+        <PeriodSelector
+          periodKey={period.key}
+          from={period.from}
+          to={period.to}
+          basePath={basePath}
+        />
 
         {/* ビュー切替タブ（日次 / HR月次）。アクティブ＝ミント（§12 アクティブタブ） */}
         <div className="seg" role="tablist" aria-label="ダッシュボードの表示切替">
@@ -313,7 +334,11 @@ export default function DashboardClient({
                 {data.recent.length > 0 &&
                   (data.recentHasMore && recentTake < RECENT_MAX_TAKE ? (
                     <Link
-                      href={dashboardHref(period, recentTake + RECENT_PAGE_SIZE)}
+                      href={dashboardHref(
+                        period,
+                        recentTake + RECENT_PAGE_SIZE,
+                        basePath,
+                      )}
                       className="btn btn-quiet btn-block"
                       scroll={false}
                     >
