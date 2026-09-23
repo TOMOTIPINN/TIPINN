@@ -310,3 +310,39 @@ staff-invite.ts の Supabase error 握り潰しをログ出力に変更（commit
 絞っていないため、「退職済み1行＋在籍1行」で同じ line_user_id を持つ状態だと
 ガードが素通りする。ログには残るようになったが、素通り自体は未修正。
 認可の対照確認が必要なため、organizations の導入時に合わせて扱う。
+
+**★訂正（2026-09-23）★** — §21 の調査で `pg_indexes` から本番の実定義を直接取得した結果、
+上の記録は現状と食い違っている。**以下が本番の事実。**
+
+本番の `staff` には **2本とも存在する**:
+
+```
+uq_staff_line_user_id
+  CREATE UNIQUE INDEX uq_staff_line_user_id ON public.staff USING btree (line_user_id)
+  WHERE (line_user_id IS NOT NULL)
+
+staff_line_user_id_active_uniq
+  CREATE UNIQUE INDEX staff_line_user_id_active_uniq ON public.staff USING btree (line_user_id)
+  WHERE ((line_user_id IS NOT NULL) AND (archived_at IS NULL))
+```
+
+- 前者は **archived 条件を持たない**ため後者を包含する。実効的な制約は
+  **「1 LINE = staff 行は退職者を含めて最大1行」**。後者は冗長。
+- **9/2 の「本番DBに該当する制約が存在しなかった」という記録は、現状と食い違う。**
+  **食い違いの原因は未確認**（9/2 時点で本当に無かったのか、別名で探して見落としたのかは分からない）。
+- **上の「残課題」は成立しない。** 「退職済み1行＋在籍1行」は
+  `uq_staff_line_user_id` があるため **DB で作れない**。line_taken ガードの素通りは
+  起こり得ない状態になっている（コードは未修正のままでよい）。
+
+**代わりに残る課題**: **アーカイブした staff は `line_user_id` を占有し続ける。**
+`archived_at` を入れても LINE は解放されない（`api/manager/staff/archive` は
+「`line_user_id` / `invite_token` も触らない＝復帰時にそのまま戻す」）。
+そのため**退職者は別サロンに新しい staff 行として入れない**
+（`/api/staff/bind` も `/api/manager/salon/new` も unique 違反で落ちる）。
+解放されるのは `/api/manager/staff/delete` の **hard delete（行ごと削除）だけ**。
+移動は `/admin/staff/transfer`（行の `salon_id` を UPDATE）でのみ可能。
+→ **§21 とは別の未着手課題（扱う時期は未定）。** §21 の実装順には含めない。
+
+**教訓**: **migration だけでなく docs の記録も本番の真実ではない。**
+実定義は `pg_indexes` / `pg_constraint` など **`pg_*` から確認する**
+（`40_decisions.md` §1.11「記録が正しいかの唯一の実効テストは『migrations だけで作り直せるか』」の系）。

@@ -102,6 +102,21 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
    （UUID 既知なら他店顧客の表示名のみ取得可・機微データは漏れない）
 2. `submit_visit_and_earn_stamp` RPC 内の customer↔salon 所属チェック
    （上流で salon_id が固定されるため越境は不能・念のためレベル）
+3. **`public` のテーブルで `anon` / `authenticated` に `TRUNCATE` / `TRIGGER` / `REFERENCES` が付いている**
+   （2026-09-23・0048 の新テーブルで確認。**既存テーブルも同じ状態と推測・未確認**）。
+   **`TRUNCATE` は RLS を素通りする**（RLS は行に効くが TRUNCATE はテーブル単位のため）。
+   ただし **PostgREST 経由では到達しないと推測**（`/rest/v1` に TRUNCATE を出す口が無い）。
+   出所は Postgres/Supabase の既定の権限付与と推測（`create table` 時に付く）。
+   → 別 migration で **REVOKE と既定の権限付与（`alter default privileges`）の修正**を検討する。
+   §1.2「新テーブルを追加したら RLS を確認する」に**権限の確認も足すか**は未決。
+4. **`grant` で `delete` を外しても、`service_role` には既定で `DELETE` が付いている**
+   （2026-09-23 確認）。0043 / 0048 が `grant select, insert, update` に留めているのは
+   **意図が効いていない**。**実害はない**（`service_role` は元から全権）が、
+   「権限で絞ったつもり」になっている点が誤解を生む。
+5. **サロン作成処理（`/api/manager/salon/new`）にレート制限がない**
+   （`/api/staff/bind`・LINE callback は `login-attempts` で絞っているが、この経路だけ無い）。
+   有効な招待コードが必須なので総当たりの価値は低いが、
+   **コミット4・5（組織指定の必須化・オーナー招待）で検討する**（→ `40_decisions.md` §21）。
 
 ---
 

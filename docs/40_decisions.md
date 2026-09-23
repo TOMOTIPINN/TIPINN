@@ -457,6 +457,9 @@ SQL で書き換えることで対応する。
 
 #### 未決定（実装前に決める）
 
+> **2026-09-23 更新**: 1（認証方法）と 3（既存データの移行）は **§21「2026-09-23 決定」で解決済み**。
+> 2（登録方法）は**オーナー招待の方式 P / Q が未決**のまま。以下は決定前の記述として残す。
+
 1. オーナーの認証方法
    `organization_members` に LINE user ID を持たせ、`admin-guard` と
    同じ型で判定するのが素直。ただし echo Labs 運営者は env、
@@ -2029,7 +2032,7 @@ Niii の **`manager_only`＋rating 4 の感想**と、その **Thank you ¥100 �
 
 ---
 
-## 21. `/owner` — オーナーが自社5店舗を見る（2026-09-19 決定・**実装は未着手**・§8.1 の具体化）
+## 21. `/owner` — オーナーが自社5店舗を見る（2026-09-19 決定・**2026-09-23 着手＝0048 適用済み**・§8.1 の具体化）
 
 **§8.1（`:372-479`）の画面設計を実装に落としたもの。** テーブル・可視範囲・招待フロー・
 未決定3点（オーナーの認証方法／登録方法／既存データ移行）は **§8.1 が正のまま**。
@@ -2128,16 +2131,113 @@ Niii の **`manager_only`＋rating 4 の感想**と、その **Thank you ¥100 �
 - **依存**: **§20 のティア表示は `/owner/inbox` がそのまま継承する。§20 を先に実装する。**
   逆順にすると同じ変更を2画面に入れることになる。
 
+### 2026-09-23 決定（組織の導入・migration 0048 適用済み）
+
+**§8.1 の未決定3点のうち、1（オーナーの認証方法）と 3（既存データの移行）を決めた。**
+2（オーナーの登録方法）は**招待の方式が未決のまま**（下記）。
+
+#### 決めたこと
+
+1. **組織の単位は「事業者（契約主体）」。**
+   **数字を見る権限を、お金が入る主体に揃えるため。**
+
+2. **オーナー権限は `organization_members` で持ち、`staff.role` とは別体系にする。**
+   識別子は **`line_user_id`**。スタッフ判定（`resolveStaffByLineUserId`）・
+   運営者判定（`admin-guard.ts`）と**同じ系統に揃えるため**。
+   → §8.1 未決定1 の「env と DB の二重管理をどう扱うか」への回答は
+   **「置き場は分けたままでよい。引く鍵（`line_user_id`）を揃えることで実害を消す」**。
+
+3. **1人1組織**（`organization_members` の `unique(line_user_id)`）。
+   **複数組織の切り替え UI は作らない。** 必要になったら制約を緩める migration を足す。
+
+4. **「オーナー」表示は `organization_members` から導出する。**
+   `display-role.ts` の現行判定（そのサロンで `created_at` 最古の manager）では**なくなる**。
+   **carta の5店舗のオーナーは原のみ。**
+   検証期間中であることは5店舗のスタッフが理解済み。
+
+5. **DEMO サロンとテストサロンは echo Labs 組織に分け、`/owner` の数字に混ぜない。**
+   → §8.1 未決定3 の回答。**NULL 許容にはしない**（`salons.org_id` は NOT NULL）。
+
+6. **サロンは必ず「招待コードの発行者（運営者）が指定した組織」に所属する。**
+   **組織の自動作成はしない。**
+   **既存の `staff` 行を持つ人は、サロン作成の入口で弾く。**
+   （現状は入口を通過してしまい、最後の `staff` INSERT が unique 違反で落ちて
+   サロンごとロールバックされる＝`salon/new/route.ts:172-191` の既知衝突。→ コミット4 で入口に移す）
+
+7. **`salons.org_id` と `salon_invites.org_id` は `ON DELETE RESTRICT`。**
+   **組織の削除でサロンが連鎖削除されるのを DB で止める。**
+
+#### 未決（0049 以降で決める）
+
+**オーナー招待の方式。** 2案あり、**どちらも採っていない**:
+
+| 案 | 内容 |
+|---|---|
+| **P** | 運営者が**先に組織を作る**（`/admin/organizations` で組織＋オーナーを登録 → §8.1 の記述どおり） |
+| **Q** | **招待の消費で組織を作る**（オーナー招待コードを配り、消費時に組織とオーナーを作る） |
+
+0048 にオーナー招待テーブルを入れなかったのはこのため（0048 冒頭に明記）。
+
+#### 実装の順番
+
+| # | 内容 | 状態 |
+|---|---|---|
+| 1 | **0048**（`organizations` / `organization_members` / `salons.org_id` / `salon_invites.org_id`） | **2026-09-23 適用済み**（`cd825c3`） |
+| 2 | オーナー表示の差し替え（`display-role.ts` を `organization_members` 由来にする） | 未着手 |
+| 3 | `/owner` の閲覧 | 未着手 |
+| 4 | サロン作成処理の**組織指定必須化**と**入口チェック**（既存 staff 行を持つ人を入口で弾く） | 未着手 |
+| 5 | オーナー招待（方式 P / Q を決めてから） | 未着手 |
+
+#### ★運用上の制約（コミット4 を本番に出すまで有効）★
+
+**新しいサロン招待コードを発行しない。**
+
+`salons.org_id` が NOT NULL になったのに対し、`/api/manager/salon/new` の
+`salons` INSERT は `org_id` を渡していない（`route.ts:143-150`）。
+**このままサロンを作ると INSERT が落ちる**（`error=save` でロールバック）。
+
+2026-09-23 時点で**未消費かつ期限内の招待コードは0件**なので、今すぐ壊れるものは無い。
+
+#### 列名の記録（§8.1 / §21 本文との差）
+
+§8.1 と §21 の本文は **`organization_id`** と書いているが、0048 で実際に作った列は
+**`org_id`**（`salons.org_id` / `salon_invites.org_id` / `organization_members.org_id`）。
+**本番の実列名 `org_id` が正。** 本文の `organization_id` は読み替えること。
+
+#### 0048 の内容（適用済み・2026-09-23 13:06）
+
+- `organizations`（`id` / `name` / `created_at`）— 初期2組織:
+  **合同会社carta** / **echo Labs（デモ・テスト）**
+- `organization_members`（`org_id` / `line_user_id` / `role` / `created_at`）
+  `unique(line_user_id)` ＋ `check (role = 'owner')`。`org_id` は `ON DELETE CASCADE`
+- `salons.org_id`（NOT NULL・`ON DELETE RESTRICT`）— 振り分けは**店名ではなく id** で指定:
+  carta 5件（CARTA / Niii / nun Fukushima / SELNI / suco）／echo Labs 2件（DEMO / テストサロン）
+- `salon_invites.org_id`（NULL 可・`ON DELETE RESTRICT`）— 既存3行は遡って埋めない
+- carta のオーナーは **`staff` 行から `line_user_id` を select して登録**
+  （PII を migration に直書きしない）
+- 新テーブルは **RLS 有効・ポリシー0件**（`50_security.md` §1.2・0037 / 0043 と同じ作法）
+- ガード3つ（`salons` 7件の一致／オーナー `staff` 行が1件かつ LINE 紐付けあり／
+  NOT NULL 化の前に `org_id` の埋め残しなし）。**`raise exception` で中断**（§1.12）
+- `scripts/demo-seed.sql` も `org_id` NOT NULL に追従済み
+
 ### 未対応・確認事項
 
-1. **実装は未着手。** 前提は §8.1 未決定3点（オーナーの認証方法／登録方法／既存データ移行）の解決。
-2. **migration が要る**（`organizations` / `salons.organization_id` / `organization_members` /
-   `salon_invites.organization_id`）。番号は **0048** が次。
-   **適用は常に SQL エディタで手動**（§6.1）。新テーブルの RLS は `ensure_rls` が自動で有効化するので、
-   残る判断は「ポリシーを書くか／完全 deny を意図として migration に明記するか」（`50_security.md` §1.2）。
-3. **`60_incidents.md:262-270` の残課題**（`/admin/staff` が全サロンを対象にしている）と
-   **`:271-275`**（`staff-invite.ts:119-123` の `line_taken` ガードが `archived_at` で絞っていない）は、
+1. ~~実装は未着手。前提は §8.1 未決定3点（オーナーの認証方法／登録方法／既存データ移行）の解決。~~
+   → **2026-09-23 着手**。§8.1 未決定1（認証方法）・3（既存データ移行）は上の「2026-09-23 決定」で解決。
+   **2（登録方法）は招待の方式 P / Q が未決のまま**。実装は順番1（0048）まで完了、**2〜5 が残り**。
+2. ~~migration が要る（`organizations` / `salons.organization_id` / `organization_members` /
+   `salon_invites.organization_id`）。番号は **0048** が次。~~
+   → **2026-09-23 適用済み**（`0048_organizations.sql` / commit `cd825c3`）。**実列名は `org_id`**（上記）。
+   RLS は**ポリシーを書かず完全 deny を migration に明記**する形を採った（0037 / 0043 と同じ作法）。
+3. **`60_incidents.md` の2件**（`/admin/staff` が全サロンを対象にしている／
+   `staff-invite.ts` の `line_taken` ガードが `archived_at` で絞っていない）は、
    どちらも「organizations 導入時に合わせて扱う」とされている。**§21 の実装で回収すること。**
+   → **後者は 2026-09-23 の訂正で解消**（`uq_staff_line_user_id` が本番に実在するため
+   「退職済み1行＋在籍1行」は DB で作れない＝素通りは起こり得ない。`60_incidents.md` の
+   2026-09-02 の項の★訂正★を読むこと）。
+   **代わりに「アーカイブ済み staff が `line_user_id` を占有し続ける」が残課題として立った**
+   （退職者は別サロンに入れない。hard delete でのみ解放）。
+   **これは §21 とは別の未着手課題で、扱う時期は未定。§21 の実装順には含めない。**
 4. **carta の5店舗のうち nun Fukushima には共用端末の店長アカウント問題がある**
    （`70_legal.md` §6・`60_incidents.md`）。`/owner` から見える店舗一覧に出るため、
    実装前に「nun」行の扱いを確定させておく。
