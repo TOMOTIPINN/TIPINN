@@ -141,6 +141,134 @@ function jstMonthKey(ms: number): string {
   return d.getUTCFullYear() + "-" + String(d.getUTCMonth() + 1).padStart(2, "0");
 }
 
+/** 期間の窓（当期・前期間）。**前期間の定義はここだけ**＝直前・同じ長さの窓。 */
+export type PeriodWindows = {
+  curStartMs: number;
+  curEndMs: number;
+  prevStartMs: number;
+  prevEndMs: number;
+};
+
+/**
+ * periodStart / periodEnd（ISO）から当期と前期間の窓を決める。
+ *
+ * ★前期間の定義を2箇所に書かないための単一ソース★
+ *   `getDashboardData` と `getSalonHeadline`（/owner の店舗一覧）が同じ関数を使う＝
+ *   一覧の数字とその店舗のダッシュボードの数字が**構造的に一致する**（§21 コミット3d-1）。
+ */
+export function resolvePeriodWindows(
+  periodStart: string,
+  periodEnd: string,
+): PeriodWindows {
+  const curStartMs = Date.parse(periodStart);
+  const curEndMs = Date.parse(periodEnd);
+  const curLen = Math.max(0, curEndMs - curStartMs);
+  return {
+    curStartMs,
+    curEndMs,
+    prevEndMs: curStartMs,
+    prevStartMs: curStartMs - curLen,
+  };
+}
+
+/** 窓の判定は [start, end)（end 排他）。全集計で共通。 */
+export function inWindowMs(ms: number, startMs: number, endMs: number): boolean {
+  return ms >= startMs && ms < endMs;
+}
+
+/** 店舗合計（感想件数・評価スタンプ件数・売上）。 */
+export type SalonTotals = {
+  reviewCount: number;
+  ratingCount: number;
+  revenue: number;
+};
+
+/**
+ * 店舗合計を数える（全行・null staff 含む＝総件数を正確に）。¥は amount 合計。
+ *
+ * 感想とスタンプを**分けて返す**（§18 B）。合算は返さない
+ *   ＝画面が「感想＋スタンプ」を1つの数にまとめない（2026-09-17 修正）。
+ *
+ * ★売上は `rating_purchases.amount` の実値を足す（件数×単価にしない）★
+ *   価格は改定される（Wonderful ¥500→¥1,000・2026-06-18・CLAUDE.md §6）。
+ */
+export function computeSalonTotals(
+  reviews: { created_at: string }[],
+  ratings: { created_at: string; amount: number }[],
+  startMs: number,
+  endMs: number,
+): SalonTotals {
+  let reviewCount = 0;
+  let ratingCount = 0;
+  let revenue = 0;
+  for (const r of reviews) {
+    if (inWindowMs(Date.parse(r.created_at), startMs, endMs)) reviewCount += 1;
+  }
+  for (const rp of ratings) {
+    if (inWindowMs(Date.parse(rp.created_at), startMs, endMs)) {
+      ratingCount += 1;
+      revenue += rp.amount;
+    }
+  }
+  return { reviewCount, ratingCount, revenue };
+}
+
+export type SalonHeadline = { cur: SalonTotals; prev: SalonTotals };
+
+/**
+ * 1店舗ぶんの先行指標（感想件数・評価スタンプ件数・店舗合計¥）を当期と前期間で返す。
+ * `/owner` の店舗一覧（§21 コミット3d-1）用。
+ *
+ * ★`getDashboardData` を複数店舗に広げない★（§21 設計上の要点）
+ *   あちらは `staffNames` を**名前文字列でキーにしている**ため、別店舗に同名スタッフがいると
+ *   集計が合流して壊れる。ここは**店舗合計しか使わない**部分だけを切り出し、
+ *   **同じ窓（resolvePeriodWindows）・同じ数え方（computeSalonTotals）**を呼ぶ。
+ *   スタッフ別には一切触れないので、同名スタッフの問題は起きない。
+ *
+ * 取得は1店舗あたり **reviews と rating_purchases の2本**（どちらも salon_id スコープ）。
+ * `gte(created_at, prevStart)` で当期・前期間の両方を含む最小のスパンだけを引く。
+ */
+export async function getSalonHeadline(
+  salonId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<SalonHeadline> {
+  const w = resolvePeriodWindows(periodStart, periodEnd);
+  const spanStartISO = new Date(w.prevStartMs).toISOString();
+
+  const [reviews, ratings] = await Promise.all([
+    fetchAllRows<{ created_at: string }>(
+      (from, to) =>
+        supabaseAdmin
+          .from("reviews")
+          .select("created_at")
+          .eq("salon_id", salonId)
+          .gte("created_at", spanStartISO)
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      { label: "reviews(headline)" },
+    ),
+    fetchAllRows<{ created_at: string; amount: number }>(
+      (from, to) =>
+        supabaseAdmin
+          .from("rating_purchases")
+          .select("created_at, amount")
+          .eq("salon_id", salonId)
+          .gte("created_at", spanStartISO)
+          .order("created_at", { ascending: true })
+          .order("id", { ascending: true })
+          .range(from, to),
+      { label: "rating_purchases(headline)" },
+    ),
+  ]);
+
+  return {
+    cur: computeSalonTotals(reviews, ratings, w.curStartMs, w.curEndMs),
+    prev: computeSalonTotals(reviews, ratings, w.prevStartMs, w.prevEndMs),
+  };
+}
+
 export async function getDashboardData(
   salonId: string,
   periodStart: string,
@@ -151,12 +279,11 @@ export async function getDashboardData(
   recentTake: number = RECENT_PAGE_SIZE,
 ): Promise<DashboardData> {
   const nowMs = Date.now();
-  const curStartMs = Date.parse(periodStart);
-  const curEndMs = Date.parse(periodEnd);
-  const curLen = Math.max(0, curEndMs - curStartMs);
-  // 前期間＝直前・同じ長さの窓（前期間比トレンド用）。
-  const prevEndMs = curStartMs;
-  const prevStartMs = curStartMs - curLen;
+  // 当期・前期間の窓は resolvePeriodWindows が単一ソース（/owner の一覧も同じものを使う）。
+  const { curStartMs, curEndMs, prevStartMs, prevEndMs } = resolvePeriodWindows(
+    periodStart,
+    periodEnd,
+  );
 
   // echo flow の直近3ヶ月（JST暦月）。取得スパンは 3ヶ月・当期・前期を包む最小の開始点。
   const monthKeys = [2, 1, 0].map((b) => jstMonthKey(jstMonthStartMs(nowMs, b)));
@@ -227,8 +354,7 @@ export async function getDashboardData(
     idToName.set(s.id, s.name);
   }
 
-  const inWindow = (ms: number, startMs: number, endMs: number) =>
-    ms >= startMs && ms < endMs;
+  const inWindow = inWindowMs;
 
   // スタッフ別集計（staff_id 別。null＝サロン全体宛は per-staff からは除外＝帰属不能のため）。
   function buildAgg(startMs: number, endMs: number): Record<string, StaffAgg> {
@@ -284,21 +410,8 @@ export async function getDashboardData(
    * 感想とスタンプを**分けて返す**（§18 B）。合算は返さない
    *   ＝画面が「感想＋スタンプ」を1つの数にまとめない（2026-09-17 修正）。
    */
-  function salonTotals(startMs: number, endMs: number) {
-    let reviewCount = 0;
-    let ratingCount = 0;
-    let revenue = 0;
-    for (const r of reviews) {
-      if (inWindow(Date.parse(r.created_at), startMs, endMs)) reviewCount += 1;
-    }
-    for (const rp of ratings) {
-      if (inWindow(Date.parse(rp.created_at), startMs, endMs)) {
-        ratingCount += 1;
-        revenue += rp.amount;
-      }
-    }
-    return { reviewCount, ratingCount, revenue };
-  }
+  const salonTotals = (startMs: number, endMs: number) =>
+    computeSalonTotals(reviews, ratings, startMs, endMs);
   const curTot = salonTotals(curStartMs, curEndMs);
   const prevTot = salonTotals(prevStartMs, prevEndMs);
 

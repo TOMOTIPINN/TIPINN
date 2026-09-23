@@ -2110,6 +2110,58 @@ a.inbox-stat:hover { border-color: var(--line-strong); }
 .inbox-body { font-size: 0.9rem; color: var(--ink-soft); line-height: 1.8; }
 
 /* ============================================================
+   Owner 店舗一覧（/owner・§21 コミット3d-1）
+   1行＝店舗名＋今月の数字。行全体がその店舗のダッシュボードへのリンク。
+   ・数字の多い店舗を目立たせない（並びは登録順・強調色なし）。
+   ・赤は使わない。上昇のミントは .trend-up（共通）に委ねる（30_design.md §2）。
+   ============================================================ */
+.owner-salon-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  transition: var(--transition);
+}
+.owner-salon-name {
+  font-family: var(--font-sans);
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+/* 数字の段。狭い幅では折り返す（横スクロールを作らない）。 */
+.owner-salon-stats {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-lg);
+  row-gap: var(--space-sm);
+}
+.owner-salon-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.owner-salon-stat-label {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--g25);
+}
+.owner-salon-stat-value {
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  color: var(--ink);
+}
+.owner-salon-stat-delta {
+  font-family: var(--font-sans);
+  font-size: 0.78rem;
+  color: var(--g25);
+}
+
+/* ============================================================
    Staff 管理（A1・/manager/staff）— 招待発行＋一覧＋QR。明るいサロンUI。
    ============================================================ */
 /* スタッフ行の見出し（名前＋role＋状態）。 */

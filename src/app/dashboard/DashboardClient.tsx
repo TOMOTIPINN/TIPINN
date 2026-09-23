@@ -9,7 +9,8 @@ import { CYCLE_SIZE, computeVipProgress } from "@/lib/vip";
 import StaffPeriodView from "./StaffPeriodView";
 import HrFlowView from "./HrFlowView";
 import PeriodSelector from "./PeriodSelector";
-import { trendDir, yen } from "./eval-data";
+import { yen } from "./eval-data";
+import DeltaPct from "./DeltaPct";
 import type { DashboardData } from "./dashboard-data";
 import type { PeriodKey } from "./period";
 import {
@@ -34,19 +35,6 @@ import {
  *  - 顧客名は VIP 一覧（レジ判別補助）と最近の評価（§20 決定3）のみ。見られるのは
  *    **その店舗の店長（/dashboard）とオーナー（/owner/[salonId]/dashboard）だけ**（原則7・§21 コミット3b）。
  */
-
-// 前期間比（0除算ガード。符号付き整数%）。
-function pct(prev: number, cur: number): string {
-  if (prev <= 0) return "—";
-  const d = Math.round(((cur - prev) / prev) * 100);
-  return (d >= 0 ? "+" : "") + d + "%";
-}
-
-// 前期間比%（§12 ステータス配色）。上昇＝ミント（.trend-up）／横ばい・下降＝既定グレー。
-function DeltaPct({ prev, cur }: { prev: number; cur: number }) {
-  const up = trendDir(prev, cur) === "up";
-  return <span className={up ? "trend-up" : undefined}>{pct(prev, cur)}</span>;
-}
 
 // Stripe 連携状態の表示（Phase 2）。決済可＝控えめな1行／未連携・審査中＝導線カード。
 // 導線は /api/manager/stripe/onboard への native form POST（連結アカウント再利用→Account Link 生成→303）。
