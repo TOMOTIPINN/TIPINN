@@ -48,14 +48,20 @@ export default async function OwnerHomePage() {
               まだ店舗が登録されていません。
             </p>
           ) : (
-            <div className="stack-sm">
-              {/* 並びは salons.created_at 昇順（暫定）。正式な並び順は §21 コミット3d で決める。
-                  リンク先は /owner/[salonId]/dashboard のみ。/manager/* ・ /staff/* へは出さない。 */}
+            <div className="stack stack-sm">
+              {/* ★`stack` を必ず併記する★ `.stack-sm` は gap だけの修飾クラスで、
+                  単体ではコンテナが flex にならない（globals.css の `.stack` / `.stack-sm`）。
+                  `p`（block）だったときは偶然1行ずつ並んでいたが、3b で `Link`（inline）に
+                  したことで横につながった。
+
+                  並びは salons.created_at 昇順（暫定）。正式な並び順は §21 コミット3d で決める。
+                  リンク先は /owner/[salonId]/dashboard のみ。/manager ・ /staff へは出さない。
+                  `btn btn-outline btn-block` で行全体がタップ領域になる（既存トークンのみ）。 */}
               {ctx.salons.map((salon) => (
                 <Link
                   key={salon.id}
                   href={`/owner/${salon.id}/dashboard`}
-                  className="headline-sm"
+                  className="btn btn-outline btn-block"
                 >
                   {salon.name}
                 </Link>
