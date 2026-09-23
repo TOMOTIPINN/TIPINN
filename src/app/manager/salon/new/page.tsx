@@ -60,6 +60,10 @@ const ERROR_MESSAGE: Record<string, string> = {
   invite_used: "この招待コードはすでに使用されています。",
   invite_expired:
     "この招待コードは有効期限が切れています。発行元にご連絡ください。",
+  // 組織未指定の招待（§21 コミット4c）。文言は @/lib/salon-invite の
+  // inviteReasonMessage("no_org") と同文。利用者に内部事情は書かない。
+  invite_no_org:
+    "この招待コードは使用できません。お手数ですが、echo 運営（info@echo-thanks.jp）までご連絡ください。",
   invite_race:
     "この招待コードは、ちょうど今ほかの登録に使われました。サロン作成は取り消しています。",
 };

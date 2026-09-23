@@ -24,6 +24,13 @@ import { checkInviteCode, consumeInvite } from "@/lib/salon-invite";
  *   処理: salon_id と visit_token をサーバー側で採番（crypto.randomUUID）→ ロゴがあれば
  *         salon-assets/salons/<salon_id>/logo に upsert → salons へ単一 INSERT。
  *         stripe_account_id は空のまま（Phase 2 で埋める）。
+ *
+ * ★組織の指定を必須にする（§21 コミット4c・0048）★
+ *   招待コードの行の `org_id` が null なら **invite_no_org で弾く**（salons の INSERT より前）。
+ *   作られるサロンの `org_id` は **checkInviteCode が DB から返した値だけ**を使い、
+ *   フォーム・クエリからは受け取らない。組織の自動作成もしない（§21 決定6）。
+ *   消費（consumeInvite）の WHERE にも同じ org_id を載せ、事前確認と消費の間に
+ *   招待の組織が変わっていたら消費に失敗させてロールバックする。
  *   自動登録: salons INSERT 成功後、作成者を新サロンの店長(role=manager)として staff に1行 INSERT。
  *
  * ★公開同意（migration 0045）★
@@ -105,7 +112,12 @@ export async function POST(req: Request) {
   const codeRaw = form.get("code");
   const code = typeof codeRaw === "string" ? codeRaw : "";
   const invite = await checkInviteCode(code);
+  // reason には no_org（組織未指定の招待・§21 コミット4c）も含まれる。
+  // ここで弾くのは salons の INSERT より前＝組織が決まらない招待では行を1つも作らない。
   if (!invite.ok) return back(`error=invite_${invite.reason}`);
+  // ★この orgId は checkInviteCode が **DB から読んだ値**★
+  //   フォーム・クエリからは受け取らない（salons.org_id に入るのはこの値だけ）。
+  const orgId = invite.orgId;
 
   // 店名（必須）。trim して空・過長を弾く。
   const nameRaw = form.get("name");
@@ -157,6 +169,9 @@ export async function POST(req: Request) {
     logo_url: logoUrl,
     visit_token: visitToken,
     notify_after_minutes: notify,
+    // 所属組織（0048 で NOT NULL・§21 コミット4c）。**招待コードの行から読んだ値**で、
+    // クライアントの入力は一切混ざらない。組織の自動作成もしない（§21 決定6）。
+    org_id: orgId,
     // stripe_account_id は Phase 2 で接続時に埋める（ここでは未設定＝null）。
   });
 
@@ -204,7 +219,10 @@ export async function POST(req: Request) {
   // 招待の消費（原子的・migration 0043）。salon_id が FK で salons を参照するため、
   // salons INSERT より前には実行できない＝必ずここ（最後）になる。
   // 更新できた行が1件でなければ、他のリクエストに先を越された／この間に期限切れになった。
-  const consumed = await consumeInvite(code, salonId);
+  //   ★組織も一致条件に入れる（4c）★ 事前確認と消費の間に招待の org_id が変わっていたら
+  //     消費に失敗させ、下のロールバックへ合流する（salons に入れた org_id と食い違ったまま
+  //     確定させない）。
+  const consumed = await consumeInvite(code, salonId, orgId);
   if (!consumed) {
     console.error("[salon/new] invite consume lost the race; rolling back", {
       salonId,
