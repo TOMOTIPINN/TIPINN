@@ -6,8 +6,10 @@ import { Eyebrow } from "@/components/ui";
  * - customer（白の世界）には出さない＝呼び出し側で RoleBar を描画しない（役割自体を渡さない）。
  * - 色は data-role → --accent（globals.css）に委譲：staff=mint / manager=濃mint / owner=bronze。
  *   ラベルは Eyebrow（.eyebrow）を再利用し、`.role-bar-label` で色だけ --accent に上書きする。
- * - owner は staff.role に無い「表示上の役割」（そのサロンで最初の manager＝owner と判定・DBカラム追加なし）。
- *   判定は呼び出し側（server page）で解決し、ここには確定した SalonRole を渡す。
+ * - owner は staff.role に無い「表示上の役割」（そのサロンを持つ組織のオーナー＝
+ *   organization_members に行がある人。migration 0048・40_decisions.md §21）。
+ *   判定は呼び出し側（server page）で `resolveSalonRole` を呼んで解決し、
+ *   ここには確定した SalonRole を渡す。
  * - 純粋な表示コンポーネント（データ取得なし）。インラインstyle禁止（§8・トークンのみ）。
  */
 export type SalonRole = "staff" | "manager" | "owner";
