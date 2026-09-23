@@ -102,17 +102,39 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
    （UUID 既知なら他店顧客の表示名のみ取得可・機微データは漏れない）
 2. `submit_visit_and_earn_stamp` RPC 内の customer↔salon 所属チェック
    （上流で salon_id が固定されるため越境は不能・念のためレベル）
-3. **`public` のテーブルで `anon` / `authenticated` に `TRUNCATE` / `TRIGGER` / `REFERENCES` が付いている**
-   （2026-09-23・0048 の新テーブルで確認。**既存テーブルも同じ状態と推測・未確認**）。
-   **`TRUNCATE` は RLS を素通りする**（RLS は行に効くが TRUNCATE はテーブル単位のため）。
-   ただし **PostgREST 経由では到達しないと推測**（`/rest/v1` に TRUNCATE を出す口が無い）。
-   出所は Postgres/Supabase の既定の権限付与と推測（`create table` 時に付く）。
-   → 別 migration で **REVOKE と既定の権限付与（`alter default privileges`）の修正**を検討する。
-   §1.2「新テーブルを追加したら RLS を確認する」に**権限の確認も足すか**は未決。
+3. ~~**`public` のテーブルで `anon` / `authenticated` に `TRUNCATE` / `TRIGGER` / `REFERENCES` が付いている**
+   （2026-09-23・0048 の新テーブルで確認。既存テーブルも同じ状態と推測・未確認）。~~
+   → **解消（2026-09-23・migration 0049 適用済み）。**
+
+   **月次セキュリティ診断で全体像が判明した**: 付いていたのは新テーブルだけではなく
+   **public の全17テーブル**で、ACL は `Dxtm`（D=TRUNCATE / x=REFERENCES / t=TRIGGER /
+   **m=MAINTAIN**）。**原因は postgres の既定の権限付与**
+   （`pg_default_acl`: defaclrole=postgres / defaclnamespace=public / defaclobjtype=r で
+   anon=Dxtm / authenticated=Dxtm）で、`create table` するたびに自動で付いていた
+   ＝テーブルごとの GRANT ではなかった。
+
+   **0049 で両方を塞いだ**: 既存17テーブルからの `REVOKE` と、
+   `alter default privileges for role postgres in schema public` での既定値の修正。
+   MAINTAIN は PG17 で追加された権限なので、`server_version_num` を見て
+   動的 SQL で権限リストを組み立てている（本番は **Postgres 17.6**）。
+
+   **適用後の確認（2026-09-23 18:22）**: public のテーブルに anon・authenticated の
+   grant は0件 ／ `pg_default_acl`（public / tables / postgres）は postgres と
+   service_role のみ ／ service_role は17テーブルすべてで権限あり ／
+   anon・authenticated の実効 TRUNCATE は17テーブル中0 ／
+   `/manager/staff` のプロフィール保存（`staff` の UPDATE）が通ることを実機で確認。
+
+   **残る判断**: §1.2「新テーブルを追加したら RLS を確認する」に**権限の確認も足すか**は
+   **未決**。0049 で既定値を塞いだので新テーブルには付かなくなったが、
+   チェックリストに1行足すかは決めていない。
+   **PUBLIC への grant の有無**は今回の対象外で、**未確認**のまま。
 4. **`grant` で `delete` を外しても、`service_role` には既定で `DELETE` が付いている**
    （2026-09-23 確認）。0043 / 0048 が `grant select, insert, update` に留めているのは
    **意図が効いていない**。**実害はない**（`service_role` は元から全権）が、
    「権限で絞ったつもり」になっている点が誤解を生む。
+   **状況は変わっていない**（2026-09-23 の 0049 適用後も同じ）。
+   0049 は anon / authenticated だけを対象にしており、**service_role は全権で運用する前提**
+   （アプリの全 DB 操作が service_role を通るため・§1.4）。この項目はそのまま残す。
 5. **サロン作成処理（`/api/manager/salon/new`）にレート制限がない**
    （`/api/staff/bind`・LINE callback は `login-attempts` で絞っているが、この経路だけ無い）。
    有効な招待コードが必須なので総当たりの価値は低いが、
