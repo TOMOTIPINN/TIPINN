@@ -2,7 +2,7 @@ import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
-import { getStaffContext } from "@/lib/staff-session";
+import { hasAnyStaffRow } from "@/lib/staff-session";
 import {
   SALON_ASSETS_BUCKET,
   validateImage,
@@ -37,8 +37,10 @@ import { checkInviteCode, consumeInvite } from "@/lib/salon-invite";
  *   ・id・日時はクライアントから受け取らない。
  *   ・この2列は**記録であって公開の制御ではない**（顧客側の表示条件は archived_at のみ）。
  *
- * 認可（入口ゆるめ・page と同型）: 未ログイン→ログイン。staff行ゼロ(新規オーナー)は許可。
- *   既存staffは manager のみ許可（従業員は弾く）。他の /manager/* は従来どおり staff必須。
+ * 認可（page と同型）: 未ログイン→ログイン。
+ *   **staff 行を1つでも持つ人は入口で弾く**（manager・オーナーも含む／退職済みの行も含む・
+ *   §21 コミット4a）。通るのは staff 行ゼロの新規オーナーだけ。
+ *   他の /manager/* は従来どおり staff必須。
  *   書き込みは service_role・サーバー側のみ（§3・§8）。
  * 検証: 店名 trim＋長さ／通知遅延は DB CHECK と同値域(30〜360)にクランプ／画像は MIME(png/jpeg/webp)＋2MB。
  * 応答: フォーム送信 → /manager/salon/new?created=<salon_id>（成功・完了画面へ）/ ?error=<reason>（失敗）へ303。
@@ -72,9 +74,18 @@ export async function POST(req: Request) {
       { status: 303 },
     );
   }
-  const ctx = await getStaffContext();
-  if (ctx && ctx.role !== "manager") {
-    return back("error=forbidden");
+  // ★入口チェック（§21 コミット4a）★
+  //   **staff 行を1つでも持つ人は、ここで弾く**（manager もオーナーも含む・§21 決定6）。
+  //   退職済み（archived_at あり）の行も対象にする＝`hasAnyStaffRow` は archived で絞らない。
+  //   本番の `uq_staff_line_user_id` は archived 条件を持たないため、退職済みの行だけを
+  //   持つ人も下の staff INSERT で必ず unique 違反になる（`60_incidents.md` 2026-09-02 ★訂正★）。
+  //
+  //   ここに置く意味: **フォームの読み取り・ロゴのアップロード・salons の INSERT より前**。
+  //   以前は staff INSERT（salons INSERT の後）で落ちており、補償トランザクションが
+  //   失敗すると店長不在の孤児サロンが残りうる経路だった。入口で弾けばその経路自体が消える。
+  //   取得に失敗したときは通さない（fail closed）。
+  if (await hasAnyStaffRow(session.line_user_id)) {
+    return back("error=already_staff");
   }
 
   const form = await req.formData().catch(() => null);
@@ -158,16 +169,16 @@ export async function POST(req: Request) {
   }
 
   // 作成者を新サロンの店長(role=manager)として自動登録（[[auth-method-line-b]]）。
-  // 名前: 既存staffなら staff.name、staff行ゼロの新規オーナーは customers.display_name（LINEログインで必須設定）。
-  let ownerName = ctx?.name ?? null;
-  if (!ownerName) {
-    const { data: cust } = await supabaseAdmin
-      .from("customers")
-      .select("display_name")
-      .eq("line_user_id", session.line_user_id)
-      .maybeSingle();
-    ownerName = cust?.display_name ?? "オーナー";
-  }
+  // 名前は customers.display_name（LINEログインで必須設定）。
+  //   §21 コミット4a より前は「既存 staff なら staff.name / staff 行ゼロなら display_name」
+  //   だったが、**入口チェックを通った時点で staff 行は1つも無い**ので前者は到達しない
+  //   （`ctx?.name` は常に null だった）。分岐を畳んだだけで、作られる行の中身は変わらない。
+  const { data: cust } = await supabaseAdmin
+    .from("customers")
+    .select("display_name")
+    .eq("line_user_id", session.line_user_id)
+    .maybeSingle();
+  const ownerName = cust?.display_name ?? "オーナー";
 
   // ⚠️ 今回スコープ外の既知衝突: staff.line_user_id は unique（1 LINE = 最大1 staff /
   //    getStaffContext の maybeSingle 前提・staff-invite.ts の line_taken ガードと同根）。

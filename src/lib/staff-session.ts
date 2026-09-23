@@ -68,3 +68,43 @@ export async function getStaffContext(): Promise<StaffContext | null> {
   const session = await getSession();
   return resolveStaffByLineUserId(session?.line_user_id);
 }
+
+/**
+ * その LINE に **staff 行があるか**（退職済みも含む）。サロン作成の入口チェック用
+ * （§21 コミット4a・40_decisions.md §21 決定6）。
+ *
+ * ★`resolveStaffByLineUserId` ではこの判定はできない★
+ *   あちらは `archived_at is null`（在籍のみ）で絞るため、**退職済みの行だけを持つ人**を
+ *   「staff 行なし」と答えてしまう。しかし本番の `uq_staff_line_user_id` は
+ *   **archived 条件を持たない**部分 unique index（`60_incidents.md` 2026-09-02 の★訂正★）なので、
+ *   退職済みの行があるだけで `staff` の INSERT は必ず unique 違反で落ちる。
+ *   入口で弾けないと、`salons` を作ってからロールバックする経路に戻ってしまう。
+ *   よってここは **`archived_at` で絞らない**。
+ *
+ * ★fail closed★ 引けなかったとき・件数が読めなかったときは **true（＝作らせない）** を返す。
+ *   ここで false を返すと、確認できないまま `salons` INSERT まで進んでしまう。
+ *
+ * `maybeSingle` は使わない（複数行ヒットで data=null になり「行なし」と区別できない）。
+ * count だけを引き、行の中身は取らない。line_user_id は PII（原則7）なのでログに出さない。
+ */
+export async function hasAnyStaffRow(
+  lineUserId: string | null | undefined,
+): Promise<boolean> {
+  // 呼び出し側は session を確認済みの想定。万一 id が無ければ確認できない＝弾く。
+  if (!lineUserId) return true;
+
+  const { count, error } = await supabaseAdmin
+    .from("staff")
+    .select("id", { count: "exact", head: true })
+    .eq("line_user_id", lineUserId);
+
+  if (error) {
+    console.error("[staff-session] hasAnyStaffRow failed", { code: error.code });
+    return true;
+  }
+  if (count === null) {
+    console.error("[staff-session] hasAnyStaffRow: count を取得できませんでした");
+    return true;
+  }
+  return count > 0;
+}

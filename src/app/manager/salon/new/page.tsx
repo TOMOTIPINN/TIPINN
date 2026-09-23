@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import QRCode from "qrcode";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getSession } from "@/lib/session";
-import { getStaffContext } from "@/lib/staff-session";
+import { hasAnyStaffRow } from "@/lib/staff-session";
 import { Eyebrow, Card } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
 import SalonQr from "./SalonQr";
@@ -28,6 +28,14 @@ import SalonConsentSubmit from "./SalonConsentSubmit";
  *   その自動登録で顧客に氏名が表示されるようになるため、**本人の公開同意**をこのフォームで取る
  *   （0045・SalonConsentSubmit / docs/40_decisions.md §10）。検証は API 側でも行う。
  */
+/**
+ * すでにスタッフ行を持つ人に出す文言（§21 コミット4a・2026-09-23 確定）。
+ * 画面（フォームを出さない側）と、API から戻された `?error=already_staff` の
+ * 両方で**同じ文字列**を使う。
+ */
+const ALREADY_STAFF_MESSAGE =
+  "このアカウントはすでにスタッフとして登録されているため、新しいサロンを作れません。サロンを追加したい場合は、echo 運営（info@echo-thanks.jp）までご連絡ください。";
+
 const ERROR_MESSAGE: Record<string, string> = {
   form: "送信データを読み取れませんでした。もう一度お試しください。",
   name: "店名を入力してください（50文字以内）。",
@@ -37,6 +45,9 @@ const ERROR_MESSAGE: Record<string, string> = {
   upload: "ロゴのアップロードに失敗しました。時間をおいて再度お試しください。",
   save: "登録に失敗しました。時間をおいて再度お試しください。",
   forbidden: "この操作は許可されていません。",
+  // §21 コミット4a。画面側でも同じ条件でフォームを出さないが、curl・JS 無効・
+  // 直前に staff 行ができた等でここに戻ることがある。文言は下の ALREADY_STAFF_MESSAGE と同一。
+  already_staff: ALREADY_STAFF_MESSAGE,
   // 公開同意（0045）。UI では未チェックだと送信できないため、ここに来るのは
   // curl・JS 無効・改変クライアントの経路。
   consent:
@@ -73,11 +84,6 @@ export default async function ManagerSalonNewPage({
       `/api/auth/line/login?returnTo=${encodeURIComponent("/manager/salon/new")}`,
     );
   }
-  const ctx = await getStaffContext();
-  if (ctx && ctx.role !== "manager") {
-    redirect("/staff");
-  }
-
   // ── 完了画面（登録直後）─────────────────────────────
   if (created) {
     const { data: salon } = await supabaseAdmin
@@ -130,6 +136,30 @@ export default async function ManagerSalonNewPage({
       );
     }
     // visit_token が引けない異常時はフォームに戻す（下の通常表示にフォールスルー）。
+  }
+
+  // ── 入口チェック（§21 コミット4a）───────────────────
+  //   **staff 行を1つでも持つ人にはフォームを出さない**（入力させてから弾かない）。
+  //   判定は API（/api/manager/salon/new）と**同じ関数**（hasAnyStaffRow）＝
+  //   画面と API で条件がズレない。退職済みの行も対象・取得失敗は fail closed。
+  //
+  //   ★完了画面（?created=）より**後**に置く★
+  //     作成に成功した人は、その時点で自分の staff 行（role=manager）が作られている。
+  //     ここを前に置くと、登録直後の本人が完了画面（店頭QR）を見られなくなる。
+  if (await hasAnyStaffRow(session.line_user_id)) {
+    return (
+      <main className="page page-top">
+        <div className="container stack animate-in">
+          <header className="stack-sm">
+            <Eyebrow className="eyebrow-mint">New salon</Eyebrow>
+            <h1 className="headline">サロンを登録</h1>
+          </header>
+          <Card>
+            <p className="muted">{ALREADY_STAFF_MESSAGE}</p>
+          </Card>
+        </div>
+      </main>
+    );
   }
 
   // ── 入力フォーム ───────────────────────────────────
