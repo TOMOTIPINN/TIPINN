@@ -33,7 +33,13 @@ type InviteRow = {
   used_at: string | null;
   salon_id: string | null;
   salons: { name: string } | { name: string }[] | null;
+  /** どの組織向けに発行したか（0048・§21 コミット4b）。既存3行は null のまま。 */
+  org_id: string | null;
+  organizations: { name: string } | { name: string }[] | null;
 };
+
+/** 発行フォームの選択肢。サロン数を添えて選び間違いを防ぐ（§8.1）。 */
+type OrgOption = { id: string; name: string; salonCount: number };
 
 const ERROR_MESSAGE: Record<string, string> = {
   form: "送信データを読み取れませんでした。",
@@ -41,6 +47,9 @@ const ERROR_MESSAGE: Record<string, string> = {
   email: "宛先メールが長すぎます。",
   save: "保存に失敗しました。時間をおいて再度お試しください。",
   restore_used: "使用済みの招待は復旧できません。",
+  // §21 コミット4b。UI では未選択だと送信できないため、ここに来るのは
+  // curl・JS 無効・改変クライアント、または存在しない組織 id を送った経路。
+  org: "発行先の組織を選んでください（選んだ組織が見つかりませんでした）。",
 };
 
 /** JST の日付表示（YYYY/MM/DD）。ダッシュボードと同じ Asia/Tokyo 基準。 */
@@ -73,7 +82,7 @@ export default async function AdminInvitesPage({
   const { data } = await supabaseAdmin
     .from("salon_invites")
     .select(
-      "id, code, recipient_email, sent_at, created_at, expires_at, used_at, salon_id, salons(name)",
+      "id, code, recipient_email, sent_at, created_at, expires_at, used_at, salon_id, salons(name), org_id, organizations(name)",
     )
     .order("created_at", { ascending: false });
 
@@ -96,6 +105,35 @@ export default async function AdminInvitesPage({
       staffCount.set(s.salon_id, (staffCount.get(s.salon_id) ?? 0) + 1);
     }
   }
+
+  /**
+   * 発行フォームの選択肢（§21 コミット4b）。
+   *
+   * 組織は現在2つ（合同会社carta / echo Labs）だけなので、検索も絞り込みも作らない。
+   * 並びは created_at 昇順（organizations の登録順）。
+   * ラベルに**その組織のサロン数**を添える（§8.1「選び間違いを防ぐため、発行画面には
+   * 会社名と既存サロン数を表示する」）。サロンは1回引いて JS で数える（N+1 を作らない）。
+   */
+  const [{ data: orgRows }, { data: orgSalonRows }] = await Promise.all([
+    supabaseAdmin
+      .from("organizations")
+      .select("id, name")
+      .order("created_at", { ascending: true }),
+    supabaseAdmin.from("salons").select("org_id"),
+  ]);
+
+  const salonCountByOrg = new Map<string, number>();
+  for (const row of (orgSalonRows ?? []) as { org_id: string | null }[]) {
+    if (!row.org_id) continue;
+    salonCountByOrg.set(row.org_id, (salonCountByOrg.get(row.org_id) ?? 0) + 1);
+  }
+  const orgOptions: OrgOption[] = ((orgRows ?? []) as { id: string; name: string }[]).map(
+    (o) => ({
+      id: o.id,
+      name: o.name,
+      salonCount: salonCountByOrg.get(o.id) ?? 0,
+    }),
+  );
 
   const now = Date.now();
 
@@ -136,6 +174,35 @@ export default async function AdminInvitesPage({
             method="post"
             className="stack-md"
           >
+            {/* 発行先の組織（§21 コミット4b・必須）。
+                ★先頭は空の選択肢で disabled＝未選択のままでは送信できない★
+                  可否の最終判定は API 側（organizations に実在するか）が行う。
+                ラベルにサロン数を添えて選び間違いを防ぐ（§8.1）。 */}
+            <div className="field-group">
+              <label className="field-label" htmlFor="org_id">
+                発行先の組織（必須）
+              </label>
+              <select
+                id="org_id"
+                name="org_id"
+                className="field"
+                defaultValue=""
+                required
+              >
+                <option value="" disabled>
+                  選択してください
+                </option>
+                {orgOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}（{o.salonCount}店舗）
+                  </option>
+                ))}
+              </select>
+              <span className="field-help">
+                このコードで作られたサロンが所属する会社です。組織をまたぐ付け替えは画面から行えません。
+              </span>
+            </div>
+
             <div className="field-group">
               <label className="field-label" htmlFor="recipient_email">
                 宛先メール（任意・メモ）
@@ -165,6 +232,7 @@ export default async function AdminInvitesPage({
             {rows.map((r) => {
               const state = inviteState(r, now);
               const salonName = one(r.salons)?.name ?? null;
+              const orgName = one(r.organizations)?.name ?? null;
               const count = r.salon_id
                 ? (staffCount.get(r.salon_id) ?? 0)
                 : null;
@@ -218,6 +286,10 @@ export default async function AdminInvitesPage({
                         <dd>{fmt(r.used_at)}</dd>
                       </div>
                       <div className="admin-meta-item">
+                        <dt>組織</dt>
+                        <dd>{orgName ?? "未指定"}</dd>
+                      </div>
+                      <div className="admin-meta-item">
                         <dt>サロン名</dt>
                         <dd>{salonName ?? "—"}</dd>
                       </div>
@@ -226,6 +298,16 @@ export default async function AdminInvitesPage({
                         <dd>{count === null ? "—" : `${count}名`}</dd>
                       </div>
                     </dl>
+
+                    {/* 組織未指定の未使用コード（§21 コミット4b）。
+                        4c でサロン作成側が org_id を必須にすると、この招待では作れなくなる。
+                        **挙動が変わる前に画面へ出しておく**（使おうとしてから気づかせない）。
+                        使用済みには出さない＝過去の履歴を責める表示にしない。 */}
+                    {!r.org_id && state !== "used" && (
+                      <p className="note-fine">
+                        組織が未指定のため、この招待ではサロンを作れません。
+                      </p>
+                    )}
 
                     {state === "expired" && (
                       <form
