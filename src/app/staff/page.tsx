@@ -246,6 +246,8 @@ export default async function StaffHomePage({
   //                  （rating 1,2 の本文は店長が受け止める・docs/00_philosophy.md §4.8）。
   //                  ここは**本文を出す一覧**なので §14 後も rating>=3 のまま。
   //  ・manager/owner: 従来どおり manager_only 以外・rating 制限なし。
+  // ★取得する行の範囲は認可と同じ根拠（ctx.role）で決める。表示用の resolveSalonRole に
+  //   依存させない（§21 で表示判定を組織由来に変えるため）。
   const displayRole = await resolveSalonRole(ctx);
   // staff_id は「その行を /staff/received/[id] で開けるか」の判定にだけ使う（絞り込み条件は不変）。
   const voicesBase = supabaseAdmin
@@ -253,7 +255,7 @@ export default async function StaffHomePage({
     .select("id, body, rating, created_at, share_scope, staff_id, staff(name)")
     .eq("salon_id", ctx.salon_id);
   const voicesQuery =
-    displayRole === "staff"
+    ctx.role !== "manager"
       ? voicesBase
           .eq("share_scope", STAFF_VISIBLE_SHARE_SCOPE)
           .gte("rating", STAFF_BODY_MIN_RATING)
@@ -653,14 +655,14 @@ export default async function StaffHomePage({
           </div>
         </Card>
 
-        {displayRole !== "staff" && (
+        {ctx.role === "manager" && (
           <Link href="/dashboard" className="btn btn-quiet btn-block">
             ダッシュボードへ
           </Link>
         )}
 
         {/* よくある質問（スタッフ向け）。/help/staff への唯一の導線なので、
-            上の displayRole 条件の外に置き、ロールによらず常に出す。
+            上の ctx.role 条件の外に置き、ロールによらず常に出す。
             見た目は AddFriendCard と同じ .note-fine の1行リンク。 */}
         <Link href="/help/staff" className="note-fine">
           よくある質問 →
