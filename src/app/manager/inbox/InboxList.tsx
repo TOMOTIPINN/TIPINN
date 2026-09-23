@@ -90,27 +90,60 @@ function RowBadges({
   );
 }
 
-export default function InboxList({ rows }: { rows: InboxRow[] }) {
+/**
+ * 1行の中身。リンクにするかどうかで外側の要素だけが変わる（中身は同一）。
+ */
+function RowInner({ r }: { r: InboxRow }) {
+  return (
+    <>
+      <div className="inbox-meta">
+        <span className="inbox-emoji" aria-hidden="true">
+          {r.emoji}
+        </span>
+        <span className="inbox-staff">{r.staffName}</span>
+        <span className="inbox-customer">{r.customerName}様</span>
+        <span className="inbox-time">{r.time}</span>
+      </div>
+      <RowBadges scope={r.shareScope} tierLabel={r.tierLabel} />
+      <p className="inbox-body">「{r.body}」</p>
+    </>
+  );
+}
+
+export default function InboxList({
+  rows,
+  linkRows = true,
+}: {
+  rows: InboxRow[];
+  /**
+   * 行を詳細（/staff/received/[reviewId]）へのリンクにするか。既定は true（店長画面・従来どおり）。
+   *
+   * ★/owner は false★（§21 コミット3c の確定事項）
+   *   詳細画面は `getStaffContext()` で認可しており、オーナーが他店舗の感想を開くと
+   *   `ctx.salon_id` が一致せず 404 になる。オーナー用の詳細画面も作らない
+   *   （詳細にしかない情報はタグと「今週 N」だけで、タグを一覧に出すかは
+   *   店長画面にも関わる別の判断として切り離した）。
+   *   /owner から /staff/* へのリンクを出さない、という条件もここで満たす。
+   */
+  linkRows?: boolean;
+}) {
   return (
     <div>
-      {rows.map((r) => (
-        <Link
-          key={r.id}
-          href={`/staff/received/${r.id}?from=inbox`}
-          className="inbox-row"
-        >
-          <div className="inbox-meta">
-            <span className="inbox-emoji" aria-hidden="true">
-              {r.emoji}
-            </span>
-            <span className="inbox-staff">{r.staffName}</span>
-            <span className="inbox-customer">{r.customerName}様</span>
-            <span className="inbox-time">{r.time}</span>
+      {rows.map((r) =>
+        linkRows ? (
+          <Link
+            key={r.id}
+            href={`/staff/received/${r.id}?from=inbox`}
+            className="inbox-row"
+          >
+            <RowInner r={r} />
+          </Link>
+        ) : (
+          <div key={r.id} className="inbox-row">
+            <RowInner r={r} />
           </div>
-          <RowBadges scope={r.shareScope} tierLabel={r.tierLabel} />
-          <p className="inbox-body">「{r.body}」</p>
-        </Link>
-      ))}
+        ),
+      )}
     </div>
   );
 }

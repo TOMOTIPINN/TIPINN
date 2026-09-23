@@ -1,10 +1,9 @@
-import Link from "next/link";
 import { requireOwnerSalon } from "@/lib/owner-guard";
 import { getDashboardData } from "@/app/dashboard/dashboard-data";
 import { resolvePeriod } from "@/app/dashboard/period";
 import { parseRecentTake } from "@/app/dashboard/recent";
 import DashboardClient from "@/app/dashboard/DashboardClient";
-import RoleBar from "@/components/RoleBar";
+import OwnerSalonNav from "@/app/owner/OwnerSalonNav";
 
 /**
  * オーナーが見る、1店舗ぶんのダッシュボード（/owner/[salonId]/dashboard・§21 コミット3b）。
@@ -27,7 +26,7 @@ import RoleBar from "@/components/RoleBar";
  *
  * ★/manager/* ・ /staff/* への導線を出さない★
  *   - `SalonNav`（数字管理/感想/スタッフ/来店受付＋設定5件）は描画せず、`nav` に
- *     自前のナビ（RoleBar ＋ 店舗一覧へ戻る）を渡す。
+ *     `OwnerSalonNav`（RoleBar ＋ 数字/感想の行き来 ＋ 店舗一覧へ戻る）を渡す。
  *   - Stripe 連携カードは `/api/manager/stripe/onboard` へ form POST するため
  *     `stripeStatus={null}` で**出さない**（店舗の設定は各店長が `/manager` で行う・§8.1）。
  *   - 期間切替と「もっと見る」の遷移先は `basePath` でこのページ自身に向ける。
@@ -76,14 +75,7 @@ export default async function OwnerSalonDashboardPage({
       stripeStatus={null}
       basePath={basePath}
       customerNameNote="※顧客名は、この店舗の店長とオーナーだけが見られます（原則7）。"
-      nav={
-        <div className="stack stack-sm">
-          <RoleBar role="owner" />
-          <Link href="/owner" className="note-fine">
-            ← 店舗一覧へ
-          </Link>
-        </div>
-      }
+      nav={<OwnerSalonNav salonId={salon.id} active="dashboard" />}
     />
   );
 }
