@@ -25,7 +25,10 @@ docs/00_philosophy.md
 | `CHANGELOG.md` | 旧 CLAUDE.md §11「現在の進捗」の全文（〜2026-07-17） | 実装の到達点の記録。以降の変更は反映されていない |
 | `handoff.md` | 日次の作業引き継ぎログ（最終 2026-07-15） | 「残タスク」は消化済みのものが混ざる。冒頭の migration 番号メモ（0024）は**古い** |
 | `phase5b_staff_screens.md` | スタッフ画面（Phase 5b）の設計メモ | 実装時の下書き。現行の画面仕様は `docs/20_product.md` |
-| `security-scan-log.md` | セキュリティスキャンの実施ログ | 現行のセキュリティ不変条件は `docs/50_security.md` |
+
+**移動の記録**: `security-scan-log.md` は **`docs/security-scan-log.md` へ移した**（2026-09-23）。
+Stripe「セキュリティ対策措置状況申告書」設問 3-1 の証跡で、**診断のたびに追記し続ける台帳**であり、
+「その時点の記録」ではないため。archive の「書き換えない」という前提と食い違っていた。
 
 **削除の記録**: 旧 CLAUDE.md **§8 ビルド規約**はアーカイブせず削除した。内容は `docs/30_design.md` §7（共有トークン/インラインstyle禁止・画面マップ確認・returnTo）と `docs/50_security.md` §1.4（DB書き込みは共有 `supabaseAdmin`）に**分散して存在する**。
 
