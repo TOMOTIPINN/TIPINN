@@ -117,6 +117,16 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
    （`/api/staff/bind`・LINE callback は `login-attempts` で絞っているが、この経路だけ無い）。
    有効な招待コードが必須なので総当たりの価値は低いが、
    **コミット4・5（組織指定の必須化・オーナー招待）で検討する**（→ `40_decisions.md` §21）。
+6. **`/api/manager/staff/archive` に「最後の manager はアーカイブできない」ガードが無い**
+   （2026-09-23・§21 の「nun」行の調査で判明）。
+   このルートは `archived_at` を更新するだけで、manager の残数を見ていない
+   （`requireManager()` ＋ `.eq("salon_id", ctx.salon_id)` の越境ガードはある）。
+   **店長1人の店舗でその人をアーカイブすると、誰も店長画面に入れなくなる**
+   （`staff-session.ts` が `archived_at is null` を要求するため、本人も締め出される）。
+   `/api/admin/staff/transfer` と `/api/admin/staff/role` には `last_manager` ガードがあり、
+   **archive だけ非対称**。
+   復旧は運営者が SQL か `/admin/staff` 側から行うことになる（画面からは戻せない）。
+   **実害は未確認**（発生の記録なし。現在 manager 1人の店舗は DEMO と SELNI）。
 
 ---
 

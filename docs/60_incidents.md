@@ -155,10 +155,37 @@ nun Fukushima の**店舗共用端末**が、staff 行「**nun**」（`role=mana
 順序を誤ると店長画面に入れなくなるため、切り替えを先に行う。
 
 **残課題**:
-- スタッフからの回答待ち（2026-09-15 時点）
+- ~~スタッフからの回答待ち（2026-09-15 時点）~~ → **解決（2026-09-23・下記）**
 - **他サロンに同じ構造があるかは未確認。**
   「実在の人物でない」を示す列が無いため、SQL では候補抽出までしかできない
   （staff 名がサロン名と一致する行・未受諾の manager 行など）
+
+**解決（2026-09-23）**: 「nun」行を**アーカイブ**した（`archived_at` を設定）。
+**顧客側のスタッフ選択（`/review`）から消えたことを実機で確認済み。**
+
+**完全削除にしなかった理由**（実行前の調査に基づく）:
+- **参照している行が6件ある** — `reviews` 1件（2026-07-15・rating=1・share_scope=everyone）と
+  `stamp_adjustments` 5件（`created_by` / `updated_by`・いずれも `source='migration'`）。
+  FK はすべて `on delete set null`（**migration 上の宣言。本番の `pg_constraint` は未確認**）なので、
+  削除すると**行は残るが「誰の実績か」「誰が入れた補正か」が null になる**。
+  `api/manager/staff/archive` が「過去実績・金額台帳の attribution 保持」を
+  明示的な設計意図として書いており、削除はこれに反する。
+- **画面からはそもそも削除できない**。`api/manager/staff/delete` は実行直前に再カウントし、
+  `reviews` が1件でもあれば **409 `has_reviews`** で拒否する。
+- **アーカイブは戻せる**（`action=unarchive`）。削除は戻せない（§4.4）。
+
+**アーカイブ後も残るもの**（承知の上）:
+- `/dashboard` のスタッフ別に**グレー表示で残る**（`dashboard-data.ts` 方針①・
+  集計からは外さない）。echo flow の**要ケア判定からは除外**される。
+- `/manager/inbox` と、そのサロンの manager の `/staff` に、
+  **2026-07-15 のテスト感想（rating=1）が残る**。staff 行の無効化では消えない。
+- **その LINE アカウントは `line_user_id` を占有し続ける**
+  （`uq_staff_line_user_id` に `archived_at` 条件が無いため。2026-09-02 の項の★訂正★参照）。
+  別サロンの staff 行には紐付けられない。復帰させる場合は `unarchive` で戻す。
+
+**副次的に判明した課題**: `/api/manager/staff/archive` に
+**「最後の manager はアーカイブできない」ガードが無い**（→ `50_security.md` §5-6）。
+今回は nun Fukushima に manager が3人いたため問題にならなかった。
 
 ---
 
