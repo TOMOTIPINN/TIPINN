@@ -20,7 +20,10 @@ import RoleBar from "@/components/RoleBar";
  *   salonId はパスに入っていてもクライアント入力なので、照合は DB 由来の
  *   `ctx.salons` に対して行う（`50_security.md` §1.1）。
  *
- * 顧客名（最近の評価・VIP のお客様）は**店長画面と同じく出す**（2026-09-23 決定）。
+ * 顧客名（最近の評価・VIP のお客様）は**店長画面と同じく出す**（2026-09-23 決定。
+ * オーナーが店長と同じ情報を持つため）。ただし**注記の文言だけ差し替える**：
+ * オーナーはレジに立たないので「レジでの判別補助」は当てはまらない。
+ * 書くのは「誰が見られるか」（原則7）。
  *
  * ★/manager/* ・ /staff/* への導線を出さない★
  *   - `SalonNav`（数字管理/感想/スタッフ/来店受付＋設定5件）は描画せず、`nav` に
@@ -72,8 +75,9 @@ export default async function OwnerSalonDashboardPage({
       recentTake={recentTake}
       stripeStatus={null}
       basePath={basePath}
+      customerNameNote="※顧客名は、この店舗の店長とオーナーだけが見られます（原則7）。"
       nav={
-        <div className="stack-sm">
+        <div className="stack stack-sm">
           <RoleBar role="owner" />
           <Link href="/owner" className="note-fine">
             ← 店舗一覧へ

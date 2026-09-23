@@ -9,8 +9,9 @@
  *  - すべて salon_id でスコープ（越境しない）。
  *  - ¥は「店舗合計（rating_purchases.amount 合計）」のみ。per-staff の ¥ は client に一切出さない
  *    （StaffAgg.revenue は常に 0 で返す）。
- *  - 顧客名は VIP 一覧（レジ判別補助）と最近の評価（§20 決定3）のみ。どちらも同サロンの店長にだけ
- *    表示する（§13 追加決定「名前＋ティアは同サロンの店長にも表示される」と整合・原則7）。
+ *  - 顧客名は VIP 一覧（レジ判別補助）と最近の評価（§20 決定3）のみ。どちらも
+ *    **その店舗の店長と、その店舗を持つ組織のオーナーにだけ**表示する
+ *    （§13 追加決定「名前＋ティアは同サロンの店長にも表示される」と整合・原則7・§21 コミット3b）。
  *
  * 日付基準（JST / Asia/Tokyo）:
  *  - reviews / rating_purchases は created_at（timestamptz）。JST境界の ISO で範囲比較する
@@ -330,8 +331,10 @@ export async function getDashboardData(
    *
    * ★顧客名を出す（§20 決定3 で「顧客名は含めない」を撤回した）★
    *   同サロンの店長に「誰がどのティアを送ったか」を見せることは §13 追加決定
-   *   （名前＋ティアは同サロンの店長にも表示される）で既に決まっている。この画面は
-   *   manager 専用ガード済み（page.tsx）。顧客名は下の wave 2 で VIP と**まとめて1回で**引く。
+   *   （名前＋ティアは同サロンの店長にも表示される）で既に決まっている。読者は
+   *   **その店舗の店長（/dashboard は manager 専用ガード済み）と、その店舗を持つ組織の
+   *   オーナー（/owner/[salonId]/dashboard は requireOwnerSalon でガード済み）**。
+   *   顧客名は下の wave 2 で VIP と**まとめて1回で**引く。
    *   並びは時刻の新しい順のまま（ティア順にしない）・amount は持たせない（§20 ガードレール）。
    *   rating_purchases を直接読むので、review_id が null の過去21件にも顧客名とティアが出る。
    */
@@ -387,7 +390,7 @@ export async function getDashboardData(
   const vipIds = new Set(vipTop.map((v) => v.customer_id));
 
   // wave 2: VIP（レジ判別補助）と最近の評価（§20 決定3）の表示名を**1回で**引く。
-  // 同サロンの店長にだけ出す（原則7）。クエリはどちらか一方でもあるときの1本だけ。
+  // 出すのはその店舗の店長とオーナーにだけ（原則7）。クエリはどちらか一方でもあるときの1本だけ。
   const nameById = new Map<string, string>();
   const nameIds = new Set<string>([
     ...vipIds,

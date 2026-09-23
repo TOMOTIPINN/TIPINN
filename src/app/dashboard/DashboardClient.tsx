@@ -31,7 +31,8 @@ import {
  * 規制ガード（原則5・6・7）:
  *  - ¥は「店舗合計」としてのみ表示（個人に割り付けない・per-staff の ¥ は集計層で 0 化済）。
  *  - スタッフ個人は件数・ティア内訳・ボイス・前期間比のみ（StaffPeriodView）。
- *  - 顧客名は VIP 一覧（レジ判別補助）と最近の評価（§20 決定3）のみ。この画面は manager 専用（原則7）。
+ *  - 顧客名は VIP 一覧（レジ判別補助）と最近の評価（§20 決定3）のみ。見られるのは
+ *    **その店舗の店長（/dashboard）とオーナー（/owner/[salonId]/dashboard）だけ**（原則7・§21 コミット3b）。
  */
 
 // 前期間比（0除算ガード。符号付き整数%）。
@@ -86,6 +87,17 @@ function StripeStatusCard({ status }: { status: StripeStatus | null }) {
 // Stripe 連携状態（Phase 2）: none=未連携 / pending=審査中 / enabled=決済可。
 export type StripeStatus = "none" | "pending" | "enabled";
 
+/**
+ * 顧客名の注記の既定文（= /dashboard・店長が自店を見るとき）。
+ *
+ * /owner/[salonId]/dashboard は読者も目的も違う（レジに立たない）ので、
+ * 呼び出し側が `customerNameNote` で差し替える（§21 コミット3b）。
+ * **どちらの文も「誰が見られるか」を書く**＝原則7（個人情報は echo 一元管理・
+ * サロンは自店データのみ）の説明であって、画面の数を数えるものではない。
+ */
+export const CUSTOMER_NAME_NOTE_MANAGER =
+  "※顧客名はレジでの判別補助のために表示しています。見られるのは、この店舗の店長とオーナーだけです（原則7）。";
+
 export default function DashboardClient({
   data,
   role,
@@ -94,6 +106,7 @@ export default function DashboardClient({
   stripeStatus,
   basePath = "/dashboard",
   nav,
+  customerNameNote = CUSTOMER_NAME_NOTE_MANAGER,
 }: {
   data: DashboardData;
   role: SalonRole;
@@ -112,6 +125,11 @@ export default function DashboardClient({
    * `/owner` は `/manager/*`・`/staff/*` への導線を出さないため、自前のナビを渡す（§21 コミット3b）。
    */
   nav?: React.ReactNode;
+  /**
+   * 「VIP のお客様」末尾の注記。既定は店長向け（CUSTOMER_NAME_NOTE_MANAGER）。
+   * /owner はレジ判別の文脈が無いので、呼び出し側が差し替える（§21 コミット3b）。
+   */
+  customerNameNote?: string;
 }) {
   // ビュー切替: 日次（今の状態）/ HR月次（echo flow トレンド）。§12 の2タブ構成。
   const [view, setView] = useState<"daily" | "hr">("daily");
@@ -225,7 +243,7 @@ export default function DashboardClient({
               </div>
             </div>
 
-            {/* 3. VIP のお客様（現場判別補助・原則7。顧客名はこの画面のみ） */}
+            {/* 3. VIP のお客様（顧客名は原則7。見られるのはこの店舗の店長とオーナーだけ） */}
             <Card>
               <div className="stack-md">
                 <h2 className="headline-sm">VIP のお客様</h2>
@@ -252,9 +270,7 @@ export default function DashboardClient({
                     })
                   )}
                 </div>
-                <p className="note-fine">
-                  ※顧客名はレジでの判別補助のためこの画面でのみ表示します（原則7）。
-                </p>
+                <p className="note-fine">{customerNameNote}</p>
               </div>
             </Card>
 
