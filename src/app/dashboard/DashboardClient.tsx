@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, Eyebrow, VipBadge } from "@/components/ui";
 import SalonNav from "@/components/SalonNav";
 import type { SalonRole } from "@/components/RoleBar";
@@ -11,6 +12,11 @@ import PeriodSelector from "./PeriodSelector";
 import { trendDir, yen } from "./eval-data";
 import type { DashboardData } from "./dashboard-data";
 import type { PeriodKey } from "./period";
+import {
+  RECENT_MAX_TAKE,
+  RECENT_PAGE_SIZE,
+  dashboardHref,
+} from "./recent";
 
 /**
  * 評価ダッシュボード（画面マップ14系・白世界）— 表示のみの client。
@@ -81,11 +87,14 @@ export default function DashboardClient({
   data,
   role,
   period,
+  recentTake,
   stripeStatus,
 }: {
   data: DashboardData;
   role: SalonRole;
   period: { key: PeriodKey; from?: string; to?: string };
+  /** 「最近の評価」の読み込み深さ（URL の ?take= 由来・§20 決定4）。 */
+  recentTake: number;
   stripeStatus: StripeStatus;
 }) {
   // ビュー切替: 日次（今の状態）/ HR月次（echo flow トレンド）。§12 の2タブ構成。
@@ -298,6 +307,23 @@ export default function DashboardClient({
                     ))
                   )}
                 </div>
+                {/* もっと見る（§20 決定4）。§17・§22 と同じ「成長する take」＝毎回先頭から take 件。
+                    リンクにはいま見ている期間を引き継ぐ（落とすと「今月」に戻る）。
+                    上限に達したら打ち切る（URL を直接いじられても増え続けない）。 */}
+                {data.recent.length > 0 &&
+                  (data.recentHasMore && recentTake < RECENT_MAX_TAKE ? (
+                    <Link
+                      href={dashboardHref(period, recentTake + RECENT_PAGE_SIZE)}
+                      className="btn btn-quiet btn-block"
+                      scroll={false}
+                    >
+                      もっと見る
+                    </Link>
+                  ) : (
+                    <p className="note-fine center-text">
+                      すべて表示しました（{data.recent.length}件）
+                    </p>
+                  ))}
               </div>
             </Card>
           </>

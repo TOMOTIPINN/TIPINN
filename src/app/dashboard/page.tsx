@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
 import { resolveSalonRole } from "@/lib/display-role";
 import { getDashboardData } from "./dashboard-data";
 import { resolvePeriod } from "./period";
+import { parseRecentTake } from "./recent";
 import DashboardClient, { type StripeStatus } from "./DashboardClient";
 
 /**
@@ -21,11 +22,19 @@ import DashboardClient, { type StripeStatus } from "./DashboardClient";
  *
  * 集計期間は URL の searchParams（?period= / ?from= / ?to=）で決まる（resolvePeriod が唯一の正）。
  *   同じ URL は同じ期間を再現する（custom＝暦区間で確定・賞与査定の再現性）。不正・欠落は「今月」。
+ *
+ * 「最近の評価」の読み込み深さも URL（?take=）に持つ（§20 決定4）。既定 5 件・上限 100 件で、
+ *   parseRecentTake が不正値を丸める。期間を切り替えると take は落ちて 5 件に戻る。
  */
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; from?: string; to?: string }>;
+  searchParams: Promise<{
+    period?: string;
+    from?: string;
+    to?: string;
+    take?: string;
+  }>;
 }) {
   const session = await getSession();
   if (!session) {
@@ -40,11 +49,14 @@ export default async function DashboardPage({
   // 集計期間は URL 由来（相対プリセット＋暦区間の custom）。periodStart/End/label を一括で解決。
   const params = await searchParams;
   const period = resolvePeriod(params);
+  // 「最近の評価」の深さ（§20 決定4）。期間の解決には使わない（resolvePeriod は period/from/to のみ読む）。
+  const recentTake = parseRecentTake(params.take);
   const data = await getDashboardData(
     ctx.salon_id,
     period.periodStart,
     period.periodEnd,
     period.label,
+    recentTake,
   );
   const displayRole = await resolveSalonRole(ctx);
 
@@ -65,6 +77,7 @@ export default async function DashboardPage({
       data={data}
       role={displayRole}
       period={{ key: period.key, from: period.from, to: period.to }}
+      recentTake={recentTake}
       stripeStatus={stripeStatus}
     />
   );

@@ -24,6 +24,7 @@ import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { RATING_TIERS } from "@/lib/rating-tiers";
 import { computeVipProgress } from "@/lib/vip";
 import { jstMonthDayTime } from "@/lib/jst-format";
+import { RECENT_PAGE_SIZE } from "./recent";
 import {
   TIER_ORDER,
   emptyTiers,
@@ -73,6 +74,8 @@ export type DashboardData = {
   /** ティア別の件数と売上（当期・店舗全体）。売上は rating_purchases.amount の実値合計（§18 C）。 */
   tierBreakdown: { label: Tier; count: number; revenue: number }[];
   recent: RecentEval[];
+  /** 「最近の評価」にまだ続きがあるか（当期の母集団 > 返した件数・§20 決定4）。 */
+  recentHasMore: boolean;
   vipCustomers: VipCustomer[];
   vipTotal: number;
   flows: StaffFlow[];
@@ -143,6 +146,8 @@ export async function getDashboardData(
   periodEnd: string,
   // 表示ラベルは呼び出し側（period.ts）が期間から導出したものを渡す（唯一の正はそちら）。
   label: string = "今月",
+  // 「最近の評価」を何件返すか（§20 決定4・URL の ?take= 由来。呼び出し側が上限で丸め済み）。
+  recentTake: number = RECENT_PAGE_SIZE,
 ): Promise<DashboardData> {
   const nowMs = Date.now();
   const curStartMs = Date.parse(periodStart);
@@ -330,11 +335,14 @@ export async function getDashboardData(
    *   並びは時刻の新しい順のまま（ティア順にしない）・amount は持たせない（§20 ガードレール）。
    *   rating_purchases を直接読むので、review_id が null の過去21件にも顧客名とティアが出る。
    */
-  const recentRows = ratings
+  const recentAll = ratings
     .filter((rp) => inWindow(Date.parse(rp.created_at), curStartMs, curEndMs))
     .filter((rp) => SLUG_TO_LABEL[rp.tier])
-    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))
-    .slice(0, 5);
+    .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  // 深さは呼び出し側（?take=）が決める（§20 決定4）。**顧客名は表示する分しか引かない**（原則7）。
+  // ratings は既にメモリにあるので、take を増やしてもクエリは増えない。
+  const recentRows = recentAll.slice(0, recentTake);
+  const recentHasMore = recentAll.length > recentRows.length;
 
   // echo flow（直近3ヶ月・月次件数＝感想＋評価スタンプ）。
   const flowCounts: Record<string, number[]> = {};
@@ -438,6 +446,7 @@ export async function getDashboardData(
     prevRangeLabel: jstRangeLabel(prevStartMs, prevEndMs, nowMs),
     tierBreakdown,
     recent,
+    recentHasMore,
     vipCustomers,
     vipTotal,
     flows,
