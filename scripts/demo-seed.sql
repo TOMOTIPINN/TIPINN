@@ -1,6 +1,7 @@
 -- ============================================================================
 -- echo — 営業デモ用サロンのシードデータ（本番Supabase / Supabase SQLエディタで手動実行）
 -- ----------------------------------------------------------------------------
+-- ★0048 適用後に実行すること（organizations に echo Labs 組織が存在する前提）。
 -- ★これは「データ」であって「スキーマ」ではない。migrations/ には置かない（scripts/ に置く）。
 -- ★冪等: 固定UUID + ON CONFLICT で何度でも再実行できる（開くたび綺麗な状態に戻せる）。
 -- ★固定UUIDは src/lib/demo.ts と同一（単一ソース）:
@@ -31,13 +32,17 @@ begin;
 --    来店軸ON・cycle=20（実サービス既定と同条件）。19来店で 19/20＝「あと1回でVIP」。
 --    ロゴは後から管理UIで。
 -- ---------------------------------------------------------------------------
-insert into public.salons (id, name, logo_url, stripe_account_id, visit_axis_enabled, visit_cycle_size)
+--    org_id は echo Labs 組織（0048 で固定採番）。salons.org_id は 0048 で NOT NULL に
+--    なったため、列を省くとこの insert は落ちる。
+insert into public.salons (id, name, logo_url, stripe_account_id, visit_axis_enabled, visit_cycle_size, org_id)
 values
-  ('deded000-0000-0000-0000-000000000000', '【DEMO】echo デモサロン', null, null, true, 20)
+  ('deded000-0000-0000-0000-000000000000', '【DEMO】echo デモサロン', null, null, true, 20,
+   'ec40ab50-0000-0000-0000-000000000002')
 on conflict (id) do update set
   name               = excluded.name,
   visit_axis_enabled = excluded.visit_axis_enabled,
-  visit_cycle_size   = excluded.visit_cycle_size;
+  visit_cycle_size   = excluded.visit_cycle_size,
+  org_id             = excluded.org_id;
 
 -- ---------------------------------------------------------------------------
 -- 2) staff（4名：店長persona + スタイリスト2 + アシスタント1）
