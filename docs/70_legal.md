@@ -17,7 +17,7 @@
 設計判断は `40_decisions.md`、起きた事実は `60_incidents.md` に書く。
 ここから参照するのは構わないが、**法務の回答そのものはここを正とする**。
 
-> 最終更新: 2026-09-19
+> 最終更新: 2026-09-24
 
 ---
 
@@ -168,9 +168,16 @@ carta LLC なら CARTA / Niii / nun Fukushima / suco / SELNI の5店舗が対象
 
 | # | 項目 | 実装 | 当面の扱い |
 |---|---|---|---|
-| 1 | **退会・削除機能** | **なし**（顧客が自分で削除する手段が存在しない） | **窓口（info@echo-thanks.jp）への申出を手作業で処理**する。**手順書は未作成** — 顧客削除時の **FK 挙動が未確認**のため、消す順序が決められていない |
+| 1 | **退会・削除機能** | **画面・API は作らない**（2026-09-24 決定） | **窓口（info@echo-thanks.jp）への申出を手作業で処理**する。**手順書は §7**。窓口は `/mypage` の末尾に表示（`b44fde8`） |
 | 2 | **保存期間の削除処理** | `login_attempts`（IP）**以外はすべて無期限** | 最初に期限が来るのは**通知履歴6か月**（`notification_outbox`）。それまでに削除処理を用意するか、期間の記載を見直す |
-| 3 | **`audit_log.note` が自由記述** | 列は存在。本番は現在**全件 NULL** | **個人情報を書かない運用ルールが必要。** 書かれると監査ログ（3年保存・削除処理なし）に個人情報が混入する |
+| 3 | **`stamp_adjustments.note` が自由記述**（★訂正・下記★） | 本番の audit_log の `new_data.note` は**448件すべて null**（2026-09-24） | **個人情報を書かない運用ルールが必要。** 書かれると監査ログ（3年保存・削除処理なし）に個人情報が混入する |
+
+**★#3 の訂正（2026-09-24）★** 以前は「`audit_log.note` が自由記述・列は存在」と書いていたが、
+**`audit_log` に `note` 列は存在しない**（本番の列は `id, salon_id, customer_id, actor_type, actor_id,
+action, table_name, record_id, old_data, new_data, created_at`）。
+自由記述なのは **`stamp_adjustments.note`** で、トリガー `fn_audit_log` がその行を丸ごと
+**`audit_log.new_data.note`（UPDATE・DELETE 時は `old_data.note` にも）に写す**。
+懸念の中身（書かれたら監査ログに3年残る）は変わらない。
 
 ### 補足（2026-09-15 の調査で確認した事実）
 
@@ -179,6 +186,9 @@ carta LLC なら CARTA / Niii / nun Fukushima / suco / SELNI の5店舗が対象
   ただし**トリガー定義（prosrc）は未確認**（この環境から `pg_catalog` を読めない）。
 - `audit_log` に**氏名・感想本文・LINE ユーザーIDは入っていない**（現データの全キーを確認）。
   ただし `customer_id`（UUID）は入る＝`customers` と突合すれば個人に到達する**仮名化情報**。
+  → **2026-09-24 に再確認**（674件すべて。`customers.display_name`・`customers.line_user_id`・
+  `staff.name`・LINE ID の形式と照合し、`new_data`・`old_data`・`actor_id` のどこにも一致なし）。
+  スタッフは `created_by` / `redeemed_by` 等の UUID でのみ入る。
 - **年齢確認は echo の DB に保存していない。** Stripe Checkout Session の metadata
   （`adult_confirmed` / `adult_confirmed_at`）にのみ記録（§11）。
 - クライアント（anon キー）からは**全テーブルが GRANT レベルで拒否**される（42501）。
@@ -200,3 +210,168 @@ carta LLC なら CARTA / Niii / nun Fukushima / suco / SELNI の5店舗が対象
 | 他サロンの同構造 | **未確認。** 「実在の人物でない」を示す列が存在しないため、SQL では候補抽出までしかできない |
 
 詳細は `60_incidents.md` を参照。
+
+---
+
+## 7. 手作業での退会の手順書（プライバシーポリシー第7条）
+
+**2026-09-24 決定**: 第7条の退会は、当面「**窓口（info@echo-thanks.jp）への申出を受けて、
+当社が手作業で処理する**」方式で約束を守る。**退会の画面・API は作らない。**
+案内は `/mypage` の末尾に小さな1行で置く（目立たせないが見つけられる場所・`b44fde8`）。
+
+**この手順は本番 DB への手作業の書き込み**なので、Supabase SQL エディタで行う
+（`CLAUDE.md` §3・migration と同じ場所）。**1件ずつ・1人ずつ**処理する。
+
+### 7.1 方針：行は物理削除せず、識別子を置き換える
+
+`customers` の行を **delete しない**。理由（migration の FK 定義による。
+**本番の定義は `pg_catalog` を読めないため未照合**）:
+
+| `customers` を参照する表 | `on delete` | 物理削除すると |
+|---|---|---|
+| `rating_purchases`（0001） | **RESTRICT** | 購入が1件でもあると**削除そのものが失敗する** |
+| `reward_redemptions`（0025）・`earned_stamps`（0001）・`stamp_adjustments`（0019） | CASCADE | **特典・スタンプの履歴が消える**＝第7条の「特典の利用履歴を保有し続ける」に反する |
+| `visits`（0009）・`notification_outbox`（0014）・`reviews`（0001） | CASCADE | 来店履歴・通知履歴・感想が消える（感想は本人の希望で決める＝7.3） |
+
+代わりに、個人を識別できる**2列だけ**を復元できない値に置き換える:
+
+| 列 | 置き換え後 | 理由 |
+|---|---|---|
+| `line_user_id`（`not null unique`） | `'withdrawn:' \|\| gen_random_uuid()` | **ランダム値**にする（元の ID のハッシュにしない＝同じ人が再び現れても突き合わせられない）。unique を満たし、LINE ID の形式（`U`＋16進32桁）とも衝突しない。`withdrawn:` の接頭辞で退会済みを SQL から判別できる |
+| `display_name`（`not null`） | `'退会済みのお客様'` | 感想・評価の画面は投稿者名を `customers.display_name` から都度読んでいる（`inbox-data.ts`・`dashboard-data.ts`・`staff/received/[reviewId]/page.tsx`）＝**感想を残す場合も表示は自動でこの文言になる** |
+
+あわせて `line_is_friend` を `false` にし、未送信の来店リマインド（`notification_outbox` の `pending`）を閉じる。
+
+これで audit_log・取引の記録・特典の履歴に残るのは `customer_id`（UUID）だけになり、
+その UUID の先の `customers` 行に個人を識別できる値が無い状態になる
+（audit_log の中身は §5 補足・2026-09-24 再確認）。
+
+### 7.2 申出の受付
+
+1. info@echo-thanks.jp で申出を受ける。
+2. **本人確認の方法：未決。**
+   - 何を以て「申出者＝その `customers` 行の本人」とするかが決まっていない。
+   - **対象の行を特定する手段も未決**。`display_name` は一意ではなく、お客様の画面には
+     `customer_id` も LINE ID も表示していない。メールだけでは行を1つに絞れない。
+   - **決まるまでは、行を1つに確定できない申出は処理しない**（取り違えて別人を退会させると戻せない）。
+3. 受付日・対応者・（確定後の）`customer_id` を記録する。**記録の置き場所は未決**
+   （audit_log や `stamp_adjustments.note` には書かない＝§5-3）。
+
+### 7.3 感想の扱いの希望を聞く
+
+第7条は、投稿済みの感想について「**削除する**」か「**投稿者を特定できない形式で掲載を続ける**」かを
+お客様が選べると約束している。**処理の前に必ず希望を聞く。**
+
+| 希望 | すること | 起きること |
+|---|---|---|
+| 掲載を続ける | 7.4 の SQL だけ（感想には触らない） | 投稿者名が「退会済みのお客様」になる。**本文はそのまま**＝本文に本人が分かる内容があれば残る。気になる場合は「削除」を案内する |
+| 削除する | 7.4 の手順 1 で `reviews` を delete | `rating_purchases.review_id` は `on delete set null`（0001）＝**購入の記録は残り、感想との紐づけだけ外れる**。店舗・スタッフの感想件数が減る。`reviews` は監査対象外＝**削除の記録は audit_log に残らない** |
+
+### 7.4 置き換えの SQL
+
+`<CUSTOMER_ID>` を 7.2 で確定した uuid に置き換えて実行する。
+
+**0) 処理前の件数を控える**（7.5 の確認で使う）
+
+```sql
+select
+  (select count(*) from public.reviews            where customer_id = '<CUSTOMER_ID>') as reviews,
+  (select count(*) from public.rating_purchases   where customer_id = '<CUSTOMER_ID>') as rating_purchases,
+  (select count(*) from public.reward_redemptions where customer_id = '<CUSTOMER_ID>') as reward_redemptions,
+  (select count(*) from public.earned_stamps      where customer_id = '<CUSTOMER_ID>') as earned_stamps,
+  (select count(*) from public.stamp_adjustments  where customer_id = '<CUSTOMER_ID>') as stamp_adjustments,
+  (select count(*) from public.visits             where customer_id = '<CUSTOMER_ID>') as visits,
+  (select count(*) from public.notification_outbox
+     where customer_id = '<CUSTOMER_ID>' and status = 'pending')                     as outbox_pending,
+  (select line_user_id like 'withdrawn:%' from public.customers
+     where id = '<CUSTOMER_ID>')                                                      as already_withdrawn;
+```
+
+`already_withdrawn` が `true` なら処理済み。**null なら行が無い**（uuid の誤り）。どちらも中断する。
+
+**1)〜3) 本体**（1トランザクション。ガードに引っかかれば `raise exception` で全体が巻き戻る＝40 §1.12）
+
+```sql
+begin;
+
+do $$
+declare
+  v_customer uuid := '<CUSTOMER_ID>';
+  v_delete_reviews boolean := false;  -- ★7.3 で「削除」を希望された場合だけ true にする
+  v_n int;
+begin
+  -- 対象が1行・未処理であること
+  select count(*) into v_n from public.customers
+   where id = v_customer and line_user_id not like 'withdrawn:%';
+  if v_n <> 1 then
+    raise exception '[withdraw] 対象が1行ではない、または処理済み（% 行）', v_n;
+  end if;
+
+  -- 1) 感想（希望が「削除」のときだけ）
+  if v_delete_reviews then
+    delete from public.reviews where customer_id = v_customer;
+  end if;
+
+  -- 2) 未送信の来店リマインドを閉じる
+  --    skip_reason は CHECK で値が固定（0024・0044）。「LINE ID が無い」に当たる既存値を使う。
+  update public.notification_outbox
+     set status = 'skipped', skip_reason = 'no_line_user'
+   where customer_id = v_customer and status = 'pending';
+
+  -- 3) 識別子の置き換え（行は消さない）
+  update public.customers
+     set line_user_id   = 'withdrawn:' || gen_random_uuid()::text,
+         display_name   = '退会済みのお客様',
+         line_is_friend = false
+   where id = v_customer and line_user_id not like 'withdrawn:%';
+  get diagnostics v_n = row_count;
+  if v_n <> 1 then
+    raise exception '[withdraw] customers の置き換えが1行ではない（% 行）', v_n;
+  end if;
+end $$;
+
+commit;
+```
+
+### 7.5 処理後の確認
+
+```sql
+-- 置き換わっていること（値そのものは出さない）
+select id,
+       line_user_id like 'withdrawn:%'   as line_id_replaced,
+       display_name = '退会済みのお客様' as name_replaced,
+       line_is_friend
+  from public.customers
+ where id = '<CUSTOMER_ID>';
+-- 期待: true / true / false
+```
+
+続けて、0) と同じ件数の SQL をもう一度流し、次を確かめる:
+
+| 列 | 期待 |
+|---|---|
+| `rating_purchases`・`reward_redemptions`・`earned_stamps`・`stamp_adjustments`・`visits` | **0) と同じ**（履歴を消していない） |
+| `reviews` | 「掲載を続ける」なら 0) と同じ／「削除」なら **0** |
+| `outbox_pending` | **0** |
+| `already_withdrawn` | **true** |
+
+最後に、申出者へ処理の完了を返信する（文面は未決）。
+
+### 7.6 処理後に起きること・限界
+
+- **同じ人が再び LINE ログインすると、新しい `customers` 行ができる。**
+  コード上の根拠: ログイン時の登録は `line_user_id` の衝突時に何もしない upsert
+  （`api/auth/line/callback/route.ts:168-170`・`onConflict: "line_user_id", ignoreDuplicates: true`）。
+  元の LINE ID はもう DB に無いので、**挿入が通って別人扱いの新しい行になる**（過去の履歴は引き継がない）。
+  **【推測・本番で未検証】** 実際に退会処理した人の再ログインはまだ観測していない。
+- **処理前に発行済みのセッションは、最長30日間そのまま使える。**
+  セッションは `customer_id` と `line_user_id` を入れた署名付き JWT（`src/lib/session.ts`・
+  `SESSION_MAX_AGE` 30日）で、`getSession()` は DB を照会しない。
+  **【推測】** その端末では、置き換え後の行（表示名「退会済みのお客様」）として `/mypage` が開き、
+  感想の投稿などもその行に紐づいてしまう可能性がある。サーバー側で個別に無効化する手段は無い
+  （`SESSION_SECRET` を変えると**全員**がログアウトする）。
+  当面は、申出者にホーム画面（`/`）の「ログアウト」を案内する（`src/app/page.tsx:55`）。
+- LINE の友だち登録・ブロックの webhook は `line_user_id` で `customers` を引くため、
+  処理後は該当行が無いものとして扱われる（`api/line/webhook/route.ts` の unknown 経路）。
+- **Stripe 側の記録は対象外。** echo の `stripe_events.payload` には名前・メール・電話・住所の値が
+  無いことを確認した（2026-09-24・32件）。Stripe 自体が保持する決済情報の扱いは未確認。
