@@ -484,6 +484,17 @@ export default async function MyPage() {
         <Link href="/help" className="note-fine">
           よくある質問 →
         </Link>
+
+        {/* 個人情報・退会の問い合わせ窓口（プライバシーポリシー第7条）。
+            退会は当面、窓口への申出を当社が手作業で処理する（画面・API は作らない・
+            手順は docs/70_legal.md §7）。目立たせないが見つけられる場所＝ページ末尾の小さな1行。
+            a は既定で下線なしのため、アドレスだけ既存の .text-link でリンクと分かるようにする。 */}
+        <p className="note-fine">
+          個人情報の取り扱い・退会についてのお問い合わせ：
+          <a href="mailto:info@echo-thanks.jp" className="text-link">
+            info@echo-thanks.jp
+          </a>
+        </p>
       </div>
     </main>
   );
