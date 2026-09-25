@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sanitizeReturnTo } from "@/lib/return-to";
 import { Eyebrow, Card } from "@/components/ui";
+import NameForm from "./NameForm";
 
 /**
  * 表示名の確定（初回チェックイン直前・白世界・§5）。ルート: /onboarding/name
@@ -52,31 +53,12 @@ export default async function OnboardingNamePage({
           {isEdit ? "お名前を変更" : "お名前を教えてください"}
         </h1>
         <Card>
-          <form action="/api/customer/name" method="post" className="stack-md">
-            <input type="hidden" name="returnTo" value={safeReturn} />
-            <div className="field-group">
-              <label className="field-label" htmlFor="name">
-                お名前
-              </label>
-              <input
-                id="name"
-                name="name"
-                className="field"
-                type="text"
-                maxLength={50}
-                required
-                defaultValue={defaultName}
-                placeholder="例：山田 はな"
-                autoComplete="name"
-              />
-            </div>
-            {error && (
-              <p className="muted">お名前を入力してください。</p>
-            )}
-            <button type="submit" className="btn btn-outline btn-block">
-              {isEdit ? "変更する" : "はじめる"}
-            </button>
-          </form>
+          <NameForm
+            returnTo={safeReturn}
+            defaultName={defaultName}
+            isEdit={isEdit}
+            hasError={Boolean(error)}
+          />
           <p className="note-fine">
             スタンプや感想に表示されます。あとから変更できます。
           </p>
