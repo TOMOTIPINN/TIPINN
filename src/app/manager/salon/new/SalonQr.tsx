@@ -30,7 +30,7 @@ export default function SalonQr({
   }
 
   return (
-    <div className="stack-md center-text">
+    <div className="stack stack-md center-text">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className="qr-img" src={qr} alt="来店受付QRコード" width={200} height={200} />
 

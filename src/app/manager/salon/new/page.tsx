@@ -190,7 +190,7 @@ export default async function ManagerSalonNewPage({
             action="/api/manager/salon/new"
             method="post"
             encType="multipart/form-data"
-            className="stack-md"
+            className="stack stack-md"
           >
             <div className="field-group">
               <label className="field-label" htmlFor="code">
