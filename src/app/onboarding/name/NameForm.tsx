@@ -59,7 +59,7 @@ export default function NameForm({
     <form
       action="/api/customer/name"
       method="post"
-      className="stack-md"
+      className="stack stack-md"
       onSubmit={handleSubmit}
     >
       <input type="hidden" name="returnTo" value={returnTo} />
