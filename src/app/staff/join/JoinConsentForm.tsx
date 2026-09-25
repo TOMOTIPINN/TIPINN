@@ -22,7 +22,7 @@ export default function JoinConsentForm({ token }: { token: string }) {
   const [consent, setConsent] = useState(false);
 
   return (
-    <form action="/api/staff/bind" method="post" className="stack-md">
+    <form action="/api/staff/bind" method="post" className="stack stack-md">
       <input type="hidden" name="token" value={token} />
 
       {/* マークアップは共通クラス .field-check（globals.css）。

@@ -50,7 +50,7 @@ export default async function StaffJoinPage({
           <Eyebrow className="eyebrow-mint">Staff invitation</Eyebrow>
           <h1 className="headline">スタッフ登録は完了しています</h1>
           <Card>
-            <div className="stack-md center-text">
+            <div className="stack stack-md center-text">
               <p className="body text-balance">
                 このLINEアカウントは、すでにスタッフ登録が完了しています。
                 <br />
@@ -96,7 +96,7 @@ export default async function StaffJoinPage({
         <Eyebrow className="eyebrow-mint">Staff invitation</Eyebrow>
         <h1 className="headline">スタッフとして参加</h1>
         <Card>
-          <div className="stack-md center-text">
+          <div className="stack stack-md center-text">
             <p className="body text-balance">
               <strong>{staff.salon_name}</strong> の
               {ROLE_LABEL[staff.role] ?? "スタッフ"}として、
