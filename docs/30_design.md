@@ -131,6 +131,8 @@
   `/staff/join` の3か所（`page.tsx` 2か所・`JoinConsentForm.tsx`）と、
   `/manager/salon/new` の2か所（登録フォーム・`SalonQr.tsx`）。
   あわせて名前の画面（`/onboarding/name`）も同じ原因で直した（`a808841`）。
+  **名前の画面は 2026-09-25 に原のスマホで本番確認済み**: 入力欄とボタンの間隔（`a808841`）と、
+  同日に足した「はじめる／変更する」の送信中表示・送信後に元の画面へ戻ること（`d409c47`）。
 - **残り21か所は、困る画面が出たときに直す方針**。探すときは
   `grep -rn 'stack-md' src --include='*.tsx'` から `stack stack-md` を除く。
 - **`stack-sm` も同じ問題があるが未調査**（例: `src/app/staff/page.tsx:510`・`:515`）。
