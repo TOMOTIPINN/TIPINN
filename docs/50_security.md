@@ -106,8 +106,9 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
 > この節は本来「優先度低」の積み残しだが、未対応の項目を書く場所がほかに無いため、
 > **優先度の高いものはこの囲みに分けて置く**。閉じたら取り消し線で残す。
 >
-> **A. `/manager/salon/new?created=<サロンID>` の完了画面が、サロンの持ち主を確かめずに来店QRを出す**
-> （2026-09-25・Claude Code がコードを読んで発見。**実機・本番では未確認**）。
+> ~~**A. `/manager/salon/new?created=<サロンID>` の完了画面が、サロンの持ち主を確かめずに来店QRを出す**
+> （2026-09-25・Claude Code がコードを読んで発見。**実機・本番では未確認**）。~~
+> → **解決済み（2026-09-29・`7f2b650` 修正・本番確認済み）。** 経緯と確認結果は下に残す。
 > - `src/app/manager/salon/new/page.tsx` の `if (created) { ... }` の部分は、ログインしていれば
 >   query の `created` をそのまま使って `salons` から `name, visit_token` を引き、
 >   来店URL（`/visit?salon=&t=<visit_token>`）と QR を表示する。**持ち主かどうか（自分の staff 行が
@@ -124,7 +125,20 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
 >   （入口チェック → 「すでにスタッフ」の文言 or 入力フォーム）に進み、QR も URL も出さない。
 >   **通るのは「そのサロンの manager」で、作成者に限らない**（作成者以外の manager も通る＝許容）。
 >   組織のオーナー（`organization_members`）であるだけでは通らない。
->   DB・migration・RLS は変更なし。**実機で対照群と攻撃側を確認するまで、この囲みは閉じない。**
+>   DB・migration・RLS は変更なし。~~**実機で対照群と攻撃側を確認するまで、この囲みは閉じない。**~~
+> - **2026-09-29: 本番確認済み**（`b7e39c2` デプロイ後・原のアカウント。原は CARTA の manager
+>   で、carta 組織のオーナー）。
+>   - 対照群: `?created=<CARTA のID>` → 店名・QR・来店URLが出た。
+>   - 攻撃側: `?created=<Niii のID>`（原は組織のオーナーだが Niii の manager ではない）→
+>     QR も来店URLも出ず、「すでにスタッフとして登録されているため…」の表示。
+>     **組織のオーナーであるだけでは通らない**ことの確認も兼ねる。
+>   - 不正な値: `?created=abc` → エラーにならず、上と同じ表示。
+> - **未確認として残す**（判定のコードは同じため、囲みは閉じる）:
+>   - staff 行のないアカウントで開いた場合（入力フォーム側に進む想定）。
+>   - 実際の新規登録直後の本人に QR が出ること。**次に新しいサロンが登録されるときに確認する。**
+> - **`visit_token` の再発行（ローテーション）は今回は行わない。** パイロット5店舗で悪用の兆候を
+>   確認しておらず、店頭QRにもともと含まれる値のため。
+> - 同じ形の候補の確認は未着手のまま、下の 7 に別項目として残す。
 
 1. `api/staff/visit` の `customers.display_name` 取得が salon_id 非スコープ
    （UUID 既知なら他店顧客の表示名のみ取得可・機微データは漏れない）
@@ -177,6 +191,13 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
    **archive だけ非対称**。
    復旧は運営者が SQL か `/admin/staff` 側から行うことになる（画面からは戻せない）。
    **実害は未確認**（発生の記録なし。現在 manager 1人の店舗は DEMO と SELNI）。
+7. **URL の ID でデータを引くページの確認（未着手）**
+   （2026-09-29・囲みA の調査で候補として挙がった。中身はまだ読んでいない）。
+   - `/admin/invites` が囲みA と同じ形の `?created=` を受け取る。入口は `isAdmin`
+     （運営者のみ）の想定だが、完了表示の中身は未確認。
+   - 公開ページ（`/visit`・`/onboard`・`/review`・`/rating`・`/review/complete`）は設計上
+     query の salon ID を受け取る。**それぞれが何を返しているか**（トークン照合があるか・
+     公開してよい情報だけか）は未確認。
 
 ---
 
