@@ -22,6 +22,8 @@ import SalonConsentSubmit from "./SalonConsentSubmit";
  *   ＝この画面の到達可否は緩いままで、実際の作成ゲートは招待コードが担う。
  *   staff行はあるが manager でない従業員は従来どおり /staff へ redirect。他の /manager/* は staff必須のまま。
  * 完了（?created=<id>）: 登録サロンの visit_token から /visit?salon=&t= のURLを作り、QR表示＋PNG保存を出す。
+ *   出すのは**そのサロンの在籍中の manager にだけ**（isSalonManager・作成者に限らない）。
+ *   それ以外は created が無いときと同じ表示になる。
  * 書き込みは API（service_role・サーバー側）。トーン: サロンUI＝ミント・¥なし・赤なし・インラインstyle禁止。
  *
  * ※ 作成時に API 側で作成者を新サロンの店長(role=manager)として自動登録する（route.ts 参照）。
@@ -68,6 +70,41 @@ const ERROR_MESSAGE: Record<string, string> = {
     "この招待コードは、ちょうど今ほかの登録に使われました。サロン作成は取り消しています。",
 };
 
+/** uuid（8-4-4-4-12）。created の形だけを見る（@/lib/owner-guard の UUID_RE と同じ）。 */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * その LINE の人が、そのサロンの**在籍中の manager** か（完了画面の表示可否）。
+ *
+ * 判定は「本人（session の line_user_id）× サロン（created）」の組で行う。
+ * getStaffContext は使わない（1人1 staff 行を前提に maybeSingle しているため、
+ * 将来兼任を許したときに正規の manager が弾かれる）。行の中身は取らず件数だけ見る。
+ *
+ * ★fail closed★ uuid でない・取得失敗・件数不明は false（＝完了画面を出さない）。
+ * line_user_id は PII（原則7）なのでログに出さない。error.code だけを出す。
+ */
+async function isSalonManager(
+  lineUserId: string,
+  salonId: string,
+): Promise<boolean> {
+  if (!UUID_RE.test(salonId)) return false;
+
+  const { count, error } = await supabaseAdmin
+    .from("staff")
+    .select("id", { count: "exact", head: true })
+    .eq("salon_id", salonId)
+    .eq("line_user_id", lineUserId)
+    .eq("role", "manager")
+    .is("archived_at", null);
+
+  if (error) {
+    console.error("[salon/new] isSalonManager failed", { code: error.code });
+    return false;
+  }
+  return (count ?? 0) > 0;
+}
+
 const NOTIFY_DEFAULT = 180;
 const NOTIFY_MIN = 30;
 const NOTIFY_MAX = 360;
@@ -89,7 +126,13 @@ export default async function ManagerSalonNewPage({
     );
   }
   // ── 完了画面（登録直後）─────────────────────────────
-  if (created) {
+  //   ★そのサロンの在籍中の manager にだけ出す★（50_security.md §5 囲みA）
+  //     created は query＝クライアント入力で、salons は service_role で読むため RLS は効かない。
+  //     判定しないと、サロンIDを知っているだけでほかの店の visit_token（来店QR）が見える。
+  //     作成者はリダイレクト前に manager 行が作られている（route.ts）ので必ず通る。
+  //     作成者以外でも、そのサロンの在籍中の manager なら通る（許容）。
+  //     通らなければ created が無いときと同じ流れ（下の入口チェック）に進む。
+  if (created && (await isSalonManager(session.line_user_id, created))) {
     const { data: salon } = await supabaseAdmin
       .from("salons")
       .select("name, visit_token")
