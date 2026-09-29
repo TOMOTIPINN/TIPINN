@@ -118,6 +118,13 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
 >   経緯がある（登録直後の本人が完了画面を見られるように）。直すときもその順序は崩さない。
 > - **直すときは対照群も確認する**: 持ち主（作った本人＝その店の manager）には今までどおり
 >   完了画面が見えること／持ち主でないアカウントでは見えないこと、の両方。
+> - **2026-09-29: コード修正済み・実機未確認**（`7f2b650`）。完了画面を出す前に
+>   `isSalonManager`（page.tsx 内）で「session の本人 × created のサロン」の組に
+>   **在籍中の manager 行**があるかを見る。無ければ created が無いときと同じ流れ
+>   （入口チェック → 「すでにスタッフ」の文言 or 入力フォーム）に進み、QR も URL も出さない。
+>   **通るのは「そのサロンの manager」で、作成者に限らない**（作成者以外の manager も通る＝許容）。
+>   組織のオーナー（`organization_members`）であるだけでは通らない。
+>   DB・migration・RLS は変更なし。**実機で対照群と攻撃側を確認するまで、この囲みは閉じない。**
 
 1. `api/staff/visit` の `customers.display_name` 取得が salon_id 非スコープ
    （UUID 既知なら他店顧客の表示名のみ取得可・機微データは漏れない）
