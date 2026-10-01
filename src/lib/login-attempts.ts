@@ -131,3 +131,108 @@ export async function isThrottled(req: Request, scope: Scope): Promise<boolean> 
     return false;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────
+ * 運営者への通知の記録（`50_security.md` §5-7・2026-10-01 決定・migration なし）
+ *
+ * 運営者への LINE 通知を送ったことを、このテーブルに**認証の試行とは別の scope** で1行残す。
+ *   ・"rate_limit_alert" … レート制限の通知。detail = 元の scope（例 "owner_join"）、ip = 発火した IP
+ *   ・"operator_alert"   … それ以外の運営者への通知。detail = 種類のタグ、ip = null
+ * scope に CHECK 制約は無い（0037）ので migration は要らない。古い行は既存の30日の削除で消える。
+ * isThrottled は Scope 型の scope しか数えないので、これらの行がレート制限の失敗回数に混ざることはない。
+ *
+ * 判定（送るか）は @/lib/operator-alert-budget の純粋な関数が持つ。ここは読み書きだけ。
+ * **どれも例外を投げない。** DB の失敗は null / false で返し、扱いは呼び出し側が決める。
+ * ──────────────────────────────────────────────────────────────────── */
+
+export type OperatorAlertScope = "rate_limit_alert" | "operator_alert";
+
+const OPERATOR_ALERT_SCOPES: OperatorAlertScope[] = [
+  "rate_limit_alert",
+  "operator_alert",
+];
+
+/**
+ * B: 同じ scope・同じ IP へのレート制限の通知が、直近1時間（WINDOW_MS）に何件あるか。
+ * 失敗したら null。
+ */
+export async function countRecentRateLimitAlerts(
+  req: Request,
+  scope: Scope,
+): Promise<number | null> {
+  try {
+    const since = new Date(Date.now() - WINDOW_MS).toISOString();
+    const { count, error } = await supabaseAdmin
+      .from("login_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("scope", "rate_limit_alert")
+      .eq("detail", scope)
+      .eq("ip", clientIp(req))
+      .gte("created_at", since);
+    if (error) {
+      console.error("[login-attempts] count rate_limit_alert failed", {
+        code: error.code,
+      });
+      return null;
+    }
+    return count ?? 0;
+  } catch {
+    console.error("[login-attempts] count rate_limit_alert threw");
+    return null;
+  }
+}
+
+/**
+ * C: 運営者への通知（全種類）が sinceIso 以降に何件あるか。失敗したら null。
+ */
+export async function countOperatorAlertsSince(
+  sinceIso: string,
+): Promise<number | null> {
+  try {
+    const { count, error } = await supabaseAdmin
+      .from("login_attempts")
+      .select("id", { count: "exact", head: true })
+      .in("scope", OPERATOR_ALERT_SCOPES)
+      .gte("created_at", sinceIso);
+    if (error) {
+      console.error("[login-attempts] count operator alerts failed", {
+        code: error.code,
+      });
+      return null;
+    }
+    return count ?? 0;
+  } catch {
+    console.error("[login-attempts] count operator alerts threw");
+    return null;
+  }
+}
+
+/**
+ * 運営者への通知を送る（直前に）記録する。成功したら true。
+ * req を渡すと発火した IP を残す（レート制限の通知）。渡さなければ ip は null。
+ * detail は分類語・タグのみ（LINE の ID・トークン・本文は入れない）。
+ */
+export async function recordOperatorAlert(
+  scope: OperatorAlertScope,
+  detail: string,
+  req?: Request,
+): Promise<boolean> {
+  try {
+    const { error } = await supabaseAdmin.from("login_attempts").insert({
+      scope,
+      ip: req ? clientIp(req) : null,
+      succeeded: true,
+      detail: detail.slice(0, DETAIL_MAX),
+    });
+    if (error) {
+      console.error("[login-attempts] record operator alert failed", {
+        code: error.code,
+      });
+      return false;
+    }
+    return true;
+  } catch {
+    console.error("[login-attempts] record operator alert threw");
+    return false;
+  }
+}

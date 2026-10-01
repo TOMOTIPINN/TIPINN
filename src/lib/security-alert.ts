@@ -1,10 +1,20 @@
 import { pushText } from "@/lib/line-messaging";
 import {
   attemptClientIp,
+  countOperatorAlertsSince,
+  countRecentRateLimitAlerts,
   FAILURE_LIMIT,
+  recordOperatorAlert,
   WINDOW_MS,
+  type OperatorAlertScope,
   type Scope,
 } from "@/lib/login-attempts";
+import {
+  decideDailyAlert,
+  isRateLimitAlertSuppressed,
+  jstDayStartMs,
+  withLastNote,
+} from "@/lib/operator-alert-budget";
 
 /**
  * 不正アクセス検知の運営者通知（サーバー専用）。
@@ -26,6 +36,13 @@ import {
  *  ・env `SECURITY_ALERT_LINE_USER_ID` 未設定なら**何もせず return**。
  *    ローカル・Preview から運営者へ誤送信するのを防ぐ（本番 env にだけ値を置く）。
  *  ・閾値・集計窓は login-attempts.ts の定数を読む＝数字を2箇所に持たない。
+ *  ・★通数の上限（`50_security.md` §5-7・2026-10-01 決定）★
+ *    運営者への通知はお客様への来店リマインドと**同じ Messaging チャネル＝同じ月の配信枠**を使う
+ *    （ライトプラン月5,000通・超えると送信が止まる）。そこで、
+ *      B. レート制限の通知は、同じ scope・同じ IP に直近1時間で通知済みなら送らない
+ *      C. 運営者への通知**すべて**を合わせて JST の1日10通まで（10通目の本文に止める旨を添える）
+ *    送るたびに login_attempts へ1行記録し（scope は rate_limit_alert / operator_alert）、その件数で判定する。
+ *    判定は @/lib/operator-alert-budget の純粋な関数、読み書きは login-attempts.ts。
  *
  * ★本文に入れないもの（意図的な除外・変更しないこと）★
  *  ・line_user_id / invite_token / state / 生トークンなどの秘匿値
@@ -74,10 +91,23 @@ export async function notifyRateLimitHit(
   scope: Scope,
 ): Promise<void> {
   const to = process.env.SECURITY_ALERT_LINE_USER_ID;
-  // 未設定＝通知を使わない環境（ローカル / Preview）。無言で何もしない。
+  // 未設定＝通知を使わない環境（ローカル / Preview）。無言で何もしない（DB も引かない）。
   if (!to) return;
 
   try {
+    // B: 同じ scope・同じ IP に直近1時間で通知済みなら送らない。
+    //   止められたリクエストは recordAttempt されないので、何もしないと止まっている間
+    //   リクエストのたびに1通ずつ送られていた（2026-10-01 に判明）。
+    const recent = await countRecentRateLimitAlerts(req, scope);
+    if (recent === null) {
+      if (!SEND_ON_BUDGET_DB_ERROR) {
+        console.warn(`[security-alert] skipped tag=rate_limit:${scope} reason=db_error`);
+        return;
+      }
+    } else if (isRateLimitAlertSuppressed(recent)) {
+      return;
+    }
+
     const ip = attemptClientIp(req);
     const windowHours = WINDOW_MS / (60 * 60 * 1000);
     const text = [
@@ -89,42 +119,91 @@ export async function notifyRateLimitHit(
       `閾値: 直近${windowHours}時間に失敗${FAILURE_LIMIT[scope]}回以上`,
       "",
       "同一 IP からの連続失敗を検知し、この入口を一時的にブロックしています。",
+      `同じ入口・同じ IP への通知は${windowHours}時間に1回までです。`,
     ].join("\n");
 
-    const result = await pushText(to, text);
-    if (!result.ok) {
-      // 通知が届かないこと自体が検知の穴になるため、必ずログに残す（握り潰さない）。
-      console.warn(
-        `[security-alert] push failed scope=${scope} status=${result.status} body=${result.body}`,
-      );
-    }
+    await sendWithinDailyLimit(`rate_limit:${scope}`, text, {
+      scope: "rate_limit_alert",
+      detail: scope,
+      req,
+    });
   } catch (e) {
-    console.warn(`[security-alert] push threw scope=${scope}`, e);
+    console.warn(`[security-alert] push threw tag=rate_limit:${scope}`, e);
+  }
+}
+
+/**
+ * ★通数の判定・記録で DB に失敗したときの扱い★（2026-10-01 時点の既定は「送らない」）
+ *   false＝送らない（配信枠を守る側）／true＝送る（通知を落とさない側）。
+ *   どちらにするかは決定待ち。理由は 50_security.md §5-7 と実装報告を参照。
+ */
+const SEND_ON_BUDGET_DB_ERROR = false;
+
+/**
+ * C: 運営者への通知すべての共通の出口。JST の1日の上限（全種類の合計）を超えないときだけ送る。
+ *   順番: 本日の通数を数える → 上限なら送らない → 記録を1行入れる → 送る。
+ *   記録を送信より先に入れるのは、同時に来た通知どうしで通数を数え漏らしにくくするため
+ *   （送信に失敗しても1通分として数える＝枠を守る側に倒す）。
+ *   **例外は投げない。** env 未設定は呼び出し側で return 済み。
+ */
+async function sendWithinDailyLimit(
+  tag: string,
+  text: string,
+  record: { scope: OperatorAlertScope; detail: string; req?: Request },
+): Promise<void> {
+  const to = process.env.SECURITY_ALERT_LINE_USER_ID;
+  if (!to) return;
+
+  const sentToday = await countOperatorAlertsSince(
+    new Date(jstDayStartMs(Date.now())).toISOString(),
+  );
+  let isLast = false;
+  if (sentToday === null) {
+    if (!SEND_ON_BUDGET_DB_ERROR) {
+      console.warn(`[security-alert] skipped tag=${tag} reason=db_error`);
+      return;
+    }
+  } else {
+    const decision = decideDailyAlert(sentToday);
+    if (!decision.send) {
+      console.warn(`[security-alert] skipped tag=${tag} reason=daily_limit`);
+      return;
+    }
+    isLast = decision.isLast;
+  }
+
+  const recorded = await recordOperatorAlert(record.scope, record.detail, record.req);
+  if (!recorded && !SEND_ON_BUDGET_DB_ERROR) {
+    // 記録できないまま送ると通数が数えられず、上限が効かなくなる。
+    console.warn(`[security-alert] skipped tag=${tag} reason=record_failed`);
+    return;
+  }
+
+  const result = await pushText(to, withLastNote(text, isLast));
+  if (!result.ok) {
+    // 通知が届かないこと自体が検知の穴になるため、必ずログに残す（握り潰さない）。
+    console.warn(
+      `[security-alert] push failed tag=${tag} status=${result.status} body=${result.body}`,
+    );
   }
 }
 
 /**
  * 運営者へ1通 push する共通部。**例外は投げない**／env 未設定なら**無音で return**。
  *
- * notifyRateLimitHit は本文組み立てまで含めて try で包む既存構造をそのまま残したいので
- * この関数を使っていない（ログ書式を含め既存挙動を1文字も変えないため）。新規の通知は
- * すべてここを通す。
+ * notifyRateLimitHit はこの関数を通らない（B の判定と IP の記録があるため）が、
+ * 1日の上限は同じ sendWithinDailyLimit で合わせて数える。新規の通知はすべてここを通す。
  *
  * @param tag  ログに出す識別子（本文ではない）。秘匿値・個人情報を渡さないこと。
  */
 async function pushToOperator(tag: string, text: string): Promise<void> {
   const to = process.env.SECURITY_ALERT_LINE_USER_ID;
-  // 未設定＝通知を使わない環境（ローカル / Preview）。無言で何もしない。
+  // 未設定＝通知を使わない環境（ローカル / Preview）。無言で何もしない（DB も引かない）。
   if (!to) return;
 
   try {
-    const result = await pushText(to, text);
-    if (!result.ok) {
-      // 通知が届かないこと自体が検知の穴になるため、必ずログに残す（握り潰さない）。
-      console.warn(
-        `[security-alert] push failed tag=${tag} status=${result.status} body=${result.body}`,
-      );
-    }
+    // C: 1日の上限は notifyRateLimitHit と合わせて数える（sendWithinDailyLimit）。
+    await sendWithinDailyLimit(tag, text, { scope: "operator_alert", detail: tag });
   } catch (e) {
     console.warn(`[security-alert] push threw tag=${tag}`, e);
   }
