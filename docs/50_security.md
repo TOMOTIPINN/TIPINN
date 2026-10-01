@@ -203,6 +203,17 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
      継承プロパティ名だと、文言ではない値が引ける（`/admin/organizations`・5b では `Object.hasOwn` で絞った）。
      同じ書き方は `grep` で `/admin/staff`・`/manager/salon/new`・`/manager/profile`・`/manager/staff/[id]` にもある。
      実際に何が表示されるか・害があるかは未確認。
+   - **送信済みの API が存在しない ID でも成功扱いになる（2026-10-01 追記・未着手）**:
+     `/api/admin/invites/sent`・`/api/admin/owner-invites/sent` は uuid の形だけを確かめて UPDATE し、
+     **更新した行数を見ていない**。存在しない ID でも `error` が無く、何も出ずに一覧へ戻る
+     （2026-10-01 に見つかった「送信済みが一度も保存できていなかった」不具合が気づかれなかったのと同じ形・`40_decisions.md` §21 5d）。
+   - **`/api/admin/invites` がエラーのオブジェクトをまるごとログに出している（2026-10-01 追記・未着手）**:
+     INSERT 失敗時に `console.error(..., error)`。unique 違反のときは PostgREST の `details` に
+     `Key (code)=(...)` が入り、**衝突した既存の招待コード（秘密値）がログに残る**と思われる（推測・未確認）。
+     衝突は事実上起きない。オーナー招待（`/api/admin/owner-invites`）は `error.code` だけを出している。
+   - **`/admin/invites` の画面が描画中に `Date.now()` を呼んでいる（2026-10-01 追記・未着手）**:
+     lint（`react-hooks/purity`）で止まる。動作への影響は未確認。オーナー招待の画面（5d）は
+     データを引く関数の中に移して回避した。
 8. **0046 の `submit_review_and_earn_stamp` を anon / authenticated が EXECUTE できるかもしれない（未着手・推測・未確認）**
    （2026-10-01・0050 の下書き中に気づいた）。0046 は `revoke all ... from public` だけで、
    anon / authenticated からは revoke していない（0038＋0040・0050 は `from public, anon, authenticated`）。
