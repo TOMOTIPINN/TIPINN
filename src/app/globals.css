@@ -2438,6 +2438,16 @@ a.inbox-stat:hover { border-color: var(--line-strong); }
   text-align: right;
   word-break: break-all;
 }
+
+/* 組織名の修正（/admin/organizations・§21 5c）。カードの中で閉じた <details>。 */
+.admin-rename-summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  color: var(--g25);
+  padding: 0.25rem 0;
+}
+.admin-rename-form { margin-top: var(--space-sm); }
 @media (min-width: 640px) {
   .admin-meta { grid-template-columns: 1fr 1fr; }
 }

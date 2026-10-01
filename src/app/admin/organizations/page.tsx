@@ -19,11 +19,16 @@ import { ORGANIZATION_NAME_MAX } from "@/lib/organization-name";
  *
  * 組織名は屋号でもよい（2026-10-01 決定・§21「2026-10-01 決定（組織名は屋号でもよい）」）。契約主体は別に記録する。
  *
- * ★?created= は「1かどうか」だけを見る★
+ * ★?created= / ?updated= は「1かどうか」だけを見る★
  *   ID や名前をクエリで受け取って画面に出さない（`50_security.md` §5 囲みA・§5-7 と同じ抜けを作らない）。
  *
- * この画面に無いもの（§21 5b の範囲外）: オーナー招待の発行（5d）・組織名の修正（5c）・
- *   組織の削除・サロンの組織移動（§8.1「機能として作らない」）。
+ * 組織名の修正（§21 5c・2026-10-01）: 各カードの中の <details>「名前を直す」から
+ *   /api/admin/organizations/rename へ POST（id と name は本文で送る）。別の画面は作らない
+ *   （/admin/organizations/[id]/edit のような URL の ID で中身を引く形を作らない）。
+ *   変更の記録（前の名前）は残さない（2026-10-01 決定・契約主体の記録先を決めるときに一緒に考える）。
+ *
+ * この画面に無いもの: オーナー招待の発行（5d・/admin/owner-invites）・組織の削除・
+ *   サロンの組織移動（§8.1「機能として作らない」）。
  *
  * §7 インライン style 禁止・赤なし（docs/30_design.md §2）。
  */
@@ -37,6 +42,9 @@ const ERROR_MESSAGE: Record<string, string> = {
   name_long: `組織名は${ORGANIZATION_NAME_MAX}文字以内で入力してください。`,
   name_invalid: "組織名に改行などの使えない文字が含まれています。",
   duplicate: "同じ名前の組織がすでにあります。",
+  // 以下は組織名の修正（5c）。
+  id: "対象の組織を特定できませんでした。",
+  unchanged: "名前が変わっていません。",
   save: "保存に失敗しました。時間をおいて再度お試しください。",
 };
 
@@ -65,9 +73,9 @@ function countByOrg(
 export default async function AdminOrganizationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ created?: string; error?: string }>;
+  searchParams: Promise<{ created?: string; updated?: string; error?: string }>;
 }) {
-  const { created, error } = await searchParams;
+  const { created, updated, error } = await searchParams;
 
   // 非運営者はここで 404。以降の DB アクセスには絶対に到達させない。
   if (!(await isAdmin())) notFound();
@@ -125,6 +133,9 @@ export default async function AdminOrganizationsPage({
         )}
         {created === "1" && (
           <div className="notice notice-success">組織を作成しました。</div>
+        )}
+        {updated === "1" && (
+          <div className="notice notice-success">組織名を変更しました。</div>
         )}
         {orgRes.error && (
           <div className="notice notice-error">
@@ -187,6 +198,33 @@ export default async function AdminOrganizationsPage({
                         <dd>{owners === null ? "—" : `${owners}名`}</dd>
                       </div>
                     </dl>
+
+                    {/* 組織名の修正（5c）。id と name は POST の本文で送る（URL には載せない）。 */}
+                    <details>
+                      <summary className="admin-rename-summary">名前を直す</summary>
+                      <form
+                        action="/api/admin/organizations/rename"
+                        method="post"
+                        className="stack-sm admin-rename-form"
+                      >
+                        <input type="hidden" name="id" value={o.id} />
+                        <label className="field-label" htmlFor={`rename-${o.id}`}>
+                          新しい組織名
+                        </label>
+                        <input
+                          id={`rename-${o.id}`}
+                          name="name"
+                          className="field"
+                          type="text"
+                          required
+                          maxLength={ORGANIZATION_NAME_MAX}
+                          defaultValue={o.name}
+                        />
+                        <button type="submit" className="btn btn-outline btn-block">
+                          名前を変更
+                        </button>
+                      </form>
+                    </details>
                   </div>
                 </Card>
               );
