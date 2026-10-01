@@ -8,7 +8,7 @@ import {
 
 /**
  * POST /api/admin/organizations — 組織の新規作成（echo Labs 運営者のみ・§21 コミット5b・migration 0048）。
- *   入力: name（必須・契約書の事業者名）
+ *   入力: name（必須・屋号でも会社名でもよい・§21「2026-10-01 決定」）
  *   処理: 組織名を検証 → 前後の空白を除いて同じ名前が無いことを確認 → organizations に1行 INSERT。
  *
  * 認可: requireAdminApi（非運営者・未ログイン・env未設定は **404**。403 は返さない＝

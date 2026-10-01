@@ -17,6 +17,8 @@ import { ORGANIZATION_NAME_MAX } from "@/lib/organization-name";
  *     line_user_id（PII・原則7）は select しない＝取得も表示もしない。
  *   ・未使用のサロン招待の数は出さない（/admin/invites で見られる）。
  *
+ * 組織名は屋号でもよい（2026-10-01 決定・§21「2026-10-01 決定（組織名は屋号でもよい）」）。契約主体は別に記録する。
+ *
  * ★?created= は「1かどうか」だけを見る★
  *   ID や名前をクエリで受け取って画面に出さない（`50_security.md` §5 囲みA・§5-7 と同じ抜けを作らない）。
  *
@@ -109,7 +111,7 @@ export default async function AdminOrganizationsPage({
           <Eyebrow>Admin</Eyebrow>
           <h1 className="headline">組織の管理</h1>
           <p className="muted">
-            組織は契約主体（事業者）の単位です。作った組織は、サロン招待の発行先として選べるようになります。
+            組織は契約主体（事業者）ごとに1つ作ります。組織名は屋号でかまいません（契約主体は別に記録します）。作った組織は、サロン招待の発行先として選べるようになります。
             オーナーの登録はオーナー招待で行います。
           </p>
         </header>
@@ -148,10 +150,10 @@ export default async function AdminOrganizationsPage({
                 type="text"
                 required
                 maxLength={ORGANIZATION_NAME_MAX}
-                placeholder="株式会社〇〇"
+                placeholder="例：サロン名や屋号"
               />
               <span className="field-help">
-                契約書の事業者名を入れてください。{ORGANIZATION_NAME_MAX}文字まで。同じ名前の組織は作れません。
+                屋号（店名）でも会社名でもかまいません。法人成りしたり店舗が増えたりしても、名前を変えずに使えます。{ORGANIZATION_NAME_MAX}文字まで。同じ名前の組織は作れません。
               </span>
             </div>
             <button type="submit" className="btn btn-outline btn-block">
