@@ -198,6 +198,13 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
    - 公開ページ（`/visit`・`/onboard`・`/review`・`/rating`・`/review/complete`）は設計上
      query の salon ID を受け取る。**それぞれが何を返しているか**（トークン照合があるか・
      公開してよい情報だけか）は未確認。
+8. **0046 の `submit_review_and_earn_stamp` を anon / authenticated が EXECUTE できるかもしれない（未着手・推測・未確認）**
+   （2026-10-01・0050 の下書き中に気づいた）。0046 は `revoke all ... from public` だけで、
+   anon / authenticated からは revoke していない（0038＋0040・0050 は `from public, anon, authenticated`）。
+   関数の既定の権限付与（`pg_default_acl` の `defaclobjtype = 'f'`）で anon / authenticated に
+   EXECUTE が付いていれば残っている。0049 はテーブルの既定値だけを塞いでおり、関数には触っていない。
+   **確認方法**: `has_function_privilege('anon', 'public.submit_review_and_earn_stamp(uuid, uuid, uuid, text, integer, text[], text)', 'EXECUTE')`
+   （authenticated も同じ）と、`pg_default_acl` の `f` の行。ほかの RPC も同じ形か合わせて見る。
 
 ---
 
