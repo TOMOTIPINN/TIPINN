@@ -32,7 +32,9 @@ export async function POST(req: Request) {
   const id = String(form.get("id") ?? "");
   if (!UUID_RE.test(id)) return back("?error=id");
 
-  const sent = String(form.get("sent") ?? "") === "1";
+  // hidden の "0" と、チェック時は checkbox の "1" の両方が同名で届く（SentToggle）。
+  // FormData.get は**最初の値**（常に "0"）を返すので使わない。getAll で "1" の有無を見る。
+  const sent = form.getAll("sent").some((v) => v === "1");
 
   const { error } = await supabaseAdmin
     .from("owner_invites")

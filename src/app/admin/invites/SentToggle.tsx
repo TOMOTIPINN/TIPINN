@@ -29,8 +29,10 @@ export default function SentToggle({
       className="admin-sent"
     >
       <input type="hidden" name="id" value={id} />
-      {/* チェックを外したときも値を送る必要があるため、hidden で 0 を先に置き、
-          checkbox が checked のときだけ後勝ちで 1 を送る（同名の後者が採用される）。 */}
+      {/* チェックを外したときも値を送る必要があるため、hidden で 0 を置く。
+          チェック時は hidden の 0 と checkbox の 1 の**両方**が同名で送られる（後勝ちにはならない）。
+          受け取る側（/api/admin/invites/sent・/api/admin/owner-invites/sent）は
+          form.getAll("sent") に "1" が含まれるかで判定する（form.get は最初の 0 を返すため使わない）。 */}
       <input type="hidden" name="sent" value="0" />
       <label className="admin-sent-label">
         <input
