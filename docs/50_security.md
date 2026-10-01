@@ -214,6 +214,12 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
    - **`/admin/invites` の画面が描画中に `Date.now()` を呼んでいる（2026-10-01 追記・未着手）**:
      lint（`react-hooks/purity`）で止まる。動作への影響は未確認。オーナー招待の画面（5d）は
      データを引く関数の中に移して回避した。
+   - **★優先度高め★ `notifyRateLimitHit` が、制限に当たるたびに毎回 LINE を送る（2026-10-01 追記・未着手）**:
+     同じ scope・同じ IP の通知をまとめる仕組みが無い（`src/lib/security-alert.ts` は env を見て `pushText` を呼ぶだけ）。
+     さらに止められたリクエストは `recordAttempt` されないので、窓から古い失敗が抜けるまで止まり続け、
+     **その間リクエストのたびに1通ずつ送られる**。送り続けられると LINE の月の配信枠を消費し、
+     **お客様への通知（来店リマインド等）が止まる可能性**がある（推測：運営者への通知も同じ公式アカウントの枠を使う前提）。
+     **4つの入口（line_callback・staff_bind・demo_login・owner_join）に共通**。5e では直さず、別の作業として直す（2026-10-01 決定）。
 8. **0046 の `submit_review_and_earn_stamp` を anon / authenticated が EXECUTE できるかもしれない（未着手・推測・未確認）**
    （2026-10-01・0050 の下書き中に気づいた）。0046 は `revoke all ... from public` だけで、
    anon / authenticated からは revoke していない（0038＋0040・0050 は `from public, anon, authenticated`）。
