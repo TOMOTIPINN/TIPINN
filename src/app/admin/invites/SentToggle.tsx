@@ -6,20 +6,25 @@ import { useRef } from "react";
  * 「送信済み」チェックボックス（/admin/invites）。
  * チェックを変えたら即 form を submit して sent_at を更新する（保存ボタンを置かない）。
  * JS 無効環境ではチェックしても送信されないが、運営者専用画面なので許容する。
+ *
+ * `action` は送り先。既定値はサロン招待の `/api/admin/invites/sent`（従来どおり）。
+ * オーナー招待（/admin/owner-invites・§21 5d）は `/api/admin/owner-invites/sent` を渡す。
  */
 export default function SentToggle({
   id,
   checked,
+  action = "/api/admin/invites/sent",
 }: {
   id: string;
   checked: boolean;
+  action?: string;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
 
   return (
     <form
       ref={formRef}
-      action="/api/admin/invites/sent"
+      action={action}
       method="post"
       className="admin-sent"
     >
