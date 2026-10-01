@@ -57,6 +57,7 @@ const SCOPE_LABEL: Record<Scope, string> = {
   staff_bind: "スタッフ招待の紐付け",
   line_callback: "LINE ログイン",
   demo_login: "デモログイン",
+  owner_join: "オーナー招待の使用",
 };
 
 /**

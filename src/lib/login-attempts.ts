@@ -12,7 +12,7 @@ import { supabaseAdmin } from "@/lib/supabase-admin";
  *    'state_mismatch' 'token_invalid' のような分類語だけを渡すこと（PII・秘密値は
  *    30日間 DB に残るため、ここが漏れると記録そのものが攻撃面になる）。
  */
-export type Scope = "line_callback" | "staff_bind" | "demo_login";
+export type Scope = "line_callback" | "staff_bind" | "demo_login" | "owner_join";
 
 /**
  * 集計窓＝直近1時間。
@@ -29,6 +29,9 @@ export const FAILURE_LIMIT: Record<Scope, number> = {
   staff_bind: 20,
   demo_login: 10,
   line_callback: 30,
+  // オーナー招待の使用（/api/owner/join・§21 5e・2026-10-01 決定）。
+  // 1本の価値が重い（使えば組織のオーナーになる）ので staff_bind より厳しくする。
+  owner_join: 10,
 };
 
 /** IP が取れない／inet として不正なときのフォールバック。 */
