@@ -74,6 +74,19 @@
   - **per-salon 不要＝静的 metadata で足りる**（`start_url` 固定・DBアクセスなし）。`/kiosk` の動的 manifest（device_token 突合）とは違い、`/dashboard` は同一オーナー配下の固定着地でよい
   - `icons` は既存どおり apple=mint（業務側）＋favicon 併記のまま（変更なし）。`appleWebApp` は付けない（上記アプリ名の知見どおり、新経路では manifest.name「echo dashboard」が使われる）
   - **無改変**: 顧客 `public/manifest.json`・`manifest-staff.json`・`/kiosk`・`/manager`・`/staff`（`/manager/staff` は既に `manifest-staff.json` で `/staff` 着地のため対象外）
+- `/owner`（オーナートップ）を独立 PWA 化: アイコン1タップで `/owner` に着地する … ✓ DB変更なし（2026-10-01・commit `f43262c`）
+  - 症状: `/owner` には layout が無く root layout を継承し、顧客 `/manifest.json`（`start_url:"/"`）が配られていた。`/owner` でホーム画面に追加しても `echo-thanks.jp/` から起動していた＝`/dashboard` と同型
+  - 対策＝**`public/manifest-owner.json` 新規**（`name/short_name:"echo owner"` / `start_url:"/owner"` / **`scope:"/owner"`（末尾スラッシュ無し）** / display standalone / icons favicon.ico 48x48）を配り、**`src/app/owner/layout.tsx` 新規**（pass-through）の静的 `metadata.manifest` を `/manifest-owner.json` に上書き（scalar 最深優先＝`<link rel=manifest>` 1本）
+  - `icons` は apple=mint（業務側）＋favicon 併記＝`/staff`・`/dashboard` と同じ（それまでは root の light＝顧客アイコンを継承していた）。`appleWebApp.title` も `"echo owner"` にして manifest.name とそろえた（`40_decisions.md` §5.1）＝`/dashboard` と違い明示
+  - 認可は layout に置かない（各 page の `requireOwnerPage`／`requireOwnerSalon` のまま）
+  - **無改変**: 顧客 `public/manifest.json`・`manifest-staff.json`・`manifest-dashboard.json`・ほかの layout
+  - **実機確認（2026-10-01・iPhone・原のアカウント）**:
+    - 古いアイコンを消して `/owner` から「ホーム画面に追加」→ 名前「echo owner」・アイコン緑（業務用）
+    - ホーム画面のアイコンから開くと `/owner` の一覧に着地
+    - 対照群: お客様側の白い echo は従来どおり
+  - **未確認**:
+    - ホーム画面のアプリでの LINE ログインの往復。今回は開いた時点でログイン済みで、ログイン画面が出なかった（Safari のログイン状態を引き継いだ可能性＝**推測**）。ログインが切れたときに `/owner` へ戻るかは未確認（コード上は `returnTo=/owner` を署名付き state で運ぶので戻る想定）
+    - 別の組織のオーナーのアカウントで `/owner` を開いたとき、自分の組織の店舗だけが出ること。**11月の L/MA 登録時に確認**
 - 消費型/状態型の特典対応 … ✓（2026-07-16〜17・DB migration 0025/0027/0028/0029/0030 ＋ app 6コミット。取消UI まで込みで一周）
   - 概念: **消費型**（`rewards.is_consumable=true`・使ったら消える・例 ご褒美SPA）と**状態型**（=false・権利・消えない・例 VIPセール対象）を分離。`reward_type`（discount/service/priority）とは**直交**（「サービスだから消費型」ではない）。既存2件は 0025 で一律 false＝現状の挙動のまま。
   - DB（本番適用済み・事後記録は 44e2bb4）:
