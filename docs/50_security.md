@@ -198,6 +198,11 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
    - 公開ページ（`/visit`・`/onboard`・`/review`・`/rating`・`/review/complete`）は設計上
      query の salon ID を受け取る。**それぞれが何を返しているか**（トークン照合があるか・
      公開してよい情報だけか）は未確認。
+   - **エラー文言の表の引き方（2026-10-01 追記・未着手）**: `/admin/invites` は `ERROR_MESSAGE[error] ?? …` で
+     クエリの `error` をそのまま表のキーに使っており、`Object.hasOwn` で絞っていない。`?error=constructor` のような
+     継承プロパティ名だと、文言ではない値が引ける（`/admin/organizations`・5b では `Object.hasOwn` で絞った）。
+     同じ書き方は `grep` で `/admin/staff`・`/manager/salon/new`・`/manager/profile`・`/manager/staff/[id]` にもある。
+     実際に何が表示されるか・害があるかは未確認。
 8. **0046 の `submit_review_and_earn_stamp` を anon / authenticated が EXECUTE できるかもしれない（未着手・推測・未確認）**
    （2026-10-01・0050 の下書き中に気づいた）。0046 は `revoke all ... from public` だけで、
    anon / authenticated からは revoke していない（0038＋0040・0050 は `from public, anon, authenticated`）。
