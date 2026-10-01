@@ -6,14 +6,47 @@
  *   LINE はライトプラン（月5,000通・超えると送信が止まる）なので、運営者への通知が膨らむと
  *   **お客様への通知が止まる**。そこで次の2つで通数を抑える。
  *     B. レート制限の通知は、同じ scope・同じ IP に直近1時間で通知済みなら送らない
- *     C. 運営者への通知すべて（pushToOperator を通るもの）を合わせて、**JST の1日10通まで**
+ *     C. 上限の対象の通知（レート制限・push 失敗）を合わせて、**JST の1日10通まで**
+ *        （二重決済・配信数の警告は対象外＝下の OperatorAlertKind のコメント）
  *
  * 判定をここに分けたのは、DB・LINE を使わずに入力を変えて試せるようにするため
  * （本番の DB に試験用の行を入れない・2026-10-01 決定）。DB の読み書きは login-attempts.ts、
  * 送信は security-alert.ts が持つ。
  */
 
-/** 運営者への通知の1日の上限（全種類の合計・JST の日付で数える）。 */
+/**
+ * 運営者への通知の種類。
+ *
+ * ★1日の上限の対象かどうか（2026-10-01 決定）★
+ *   上限の対象（CAPPED）:
+ *     ・rate_limit     … レート制限の通知（notifyRateLimitHit）。攻撃者が IP を変えれば増やせる
+ *     ・push_failures  … 来店リマインドの送信失敗（notifyPushFailures）。10分ごとの cron で最大1日144通
+ *   上限の対象外（UNCAPPED）＝上限に達していても送る・件数にも数えない:
+ *     ・duplicate_review_purchase … 二重決済（notifyDuplicateReviewPurchase）。
+ *         実際の支払いが要るので攻撃者がタダで増やせない。止まると返金のきっかけを失う
+ *     ・quota_near_limit          … 配信数の警告（notifyQuotaNearLimit）。1日1通しか出ない。
+ *         止まると配信枠の警告そのものが届かなくなる
+ */
+export type OperatorAlertKind =
+  | "rate_limit"
+  | "push_failures"
+  | "duplicate_review_purchase"
+  | "quota_near_limit";
+
+/** 上限の対象かどうか（一覧はここだけ。理由は上の型のコメント）。 */
+const IS_CAPPED: Record<OperatorAlertKind, boolean> = {
+  rate_limit: true,
+  push_failures: true,
+  duplicate_review_purchase: false,
+  quota_near_limit: false,
+};
+
+/** 1日の上限の対象か。 */
+export function isCappedAlert(kind: OperatorAlertKind): boolean {
+  return IS_CAPPED[kind];
+}
+
+/** 運営者への通知の1日の上限（上限の対象の種類の合計・JST の日付で数える）。 */
 export const OPERATOR_ALERT_DAILY_LIMIT = 10;
 
 /** 上限に達する通知（その日の最後の1通）の本文に添える文。 */
@@ -44,6 +77,20 @@ export function decideDailyAlert(
   if (!Number.isFinite(sentToday) || sentToday < 0) return { send: false };
   if (sentToday >= limit) return { send: false };
   return { send: true, isLast: sentToday === limit - 1 };
+}
+
+/**
+ * 種類ごとの判定。上限の対象外なら、本日の通数（null＝DB で数えられなかった場合を含む）に関係なく送る。
+ * 上限の対象は decideDailyAlert に従う。数えられなかった（null）ときは送らない（2026-10-01 決定・案1）。
+ */
+export function decideOperatorAlert(
+  kind: OperatorAlertKind,
+  sentToday: number | null,
+  limit: number = OPERATOR_ALERT_DAILY_LIMIT,
+): DailyDecision {
+  if (!isCappedAlert(kind)) return { send: true, isLast: false };
+  if (sentToday === null) return { send: false };
+  return decideDailyAlert(sentToday, limit);
 }
 
 /**

@@ -137,7 +137,9 @@ export async function isThrottled(req: Request, scope: Scope): Promise<boolean> 
  *
  * 運営者への LINE 通知を送ったことを、このテーブルに**認証の試行とは別の scope** で1行残す。
  *   ・"rate_limit_alert" … レート制限の通知。detail = 元の scope（例 "owner_join"）、ip = 発火した IP
- *   ・"operator_alert"   … それ以外の運営者への通知。detail = 種類のタグ、ip = null
+ *   ・"operator_alert"   … それ以外の、1日の上限の対象の通知（push 失敗）。detail = 種類、ip = null
+ *   ・"operator_alert_uncapped" … 1日の上限の対象外の通知（二重決済・配信数の警告）。detail = 種類、ip = null。
+ *       **記録はするが上限の件数には数えない**（countCappedOperatorAlertsSince は見ない）
  * scope に CHECK 制約は無い（0037）ので migration は要らない。古い行は既存の30日の削除で消える。
  * isThrottled は Scope 型の scope しか数えないので、これらの行がレート制限の失敗回数に混ざることはない。
  *
@@ -145,9 +147,13 @@ export async function isThrottled(req: Request, scope: Scope): Promise<boolean> 
  * **どれも例外を投げない。** DB の失敗は null / false で返し、扱いは呼び出し側が決める。
  * ──────────────────────────────────────────────────────────────────── */
 
-export type OperatorAlertScope = "rate_limit_alert" | "operator_alert";
+export type OperatorAlertScope =
+  | "rate_limit_alert"
+  | "operator_alert"
+  | "operator_alert_uncapped";
 
-const OPERATOR_ALERT_SCOPES: OperatorAlertScope[] = [
+/** 1日の上限の件数に数える scope（operator_alert_uncapped は入れない）。 */
+const CAPPED_ALERT_SCOPES: OperatorAlertScope[] = [
   "rate_limit_alert",
   "operator_alert",
 ];
@@ -183,16 +189,17 @@ export async function countRecentRateLimitAlerts(
 }
 
 /**
- * C: 運営者への通知（全種類）が sinceIso 以降に何件あるか。失敗したら null。
+ * C: 1日の上限の対象の通知が sinceIso 以降に何件あるか。失敗したら null。
+ *   上限の対象外（operator_alert_uncapped）は数えない。
  */
-export async function countOperatorAlertsSince(
+export async function countCappedOperatorAlertsSince(
   sinceIso: string,
 ): Promise<number | null> {
   try {
     const { count, error } = await supabaseAdmin
       .from("login_attempts")
       .select("id", { count: "exact", head: true })
-      .in("scope", OPERATOR_ALERT_SCOPES)
+      .in("scope", CAPPED_ALERT_SCOPES)
       .gte("created_at", sinceIso);
     if (error) {
       console.error("[login-attempts] count operator alerts failed", {

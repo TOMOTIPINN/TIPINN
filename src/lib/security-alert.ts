@@ -1,7 +1,7 @@
 import { pushText } from "@/lib/line-messaging";
 import {
   attemptClientIp,
-  countOperatorAlertsSince,
+  countCappedOperatorAlertsSince,
   countRecentRateLimitAlerts,
   FAILURE_LIMIT,
   recordOperatorAlert,
@@ -10,10 +10,12 @@ import {
   type Scope,
 } from "@/lib/login-attempts";
 import {
-  decideDailyAlert,
+  decideOperatorAlert,
+  isCappedAlert,
   isRateLimitAlertSuppressed,
   jstDayStartMs,
   withLastNote,
+  type OperatorAlertKind,
 } from "@/lib/operator-alert-budget";
 
 /**
@@ -40,9 +42,12 @@ import {
  *    運営者への通知はお客様への来店リマインドと**同じ Messaging チャネル＝同じ月の配信枠**を使う
  *    （ライトプラン月5,000通・超えると送信が止まる）。そこで、
  *      B. レート制限の通知は、同じ scope・同じ IP に直近1時間で通知済みなら送らない
- *      C. 運営者への通知**すべて**を合わせて JST の1日10通まで（10通目の本文に止める旨を添える）
- *    送るたびに login_attempts へ1行記録し（scope は rate_limit_alert / operator_alert）、その件数で判定する。
+ *      C. **上限の対象の通知（レート制限・push 失敗）**を合わせて JST の1日10通まで（10通目の本文に止める旨を添える）
+ *         **二重決済・配信数の警告は上限の対象外**（攻撃者がタダで増やせず、止まると困るため）。
+ *         どの種類が対象かは @/lib/operator-alert-budget の OperatorAlertKind に一覧と理由がある。
+ *    送るたびに login_attempts へ1行記録し、その件数で判定する（対象外の種類も記録はするが数えない）。
  *    判定は @/lib/operator-alert-budget の純粋な関数、読み書きは login-attempts.ts。
+ *    **判定・記録で DB に失敗したら、上限の対象の通知は送らない**（2026-10-01 決定・配信枠を守る側）。
  *
  * ★本文に入れないもの（意図的な除外・変更しないこと）★
  *  ・line_user_id / invite_token / state / 生トークンなどの秘匿値
@@ -83,6 +88,8 @@ const SCOPE_LABEL: Record<Scope, string> = {
  * 引数は `isThrottled(req, scope)` と同じ形にそろえる（発火判定の直後にそのまま呼べる）。
  * IP は login-attempts の attemptClientIp で解決＝**記録された IP と必ず同一の値**になる。
  *
+ * ★1日の上限の対象★（攻撃者が IP を変えれば増やせるため）。加えて同じ scope・IP には1時間に1回まで。
+ *
  * @param req   発火したリクエスト（IP は x-forwarded-for から解決）
  * @param scope 発火した入口の種別
  */
@@ -98,15 +105,13 @@ export async function notifyRateLimitHit(
     // B: 同じ scope・同じ IP に直近1時間で通知済みなら送らない。
     //   止められたリクエストは recordAttempt されないので、何もしないと止まっている間
     //   リクエストのたびに1通ずつ送られていた（2026-10-01 に判明）。
+    //   数えられなかった（DB の失敗）ときは送らない（2026-10-01 決定）。
     const recent = await countRecentRateLimitAlerts(req, scope);
     if (recent === null) {
-      if (!SEND_ON_BUDGET_DB_ERROR) {
-        console.warn(`[security-alert] skipped tag=rate_limit:${scope} reason=db_error`);
-        return;
-      }
-    } else if (isRateLimitAlertSuppressed(recent)) {
+      console.warn(`[security-alert] skipped tag=rate_limit:${scope} reason=db_error`);
       return;
     }
+    if (isRateLimitAlertSuppressed(recent)) return;
 
     const ip = attemptClientIp(req);
     const windowHours = WINDOW_MS / (60 * 60 * 1000);
@@ -122,7 +127,7 @@ export async function notifyRateLimitHit(
       `同じ入口・同じ IP への通知は${windowHours}時間に1回までです。`,
     ].join("\n");
 
-    await sendWithinDailyLimit(`rate_limit:${scope}`, text, {
+    await sendOperatorAlert("rate_limit", `rate_limit:${scope}`, text, {
       scope: "rate_limit_alert",
       detail: scope,
       req,
@@ -133,57 +138,54 @@ export async function notifyRateLimitHit(
 }
 
 /**
- * ★通数の判定・記録で DB に失敗したときの扱い★（2026-10-01 時点の既定は「送らない」）
- *   false＝送らない（配信枠を守る側）／true＝送る（通知を落とさない側）。
- *   どちらにするかは決定待ち。理由は 50_security.md §5-7 と実装報告を参照。
- */
-const SEND_ON_BUDGET_DB_ERROR = false;
-
-/**
- * C: 運営者への通知すべての共通の出口。JST の1日の上限（全種類の合計）を超えないときだけ送る。
- *   順番: 本日の通数を数える → 上限なら送らない → 記録を1行入れる → 送る。
+ * 運営者への通知すべての共通の出口。
+ *
+ * ・**上限の対象外**（二重決済・配信数の警告）: 本日の通数に関係なく送る。記録は残すが
+ *   （scope operator_alert_uncapped）上限の件数には数えない。記録に失敗しても送る。
+ * ・**上限の対象**（レート制限・push 失敗）: 本日（JST）の対象の通数を数える → 上限なら送らない →
+ *   記録を1行入れる → 送る。数えられない・記録できない（DB の失敗）ときは送らない（2026-10-01 決定）。
  *   記録を送信より先に入れるのは、同時に来た通知どうしで通数を数え漏らしにくくするため
  *   （送信に失敗しても1通分として数える＝枠を守る側に倒す）。
- *   **例外は投げない。** env 未設定は呼び出し側で return 済み。
+ * **例外は投げない**（呼び出し側の try の中で呼ぶ）。env 未設定は呼び出し側で return 済み。
  */
-async function sendWithinDailyLimit(
-  tag: string,
+async function sendOperatorAlert(
+  kind: OperatorAlertKind,
+  logTag: string,
   text: string,
   record: { scope: OperatorAlertScope; detail: string; req?: Request },
 ): Promise<void> {
   const to = process.env.SECURITY_ALERT_LINE_USER_ID;
   if (!to) return;
 
-  const sentToday = await countOperatorAlertsSince(
-    new Date(jstDayStartMs(Date.now())).toISOString(),
-  );
   let isLast = false;
-  if (sentToday === null) {
-    if (!SEND_ON_BUDGET_DB_ERROR) {
-      console.warn(`[security-alert] skipped tag=${tag} reason=db_error`);
-      return;
-    }
+  if (!isCappedAlert(kind)) {
+    // 上限の対象外。記録は best effort（失敗しても送る）。
+    await recordOperatorAlert("operator_alert_uncapped", record.detail, record.req);
   } else {
-    const decision = decideDailyAlert(sentToday);
+    const sentToday = await countCappedOperatorAlertsSince(
+      new Date(jstDayStartMs(Date.now())).toISOString(),
+    );
+    const decision = decideOperatorAlert(kind, sentToday);
     if (!decision.send) {
-      console.warn(`[security-alert] skipped tag=${tag} reason=daily_limit`);
+      const reason = sentToday === null ? "db_error" : "daily_limit";
+      console.warn(`[security-alert] skipped tag=${logTag} reason=${reason}`);
       return;
     }
     isLast = decision.isLast;
-  }
 
-  const recorded = await recordOperatorAlert(record.scope, record.detail, record.req);
-  if (!recorded && !SEND_ON_BUDGET_DB_ERROR) {
-    // 記録できないまま送ると通数が数えられず、上限が効かなくなる。
-    console.warn(`[security-alert] skipped tag=${tag} reason=record_failed`);
-    return;
+    const recorded = await recordOperatorAlert(record.scope, record.detail, record.req);
+    if (!recorded) {
+      // 記録できないまま送ると通数が数えられず、上限が効かなくなる。
+      console.warn(`[security-alert] skipped tag=${logTag} reason=record_failed`);
+      return;
+    }
   }
 
   const result = await pushText(to, withLastNote(text, isLast));
   if (!result.ok) {
     // 通知が届かないこと自体が検知の穴になるため、必ずログに残す（握り潰さない）。
     console.warn(
-      `[security-alert] push failed tag=${tag} status=${result.status} body=${result.body}`,
+      `[security-alert] push failed tag=${logTag} status=${result.status} body=${result.body}`,
     );
   }
 }
@@ -192,20 +194,24 @@ async function sendWithinDailyLimit(
  * 運営者へ1通 push する共通部。**例外は投げない**／env 未設定なら**無音で return**。
  *
  * notifyRateLimitHit はこの関数を通らない（B の判定と IP の記録があるため）が、
- * 1日の上限は同じ sendWithinDailyLimit で合わせて数える。新規の通知はすべてここを通す。
+ * 出口は同じ sendOperatorAlert。**上限の対象かどうかは kind で決まる**（operator-alert-budget.ts の一覧）。
+ * 新規の通知はすべてここを通し、OperatorAlertKind に種類を足して対象かどうかを決めること。
  *
- * @param tag  ログに出す識別子（本文ではない）。秘匿値・個人情報を渡さないこと。
+ * @param kind 通知の種類（ログの識別子と記録の detail にも使う）。秘匿値・個人情報ではない。
  */
-async function pushToOperator(tag: string, text: string): Promise<void> {
+async function pushToOperator(
+  kind: Exclude<OperatorAlertKind, "rate_limit">,
+  text: string,
+): Promise<void> {
   const to = process.env.SECURITY_ALERT_LINE_USER_ID;
   // 未設定＝通知を使わない環境（ローカル / Preview）。無言で何もしない（DB も引かない）。
   if (!to) return;
 
   try {
-    // C: 1日の上限は notifyRateLimitHit と合わせて数える（sendWithinDailyLimit）。
-    await sendWithinDailyLimit(tag, text, { scope: "operator_alert", detail: tag });
+    // 上限の対象（push_failures）は notifyRateLimitHit と合わせて数える。対象外は数えずに送る。
+    await sendOperatorAlert(kind, kind, text, { scope: "operator_alert", detail: kind });
   } catch (e) {
-    console.warn(`[security-alert] push threw tag=${tag}`, e);
+    console.warn(`[security-alert] push threw tag=${kind}`, e);
   }
 }
 
@@ -217,6 +223,8 @@ async function pushToOperator(tag: string, text: string): Promise<void> {
  * 丸ごと止まるため、静かに忘れられる方が損失が大きい）。
  *
  * 本文に入れるのは通数と閾値だけ＝顧客・サロンの情報は一切含まない（冒頭の方針どおり）。
+ *
+ * ★1日の上限の対象外★（1日1通しか出ず、止まると配信枠の警告そのものが届かなくなるため）。
  */
 export async function notifyQuotaNearLimit(params: {
   totalUsage: number;
@@ -245,6 +253,8 @@ export async function notifyQuotaNearLimit(params: {
  *
  * 渡すのは**件数だけ**。どの顧客・どのサロンかは通知に載せない（冒頭の方針どおり。
  * 調査は notification_outbox を見る＝運営者の LINE トーク履歴に業務情報を残さない）。
+ *
+ * ★1日の上限の対象★（10分ごとの cron で最大1日144通になり得るため）。
  */
 export async function notifyPushFailures(count: number): Promise<void> {
   const text = [
@@ -270,6 +280,8 @@ export async function notifyPushFailures(count: number): Promise<void> {
  * 本文に載せるのは `payment_intent id`（`pi_...`）だけ。
  *   返金にはこの1個があれば足り、顧客名・サロン名・スタッフ名・review_id は要らない
  *   （冒頭の「本文に入れないもの」とその例外を参照）。
+ *
+ * ★1日の上限の対象外★（実際の支払いが要るので攻撃者がタダで増やせず、止まると返金のきっかけを失うため）。
  *
  * @param paymentIntentId 返金対象の payment_intent id（`pi_...`）
  */
