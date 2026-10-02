@@ -289,7 +289,10 @@ RLS・ポリシー・テーブル定義・データ。
 - Dependabot の件数
 - Supabase Security Advisor の Errors / Warnings（Info の RLS Enabled No Policy は意図どおり）
 - Malwarebytes の直近実行履歴
-- **【未解決(1)】アクセス制御の棚卸し**（`docs/access-control-audit.md` を 25 → 現在のページ数に更新するか）
+- **【未解決(1)】アクセス制御の棚卸し**（`docs/access-control-audit.md` を 25 → 現在のページ数に更新するか）。
+  **2026-10-02 時点で `page.tsx` は36枚＝未監査11枚**（§4-8 の「33枚＝8枚未監査」は 2026-09-23 時点の数。
+  その後 `/owner/join`・`/admin/organizations`・`/admin/owner-invites` が増えた）。
+  未監査の11枚: `/owner` 系4枚・`/admin` 系5枚・`/help`・`/help/staff`
 - **【未解決(2)】認可ガードを layout に集約するか、各ページ個別実装を正とするか**（§21 との整理）
 - **Google Workspace の2段階認証の2つ目の手段**（認証システムアプリ / パスキーの追加・§4-6）
 - **PUBLIC への grant の有無**（0049 の対象外だった分・§4-5）

@@ -249,6 +249,9 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
    - **public スキーマの全関数（`prokind = 'f'`）で、anon または authenticated が EXECUTE できるものは 0 件**。
    - **未確認として残す**: 既定の付与が付いていない理由（default privileges の設定か、個別の revoke か）。
      このため**新しい関数を作ったときは同じクエリで確認する**。
+9. **`robots.txt` と noindex の指定がない（2026-10-02・事実の記録のみ）。**
+   `public/robots.txt`・`src/app/robots.ts` が無く、`public/company/*.html` にも noindex は無い。
+   検索エンジンに載せたくないページ（運営者画面は 404 を返すので対象外）の扱いを含め、**対応するかは未決**。
 
 ---
 
