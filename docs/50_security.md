@@ -3,7 +3,7 @@
 > **機能追加・変更のたびに確認する不変条件。**
 > 2026-07-14 の棚卸しで確定し、2026-08-11 に login_attempts を追記。
 >
-> 最終更新: 2026-09-25
+> 最終更新: 2026-10-02
 >
 > **定期診断の実施記録は `docs/55_security-scan-log.md`。**
 > このファイルが「守るべき不変条件」、55 が「いつ何を診断して何を直したかの証跡」
@@ -235,13 +235,20 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
        本番の DB に試験用の行は入れていない。**本番で実際に発火したときの動き（1時間に1回・1日10通）は未確認**。
      - **検討事項（未決）**: 外部サロンが増えると、共有の配信枠（月5,000通）が先に詰まる
        （直近30日の約935通から単純計算で**25店舗前後**・推測）。**外部展開の前にプランの見直し時期を決める。**
-8. **0046 の `submit_review_and_earn_stamp` を anon / authenticated が EXECUTE できるかもしれない（未着手・推測・未確認）**
+8. ~~**0046 の `submit_review_and_earn_stamp` を anon / authenticated が EXECUTE できるかもしれない（未着手・推測・未確認）**~~
    （2026-10-01・0050 の下書き中に気づいた）。0046 は `revoke all ... from public` だけで、
    anon / authenticated からは revoke していない（0038＋0040・0050 は `from public, anon, authenticated`）。
    関数の既定の権限付与（`pg_default_acl` の `defaclobjtype = 'f'`）で anon / authenticated に
    EXECUTE が付いていれば残っている。0049 はテーブルの既定値だけを塞いでおり、関数には触っていない。
    **確認方法**: `has_function_privilege('anon', 'public.submit_review_and_earn_stamp(uuid, uuid, uuid, text, integer, text[], text)', 'EXECUTE')`
    （authenticated も同じ）と、`pg_default_acl` の `f` の行。ほかの RPC も同じ形か合わせて見る。
+   → **確認済み・問題なし（2026-10-02・本番の SQL Editor で読み取りクエリにより確認）。**
+   - `submit_review_and_earn_stamp(uuid, uuid, uuid, text, integer, text[], text)` は **security definer**・
+     owner は **postgres**・`proacl` は `{postgres=X/postgres, service_role=X/postgres}`。
+     **anon / authenticated は EXECUTE 不可**。同名の関数は1つだけ。
+   - **public スキーマの全関数（`prokind = 'f'`）で、anon または authenticated が EXECUTE できるものは 0 件**。
+   - **未確認として残す**: 既定の付与が付いていない理由（default privileges の設定か、個別の revoke か）。
+     このため**新しい関数を作ったときは同じクエリで確認する**。
 
 ---
 
@@ -255,3 +262,12 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
 **各ツールの体制と、実施のたびの結果は `docs/55_security-scan-log.md` に記録する**
 （月次レビュー＝毎月25日。2026-09-23 に「毎月第1日曜」から変更）。
 **未解消の指摘は 55 側に「未解消」として残す**方針で、このファイルの §5 積み残しとは別枠。
+
+### 6.1 Claude Code が `stripe` コマンドを実行できないようにした（2026-10-02・運用メモ）
+
+- `~/.claude/settings.json` の `permissions.deny` に `Bash(stripe *)` と `Bash(/usr/local/bin/stripe *)` を追加した。
+  理由は **Stripe CLI の設定に live の制限付きキーがある**ため（Stripe 利用規約 1.7 AI Agent 条項・2027-01-06 適用）。
+  原が自分のターミナルで打つ `stripe` は今までどおり使える。
+- 追加後、Claude Code からの `stripe --version`・`/usr/local/bin/stripe --version` が拒否されることを確認した。
+- **リポジトリの外の設定**なので、**Mac を替えると消える**。
+- **deny はセキュリティ境界ではない**（`sh -c` などは防げない）。**事故防止の柵**として入れた。

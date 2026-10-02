@@ -293,6 +293,15 @@ RLS・ポリシー・テーブル定義・データ。
 - **【未解決(2)】認可ガードを layout に集約するか、各ページ個別実装を正とするか**（§21 との整理）
 - **Google Workspace の2段階認証の2つ目の手段**（認証システムアプリ / パスキーの追加・§4-6）
 - **PUBLIC への grant の有無**（0049 の対象外だった分・§4-5）
+- **public の関数で anon / authenticated が EXECUTE できるものが0件か**（`50_security.md` §5-8・期待値は0行）
+
+  ```sql
+  select p.oid::regprocedure as fn, p.prosecdef, pg_get_userbyid(p.proowner) as owner, p.proacl
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+  where n.nspname = 'public' and p.prokind = 'f'
+    and (has_function_privilege('anon', p.oid, 'EXECUTE')
+         or has_function_privilege('authenticated', p.oid, 'EXECUTE'));
+  ```
 
 ---
 
