@@ -4,7 +4,7 @@
 > ここに書かれた決定は、忘れたころに必ず効いてくる。特に §1 は全て**実際に事故が起きた**記録である。
 > 新しい決定をしたら、日付・理由・実例を付けてここに足す。
 >
-> 最終更新: 2026-10-02
+> 最終更新: 2026-10-04
 
 ---
 
@@ -387,7 +387,7 @@ organizations 導入後（§8）は「同一 `organization_id` のサロンか�
   通知は Stripe から各店のメールアドレスに届くだけで、echo の運営者には届かない。
 - **`stripe_charges_enabled` / `stripe_payouts_enabled` だけでは、入金が実際に届いているかは分からない。**
   CARTA は入金が失敗している間も `payouts_enabled = true` のままだった。
-- **Stripe のログインは店ごとに別ユーザー**で、二段階認証の手段とバックアップコードの保管場所が整理されていない（suco はログインできなくなった）。
+- **Stripe のログインは店ごとに別ユーザー**で、二段階認証の手段とバックアップコードの保管場所が整理されていない（suco はログインできなくなった。2026-10-03 に SMS の二段階認証を再設定し、バックアップコードを再発行して復旧）。
 
 **対応するかは未決**（入金の失敗・提出物の期限を echo で検知するか、ログインの管理をどうするか）。
 
@@ -399,7 +399,7 @@ organizations 導入後（§8）は「同一 `organization_id` のサロンか�
 | Niii | carta llc | `acct_1U73R897r938WLIb` | 正常。入金 ¥96 は支払い済み、¥768 が送金中 |
 | nun Fukushima | cartallc | `acct_1U748g8zjxGNAJLX` | 有効。売上 ¥0 で、**口座が正しいかは未検証** |
 | SELNI | kata | `acct_1U9EWc4a3cu3O1Md` | 有効。売上 ¥0 で、**口座が正しいかは未検証** |
-| suco | cartaLLC | `acct_1UAh1O4dNQVlFHdA` | 決済・入金とも停止中（`60_incidents.md`） |
+| suco | cartaLLC | `acct_1UAh1O4dNQVlFHdA` | ~~決済・入金とも停止中~~ → **2026-10-04 解決済み**（支払い・Payouts が有効・Cartes Bancaires のみ一時停止・実機決済は未実施。`60_incidents.md` 2026-10-02） |
 
 - Stripe 側には他に2件（`acct_1U73RBQCWQSzDrrX`・`acct_1U73RA6L7pFYTd5r`）あり、名前がなく制限対象。登録を途中でやめたものと見ている（**推測・未確認**）。
 - **残り**: nun と SELNI の口座情報を、CARTA で直した点と同じ観点で見直す。
