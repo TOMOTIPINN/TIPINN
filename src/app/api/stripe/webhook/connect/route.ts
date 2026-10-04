@@ -3,7 +3,16 @@ import Stripe from "stripe";
 import { stripe } from "@/lib/stripe";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getTier } from "@/lib/rating-tiers";
-import { notifyDuplicateReviewPurchase } from "@/lib/security-alert";
+import {
+  notifyDuplicateReviewPurchase,
+  notifyStripeAccountIssues,
+} from "@/lib/security-alert";
+import {
+  decideAccountUpdatedIssues,
+  decidePayoutFailedIssues,
+  type AccountFlags,
+  type StripeIssue,
+} from "@/lib/stripe-account-alert";
 import {
   claimStripeEvent,
   markStripeEventProcessed,
@@ -20,6 +29,9 @@ import {
  * やること:
  *   - checkout.session.completed → session.metadata を読み rating_purchases に INSERT。
  *   - account.updated → 連結アカウントの審査状態を salons に同期（オンボーディング Phase 2）。
+ *     あわせて、決済・入金の停止（true → false）と提出物の期限切れを運営者へ通知する（2026-10-04 決定）。
+ *   - payout.failed → 入金の失敗を運営者へ通知する（2026-10-04 決定・`40_decisions.md` §7.2）。
+ *     通知の失敗で応答を失敗させない（notify* は例外を投げない）。何を通知するかは @/lib/stripe-account-alert。
  *   - 冪等（第一層・0032 stripe_events）: 署名検証直後にイベントを
  *     (id, type, salon_id, 絞り込み済み payload) で記録し、処理済み(processed_at NOT NULL)の
  *     再送は実処理を丸ごとスキップする。payload は redactEventPayload() が許可リストで
@@ -79,6 +91,7 @@ export async function POST(req: Request) {
       | "skipped_duplicate_review"
       | "account_synced"
       | "account_not_found"
+      | "payout_failed_checked"
       | "ignored_event_type" = "ignored_event_type";
 
     if (event.type === "checkout.session.completed") {
@@ -90,7 +103,18 @@ export async function POST(req: Request) {
       // Connect イベント（オンボーディング Phase 2）。連結アカウントの審査状態を salons に同期。
       // 既存の stripe_events 冪等化（claim/markProcessed）にそのまま乗る。
       const account = event.data.object as Stripe.Account;
+      // 順番: 今の値を読む → 判定 → 上書き → 通知（2026-10-04 決定）。
+      //   読み取り・判定は上書きの前に終わらせる。どちらかで throw したら、まだ上書きしていない
+      //   状態で 500 → 再送時に正しく比べ直せる（上書きの後に失敗すると true → false を取りこぼす）。
+      const before = await readSalonFlagsByAccount(account.id);
+      const issues = decideAccountUpdatedAlert(event, account, before);
       outcome = await syncAccountFromStripe(account);
+      // 通知は上書きの後。notifyStripeAccountIssues は例外を投げない（応答を失敗させない）。
+      await notifyStripeAccountIssues(account.id, issues);
+    } else if (event.type === "payout.failed") {
+      // 入金の失敗（CARTA 型・payouts_enabled は true のまま変わらないのでフラグでは捕まらない）。
+      const payout = event.data.object as Stripe.Payout;
+      outcome = await alertPayoutFailed(event.account ?? null, payout);
     }
 
     // 実処理が正常終了 → processed_at を打つ（以後この event は再送でも弾かれる）。
@@ -150,6 +174,80 @@ async function syncAccountFromStripe(
 
   if (error) throw error;
   return (data?.length ?? 0) > 0 ? "account_synced" : "account_not_found";
+}
+
+/**
+ * salons の今の charges / payouts を読む（account.updated の上書き前・payout.failed の店の特定）。
+ *   - 行がなければ null（通知しない・ログだけ）。
+ *   - **DB エラーは throw**（呼び出し元が 500 で Stripe に再送させる・通知を黙って落とさない）。
+ *   - 複数行に耐える（§7.1 の共有に備え、syncAccountFromStripe と同じく .single() にしない）。
+ *     どれか1行でも true なら true として扱う。
+ */
+async function readSalonFlagsByAccount(
+  account: string | null,
+): Promise<AccountFlags | null> {
+  if (!account) return null;
+  const { data, error } = await supabaseAdmin
+    .from("salons")
+    .select("stripe_charges_enabled, stripe_payouts_enabled")
+    .eq("stripe_account_id", account);
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+  return {
+    charges: data.some((r) => r.stripe_charges_enabled === true),
+    payouts: data.some((r) => r.stripe_payouts_enabled === true),
+  };
+}
+
+/**
+ * account.updated の通知の判定（イ・ウ）。**上書き（syncAccountFromStripe）の前に呼ぶ。**
+ * requirements の変化は event.data.previous_attributes を
+ * **メモリ上で読むだけで保存しない**（stripe_events.payload の許可リストは変えない）。
+ * salons に行がなければ通知しない（ログだけ・空配列を返す）。
+ */
+function decideAccountUpdatedAlert(
+  event: Stripe.Event,
+  account: Stripe.Account,
+  before: AccountFlags | null,
+): StripeIssue[] {
+  if (before === null) {
+    console.warn(
+      `[stripe-webhook/connect] account.updated for account without salon; no alert account=${account.id}`,
+    );
+    return [];
+  }
+  const previous = event.data.previous_attributes as
+    | Record<string, unknown>
+    | undefined;
+  return decideAccountUpdatedIssues({
+    before,
+    after: {
+      charges: account.charges_enabled ?? false,
+      payouts: account.payouts_enabled ?? false,
+    },
+    requirements: account.requirements,
+    previousRequirements: previous?.requirements,
+  });
+}
+
+/** payout.failed の通知（ア）。event.account で店を特定する。 */
+async function alertPayoutFailed(
+  account: string | null,
+  payout: Stripe.Payout,
+): Promise<"payout_failed_checked" | "account_not_found"> {
+  const flags = await readSalonFlagsByAccount(account);
+  const issues = decidePayoutFailedIssues({
+    salonFound: flags !== null,
+    failureCode: payout.failure_code,
+  });
+  if (!account || issues.length === 0) {
+    console.warn(
+      `[stripe-webhook/connect] payout.failed for account without salon; no alert account=${account ?? "(none)"}`,
+    );
+    return "account_not_found";
+  }
+  await notifyStripeAccountIssues(account, issues);
+  return "payout_failed_checked";
 }
 
 async function recordRatingPurchase(

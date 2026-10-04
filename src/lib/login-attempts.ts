@@ -138,8 +138,10 @@ export async function isThrottled(req: Request, scope: Scope): Promise<boolean> 
  * 運営者への LINE 通知を送ったことを、このテーブルに**認証の試行とは別の scope** で1行残す。
  *   ・"rate_limit_alert" … レート制限の通知。detail = 元の scope（例 "owner_join"）、ip = 発火した IP
  *   ・"operator_alert"   … それ以外の、1日の上限の対象の通知（push 失敗）。detail = 種類、ip = null
- *   ・"operator_alert_uncapped" … 1日の上限の対象外の通知（二重決済・配信数の警告）。detail = 種類、ip = null。
- *       **記録はするが上限の件数には数えない**（countCappedOperatorAlertsSince は見ない）
+ *   ・"operator_alert_uncapped" … 1日の上限の対象外の通知（二重決済・配信数の警告・Stripe の連結アカウントの異常）。
+ *       detail = 種類、ip = null。**記録はするが上限の件数には数えない**（countCappedOperatorAlertsSince は見ない）。
+ *       Stripe の連結アカウントの異常だけは detail = `stripe:<acct_id>:<種類>`（24時間に1回の判定に使う・
+ *       countUncappedOperatorAlertsByDetailSince）。acct_id は秘匿値ではない（security-alert.ts の例外）
  * scope に CHECK 制約は無い（0037）ので migration は要らない。古い行は既存の30日の削除で消える。
  * isThrottled は Scope 型の scope しか数えないので、これらの行がレート制限の失敗回数に混ざることはない。
  *
@@ -210,6 +212,34 @@ export async function countCappedOperatorAlertsSince(
     return count ?? 0;
   } catch {
     console.error("[login-attempts] count operator alerts threw");
+    return null;
+  }
+}
+
+/**
+ * 上限の対象外の通知のうち、detail が一致するものが sinceIso 以降に何件あるか。失敗したら null。
+ *   Stripe の連結アカウントの異常の「同じ連結アカウント・同じ種類は24時間に1回まで」に使う。
+ */
+export async function countUncappedOperatorAlertsByDetailSince(
+  detail: string,
+  sinceIso: string,
+): Promise<number | null> {
+  try {
+    const { count, error } = await supabaseAdmin
+      .from("login_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("scope", "operator_alert_uncapped")
+      .eq("detail", detail.slice(0, DETAIL_MAX))
+      .gte("created_at", sinceIso);
+    if (error) {
+      console.error("[login-attempts] count operator alerts by detail failed", {
+        code: error.code,
+      });
+      return null;
+    }
+    return count ?? 0;
+  } catch {
+    console.error("[login-attempts] count operator alerts by detail threw");
     return null;
   }
 }

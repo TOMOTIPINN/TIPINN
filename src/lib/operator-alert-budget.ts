@@ -7,7 +7,7 @@
  *   **お客様への通知が止まる**。そこで次の2つで通数を抑える。
  *     B. レート制限の通知は、同じ scope・同じ IP に直近1時間で通知済みなら送らない
  *     C. 上限の対象の通知（レート制限・push 失敗）を合わせて、**JST の1日10通まで**
- *        （二重決済・配信数の警告は対象外＝下の OperatorAlertKind のコメント）
+ *        （二重決済・配信数の警告・Stripe の連結アカウントの異常は対象外＝下の OperatorAlertKind のコメント）
  *
  * 判定をここに分けたのは、DB・LINE を使わずに入力を変えて試せるようにするため
  * （本番の DB に試験用の行を入れない・2026-10-01 決定）。DB の読み書きは login-attempts.ts、
@@ -26,12 +26,17 @@
  *         実際の支払いが要るので攻撃者がタダで増やせない。止まると返金のきっかけを失う
  *     ・quota_near_limit          … 配信数の警告（notifyQuotaNearLimit）。1日1通しか出ない。
  *         止まると配信枠の警告そのものが届かなくなる
+ *     ・stripe_account_issue      … Stripe の連結アカウントの異常（notifyStripeAccountIssues・2026-10-04 決定）。
+ *         Stripe の署名付き webhook からしか出ないので攻撃者が増やせない。止まると入金の失敗・
+ *         提出物の期限切れに気づけない（`60_incidents.md` 2026-10-02）。代わりに、同じ連結アカウント・
+ *         同じ種類は24時間に1回まで（判定は @/lib/stripe-account-alert）
  */
 export type OperatorAlertKind =
   | "rate_limit"
   | "push_failures"
   | "duplicate_review_purchase"
-  | "quota_near_limit";
+  | "quota_near_limit"
+  | "stripe_account_issue";
 
 /** 上限の対象かどうか（一覧はここだけ。理由は上の型のコメント）。 */
 const IS_CAPPED: Record<OperatorAlertKind, boolean> = {
@@ -39,6 +44,7 @@ const IS_CAPPED: Record<OperatorAlertKind, boolean> = {
   push_failures: true,
   duplicate_review_purchase: false,
   quota_near_limit: false,
+  stripe_account_issue: false,
 };
 
 /** 1日の上限の対象か。 */

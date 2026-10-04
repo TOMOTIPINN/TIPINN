@@ -389,7 +389,54 @@ organizations 導入後（§8）は「同一 `organization_id` のサロンか�
   CARTA は入金が失敗している間も `payouts_enabled = true` のままだった。
 - **Stripe のログインは店ごとに別ユーザー**で、二段階認証の手段とバックアップコードの保管場所が整理されていない（suco はログインできなくなった。2026-10-03 に SMS の二段階認証を再設定し、バックアップコードを再発行して復旧）。
 
-**対応するかは未決**（入金の失敗・提出物の期限を echo で検知するか、ログインの管理をどうするか）。
+~~**対応するかは未決**（入金の失敗・提出物の期限を echo で検知するか、ログインの管理をどうするか）。~~
+→ **2026-10-04 決定（原）**: 連結アカウントの異常を**運営者の LINE に通知する**。ログインの管理は運用で対応する。
+
+**通知する出来事（この3つだけ）**:
+
+| | 出来事 | 種類（24時間に1回の単位） | 本文の理由コード |
+|---|---|---|---|
+| ア | `payout.failed`（`event.account` で店を特定） | `payout_failed` | `failure_code` |
+| イ | `account.updated` で `stripe_charges_enabled` / `stripe_payouts_enabled` が **true → false**（上書きの前に `salons` の今の値を読んで比べる） | `disabled` | `disabled_reason` |
+| ウ | `account.updated` で `requirements.past_due` が**空 → 空でない** | `requirements` | `past_due` の件数 |
+| ウ | `account.updated` で `requirements.disabled_reason` が **null → 値あり** | `disabled`（イと同じ種類） | `disabled_reason` |
+
+- ウは `event.data.previous_attributes` と今の値を比べる。**メモリ上で読むだけで保存しない**（`stripe_events.payload` の許可リストは変えない）。
+  `previous_attributes` に `requirements` が無いとき（または中に `past_due` / `disabled_reason` のキーが無いとき）は変化なしとして通知しない。
+- 通知の種類は `stripe_account_issue`。**1日10通の上限の対象外**（Stripe の署名付き webhook からしか出ないので攻撃者が増やせない／止まると気づけない）。
+- **同じ連結アカウント・同じ種類は24時間に1回まで**。送る前に `login_attempts` の直近24時間を detail `stripe:<acct_id>:<種類>` で見る。
+  **重複判定の読み取りに失敗したときは送る**（黙って落とさない）。記録に失敗しても送る。1つのイベントで複数に該当したら**1通にまとめる**。
+- **通知の失敗で webhook の応答を失敗させない**。`salons` の更新と `stripe_events` の処理済み記録は今までどおり。
+  ただし、イのために `salons` の今の値を読む処理が DB エラーで失敗したら **500 で再送させる**（まだ上書きしていないので再送時に正しく比べ直せる）。
+- **`account.updated` の順番は「今の値を読む → 判定 → 上書き → 通知」**（2026-10-04 決定）。読み取りと判定（`previous_attributes` の読み取りを含む）を
+  上書きの前に終わらせ、そこで例外が出たら上書きの前に 500 になる。上書きの後に失敗すると、再送時には今の値がもう false で true → false を取りこぼすため。
+- 本文: **サロン名・スタッフ名・顧客名は入れない**。連結アカウント ID（`acct_...`）は `pi_...` と同じ理由で例外として入れる（`src/lib/security-alert.ts` の「本文に入れないもの」）。
+  入れないもの: 金額・口座の情報・`failure_message`・`past_due` の項目名・担当者に関する値。どの店かは運営者が §7.3 の表で引く。
+- 実装: 判定は純粋関数の `src/lib/stripe-account-alert.ts`、送信は `notifyStripeAccountIssues`（`src/lib/security-alert.ts`）、
+  呼び出しは `src/app/api/stripe/webhook/connect/route.ts`。**migration なし**。
+  確認はローカルの台本 `scripts/check-stripe-account-alert.mjs`（`node --experimental-strip-types` で実行・DB・LINE・Stripe を使わない）。
+- **Stripe の設定（2026-10-04・原がダッシュボードで実施・確認済み）**: echo-connect（連結アカウント）の送信先の受け取るイベントに
+  `payout.failed` を足して**3件**にした。
+- **本番での発火は未確認**（ア・イ・ウのどれも、本番で通知が届いたことはまだ確かめていない）。
+- **確認の方法**: ローカルの開発サーバーは**本番の DB につながる**（`.env.local` の Supabase は本番のプロジェクト）ため、
+  サンドボックスで端から端までは試せない。**デプロイ後に、テストサロンを使って本番で1回試す予定（未実施）**。
+
+**既知の制限（2026-10-04・直さないと決めたもの）**:
+- **LINE の送信に失敗した通知は再送されない。** 停止と入金の失敗は1回きりのイベントで、処理済みになった後は再判定されないため。
+  また、共通の `sendOperatorAlert` は**記録してから送る**ので、送信に失敗しても記録は残り、**同じ種類は24時間止まる**。
+  直さない理由: 直しても効くのは「24時間以内に同じ種類がもう一度来た場合」だけで、共通の関数を触る危険のほうが大きい。
+- **オンボーディングから戻ったときの処理（`src/app/api/manager/stripe/return/route.ts`）もフラグを上書きするが、通知を通らない。**
+  そこで true → false に変わった場合、後から届く `account.updated` では今の値がもう false なので、イは通知されない。
+- 上の2点は、**月次診断で連結アカウントの状態を目で確認して補う**（`55_security-scan-log.md` §5 の確認項目）。
+
+**作らないと決めたもの（2026-10-04）**:
+- サロンのオーナーや店長への自動通知
+- 期限の事前通知（cron と列の追加が要るため）
+- `currently_due` だけが増えた場合の通知
+- `salons` に行がない連結アカウントの通知（ログだけ出す）
+- false のまま届く `account.updated` の通知
+
+**Stripe のログインの管理は運用で対応する**（仕組みは作らない）。**他社サロンの Stripe のログインは echo が預からない。**
 
 ### 7.3 各店と Stripe の連結アカウントの対応（2026-10-02 時点の記録）
 

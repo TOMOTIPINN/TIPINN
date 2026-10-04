@@ -3,12 +3,20 @@ import {
   attemptClientIp,
   countCappedOperatorAlertsSince,
   countRecentRateLimitAlerts,
+  countUncappedOperatorAlertsByDetailSince,
   FAILURE_LIMIT,
   recordOperatorAlert,
   WINDOW_MS,
   type OperatorAlertScope,
   type Scope,
 } from "@/lib/login-attempts";
+import {
+  formatStripeIssueLines,
+  isStripeIssueSuppressed,
+  STRIPE_ISSUE_DEDUP_MS,
+  stripeIssueDetail,
+  type StripeIssue,
+} from "@/lib/stripe-account-alert";
 import {
   decideOperatorAlert,
   isCappedAlert,
@@ -25,11 +33,13 @@ import {
  * 役割: レート制限（@/lib/login-attempts の isThrottled）が発火したことを、
  * echo 運営者の LINE へ push で知らせる。送信は既存の pushText を使う（新規に API は書かない）。
  *
- * このファイルは **運営者（SECURITY_ALERT_LINE_USER_ID）宛 push の唯一の置き場**。現在3種類:
+ * このファイルは **運営者（SECURITY_ALERT_LINE_USER_ID）宛 push の唯一の置き場**。現在5種類:
  *   1. notifyRateLimitHit    … レート制限の発火（不正アクセス検知・上記の申告書対応）
  *   2. notifyQuotaNearLimit  … LINE 配信通数が上限に接近（/api/cron/purge から日次）
  *   3. notifyPushFailures    … 来店リマインドの送信失敗（/api/cron/line-push から実行ごと）
- * 2・3 はセキュリティ事象ではなく**運用アラート**だが、宛先・env 未設定なら無音・例外を投げない
+ *   4. notifyDuplicateReviewPurchase … 同じ感想への有料スタンプ二重決済（/api/stripe/webhook/connect）
+ *   5. notifyStripeAccountIssues     … Stripe の連結アカウントの異常（/api/stripe/webhook/connect・2026-10-04 決定）
+ * 2〜5 はセキュリティ事象ではなく**運用アラート**だが、宛先・env 未設定なら無音・例外を投げない
  * という制約が完全に同じなので、置き場を分けずここへ集約する（env とガードを1箇所に保つ）。
  *
  * 方針:
@@ -61,6 +71,11 @@ import {
  *  ・**例外**: Stripe の payment_intent id（`pi_...`）は載せてよい。運営者が Stripe 側で
  *    手動返金するのに必須の識別子で、これ単体では顧客・サロン・スタッフを特定できない
  *    （個人情報でも秘匿値でもなく、Stripe ダッシュボードの検索キーにすぎない）。
+ *  ・**例外（2026-10-04 追加）**: Stripe の連結アカウント ID（`acct_...`）も、`pi_...` と同じ理由で載せてよい。
+ *    運営者が Stripe ダッシュボードで該当の連結アカウントを開くのに必須の識別子で、これ単体では
+ *    顧客・スタッフを特定できない（個人情報でも秘匿値でもなく、ダッシュボードの検索キーにすぎない）。
+ *    サロン名は引き続き載せない（どの店かは運営者が `40_decisions.md` §7.3 の対応表で引く）。
+ *    Stripe の通知でも、金額・口座の情報・failure_message・past_due の項目名・担当者に関する値は載せない。
  */
 
 /** 発生時刻の表示（JST・YYYY-MM-DD HH:MM）。基準は他画面（dashboard / inbox）と同じ Asia/Tokyo。 */
@@ -152,7 +167,16 @@ async function sendOperatorAlert(
   kind: OperatorAlertKind,
   logTag: string,
   text: string,
-  record: { scope: OperatorAlertScope; detail: string; req?: Request },
+  record: {
+    scope: OperatorAlertScope;
+    detail: string;
+    /**
+     * 上限の対象外で、1通に複数の種類をまとめたときの残りの detail（Stripe の連結アカウントの異常）。
+     * 24時間に1回の判定が種類ごとなので、種類ごとに1行ずつ記録する。上限の対象では使わない。
+     */
+    extraDetails?: readonly string[];
+    req?: Request;
+  },
 ): Promise<void> {
   const to = process.env.SECURITY_ALERT_LINE_USER_ID;
   if (!to) return;
@@ -160,7 +184,9 @@ async function sendOperatorAlert(
   let isLast = false;
   if (!isCappedAlert(kind)) {
     // 上限の対象外。記録は best effort（失敗しても送る）。
-    await recordOperatorAlert("operator_alert_uncapped", record.detail, record.req);
+    for (const detail of [record.detail, ...(record.extraDetails ?? [])]) {
+      await recordOperatorAlert("operator_alert_uncapped", detail, record.req);
+    }
   } else {
     const sentToday = await countCappedOperatorAlertsSince(
       new Date(jstDayStartMs(Date.now())).toISOString(),
@@ -298,4 +324,66 @@ export async function notifyDuplicateReviewPurchase(
   ].join("\n");
 
   await pushToOperator("duplicate_review_purchase", text);
+}
+
+/**
+ * Stripe の連結アカウントの異常を運営者へ通知する（/api/stripe/webhook/connect から・2026-10-04 決定）。
+ *
+ * 何を異常とするか（ア・イ・ウ）は @/lib/stripe-account-alert の純粋な関数が決め、ここには
+ * 該当した種類だけが渡る。**1つのイベントで複数の種類に該当したら1通にまとめる。**
+ *
+ * ★1日の上限の対象外★（Stripe の署名付き webhook からしか出ず、止まると入金の失敗に気づけないため）。
+ * 代わりに、**同じ連結アカウント・同じ種類は24時間に1回まで**:
+ *   送る前に login_attempts の直近24時間を detail `stripe:<acct_id>:<種類>` で数え、あればその種類を外す。
+ *   **数えられなかった（DB の失敗）ときは送る**（黙って落とさない・2026-10-04 決定）。
+ *   記録に失敗しても送る（既存の対象外の通知と同じ）。
+ *
+ * 本文に入れるのは種類・`acct_...`・理由コード（failure_code／disabled_reason／past_due の件数）だけ
+ * （冒頭の「本文に入れないもの」とその例外を参照）。**例外は投げない**（webhook の応答を失敗させない）。
+ *
+ * @param account 連結アカウント ID（`acct_...`）
+ * @param issues  判定で該当した異常（空なら何もしない）
+ */
+export async function notifyStripeAccountIssues(
+  account: string,
+  issues: StripeIssue[],
+): Promise<void> {
+  const to = process.env.SECURITY_ALERT_LINE_USER_ID;
+  // 未設定＝通知を使わない環境（ローカル / Preview）。無言で何もしない（DB も引かない）。
+  if (!to || issues.length === 0) return;
+
+  try {
+    const since = new Date(Date.now() - STRIPE_ISSUE_DEDUP_MS).toISOString();
+    const fresh: StripeIssue[] = [];
+    for (const issue of issues) {
+      const detail = stripeIssueDetail(account, issue.kind);
+      const recent = await countUncappedOperatorAlertsByDetailSince(detail, since);
+      if (recent === null) {
+        console.warn(`[security-alert] dedup read failed tag=${detail} (send anyway)`);
+      }
+      if (isStripeIssueSuppressed(recent)) continue;
+      fresh.push(issue);
+    }
+    if (fresh.length === 0) return;
+
+    const text = [
+      "【echo】Stripe の連結アカウントに異常があります",
+      "",
+      `検知時刻: ${jstStamp.format(new Date())}（JST）`,
+      `連結アカウント: ${account}`,
+      ...formatStripeIssueLines(fresh),
+      "",
+      "Stripe ダッシュボードでこの連結アカウントを開いて確認してください。",
+      "同じアカウント・同じ種類の通知は24時間に1回までです。",
+    ].join("\n");
+
+    const [first, ...rest] = fresh.map((i) => stripeIssueDetail(account, i.kind));
+    await sendOperatorAlert("stripe_account_issue", first, text, {
+      scope: "operator_alert_uncapped",
+      detail: first,
+      extraDetails: rest,
+    });
+  } catch (e) {
+    console.warn(`[security-alert] push threw tag=stripe_account_issue:${account}`, e);
+  }
 }
