@@ -417,9 +417,32 @@ organizations 導入後（§8）は「同一 `organization_id` のサロンか�
   確認はローカルの台本 `scripts/check-stripe-account-alert.mjs`（`node --experimental-strip-types` で実行・DB・LINE・Stripe を使わない）。
 - **Stripe の設定（2026-10-04・原がダッシュボードで実施・確認済み）**: echo-connect（連結アカウント）の送信先の受け取るイベントに
   `payout.failed` を足して**3件**にした。
-- **本番での発火は未確認**（ア・イ・ウのどれも、本番で通知が届いたことはまだ確かめていない）。
+- **本番での確認: ア・イは確認済み（2026-10-04）・ウは未確認**（ローカルの台本 `scripts/check-stripe-account-alert.mjs` のみ）。
 - **確認の方法**: ローカルの開発サーバーは**本番の DB につながる**（`.env.local` の Supabase は本番のプロジェクト）ため、
-  サンドボックスで端から端までは試せない。**デプロイ後に、テストサロンを使って本番で1回試す予定（未実施）**。
+  サンドボックスで端から端までは試せない。そこで、デプロイ後にテストサロンを使って本番で1回試した（台本 `scripts/send-stripe-alert-test.mjs`）。
+
+#### 本番での確認（2026-10-04・原が実施）
+
+- 14:17 `63aec7f` を push、Vercel の本番デプロイが Ready。14:18 お客様の画面（`/mypage`）が正常に表示。
+  14:20 echo-connect に処理済みの `account.updated` を手動で再送し、200 が返った。
+- **準備**: テストサロン（`682336ef-997e-4b07-876e-b71fb032b71b`）に試験用の連結アカウント ID `acct_TEST_ALERT_20261004` を入れ、3つのフラグを true にした。
+  試験前の値は `stripe_account_id` NULL・`details_submitted` false・`charges_enabled` false・`payouts_enabled` true。
+  本番の `salons` にトリガーは無く、`stripe_account_id` には一意制約（`salons_stripe_account_id_key`）がある。
+- **ア**: 14:59 `payout.failed` の試験イベントを送信。応答 200・outcome `payout_failed_checked`。
+  運営者の LINE に「入金の失敗（failure_code: account_closed）」が届いた。
+- **イ**: 15:00 `account.updated` の試験イベントを送信。応答 200・outcome `account_synced`。
+  運営者の LINE に「決済の停止・入金の停止（disabled_reason: なし）」が届いた。
+- 本文にサロン名・金額・口座の情報は入っていなかった。
+- **DB の確認**: テストサロンのフラグが true / false / false（details_submitted / charges / payouts）に変わった。
+  `login_attempts` に `payout_failed` と `disabled` の2行。`stripe_events` に2件（`processed_at` あり・`salon_id` はテストサロン）。
+- **後片付け**: テストサロンを試験前の値（NULL・false・false・true）に戻した。
+- **残したもの**: `stripe_events` の試験の2件（ID が `evt_TEST_ALERT_` で始まる・`livemode` false）と、
+  `login_attempts` の2行（30日で自動的に消える）。
+- 署名のシークレットは原のターミナルの環境変数で渡し、試験後に unset した。
+
+**未確認のまま残るもの**:
+- **ウ（提出物の期限切れ・`disabled_reason` が付いた場合）は本番では試していない**。ローカルの台本だけ。
+- テストサロンの `stripe_payouts_enabled` が、連結アカウントが無いのに true になっている理由（試験前からこの値。直していない）。
 
 **既知の制限（2026-10-04・直さないと決めたもの）**:
 - **LINE の送信に失敗した通知は再送されない。** 停止と入金の失敗は1回きりのイベントで、処理済みになった後は再判定されないため。

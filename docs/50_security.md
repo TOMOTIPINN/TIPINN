@@ -230,7 +230,8 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
        - **Stripe の連結アカウントの異常（`notifyStripeAccountIssues`・種類 `stripe_account_issue`）も上限の対象外**（2026-10-04 追加・`40_decisions.md` §7.2）。
          Stripe の署名付き webhook からしか出ないので攻撃者が増やせない／止まると入金の失敗・提出物の期限切れに気づけない。
          代わりに**同じ連結アカウント・同じ種類は24時間に1回まで**（`login_attempts` の detail `stripe:<acct_id>:<種類>` で判定。
-         **読み取りに失敗したら送る**）。本文に `acct_...` を入れる（`pi_...` と同じ理由の例外）。**本番での発火は未確認**
+         **読み取りに失敗したら送る**）。本文に `acct_...` を入れる（`pi_...` と同じ理由の例外）。
+         **本番での確認: ア（入金の失敗）・イ（停止）は 2026-10-04 に確認済み・ウ（提出物の期限切れ）は未確認**（`40_decisions.md` §7.2）
        - 送るたびに `login_attempts` に1行記録（scope `rate_limit_alert`・`operator_alert`・`operator_alert_uncapped`）。**migration なし**
        - **判定・記録で DB に失敗したら、上限の対象は送らない**（配信枠を守る側・2026-10-01 決定）
        - 同時に届いた通知は、上限や1時間に1回を**1〜2通超えることがある**（数える・記録する・送るが原子的でない。migration を作らないため）
