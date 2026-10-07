@@ -4,7 +4,7 @@
 > ここに書かれた決定は、忘れたころに必ず効いてくる。特に §1 は全て**実際に事故が起きた**記録である。
 > 新しい決定をしたら、日付・理由・実例を付けてここに足す。
 >
-> 最終更新: 2026-10-06
+> 最終更新: 2026-10-07
 
 ---
 
@@ -473,11 +473,11 @@ organizations 導入後（§8）は「同一 `organization_id` のサロンか�
 
 | 店 | Stripe 上の名前 | 連結アカウント | 状態（2026-10-02） |
 |---|---|---|---|
-| CARTA | carta.llc | `acct_1Tyo1y7w7uzzQqfF` | 入金停止を対処済み・10/6 に入金予定（`60_incidents.md`） |
+| CARTA | carta.llc | `acct_1Tyo1y7w7uzzQqfF` | 入金停止を対処済み・~~10/6 に入金予定~~ → **2026-10-07 着金確認済み**（通帳で ¥12,383。`60_incidents.md`） |
 | Niii | carta llc | `acct_1U73R897r938WLIb` | 正常。入金 ¥96 は支払い済み、¥768 が送金中 |
 | nun Fukushima | cartallc | `acct_1U748g8zjxGNAJLX` | 有効。売上 ¥0 で、**口座が正しいかは未検証** |
 | SELNI | kata | `acct_1U9EWc4a3cu3O1Md` | 有効。売上 ¥0 で、**口座が正しいかは未検証** |
-| suco | cartaLLC | `acct_1UAh1O4dNQVlFHdA` | ~~決済・入金とも停止中~~ → **2026-10-04 解決済み**（支払い・Payouts が有効・Cartes Bancaires のみ一時停止・実機決済は未実施。`60_incidents.md` 2026-10-02） |
+| suco | cartaLLC | `acct_1UAh1O4dNQVlFHdA` | ~~決済・入金とも停止中~~ → **2026-10-04 解決済み**（支払い・Payouts が有効・Cartes Bancaires のみ一時停止。`60_incidents.md` 2026-10-02）。**2026-10-07 実機決済を確認**（DB に購入1件） |
 
 - Stripe 側には他に2件（`acct_1U73RBQCWQSzDrrX`・`acct_1U73RA6L7pFYTd5r`）あり、名前がなく制限対象。登録を途中でやめたものと見ている（**推測・未確認**）。
 - **残り**: nun と SELNI の口座情報を、CARTA で直した点と同じ観点で見直す。
