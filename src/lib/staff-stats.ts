@@ -35,12 +35,44 @@ export function jstPeriodStartISO(
   } else if (kind === "month") {
     d.setUTCDate(1);
   } else if (kind === "quarter") {
-    const qStartMonth = d.getUTCMonth() - (d.getUTCMonth() % 3);
-    d.setUTCMonth(qStartMonth, 1);
+    d.setUTCMonth(quarterStartMonthIndex(d.getUTCMonth()), 1);
   }
 
   // 丸めた JST 壁時計を本来の UTC 瞬間へ戻す。
   return new Date(d.getTime() - JST_OFFSET_MS).toISOString();
+}
+
+/** 暦の四半期の最初の月（0=1月 … 11=12月）。jstPeriodStartISO("quarter") とラベルの共通の正。 */
+function quarterStartMonthIndex(monthIndex: number): number {
+  return monthIndex - (monthIndex % 3);
+}
+
+/**
+ * いまの暦の四半期を月で表したラベル（JST）。例: "10〜12月" / "1〜3月"。
+ * /staff の「今期」の行見出し用（docs/40_decisions.md §29 決定2）。
+ * 期間の考え方は jstPeriodStartISO("quarter") と同じ（JST の月で四半期を決める）。
+ */
+export function jstQuarterLabel(nowMs: number = Date.now()): string {
+  const first = quarterStartMonthIndex(new Date(nowMs + JST_OFFSET_MS).getUTCMonth()) + 1;
+  return `${first}〜${first + 2}月`;
+}
+
+/**
+ * /staff の件数ブロック用に、今週・今月・今期の起点と今期のラベルを**同じ「いま」**で返す
+ * （四半期の境目でラベルと件数がずれないように）。中身は jstPeriodStartISO / jstQuarterLabel そのもの。
+ */
+export function jstAppreciationPeriods(nowMs: number = Date.now()): {
+  weekStart: string;
+  monthStart: string;
+  quarterStart: string;
+  quarterLabel: string;
+} {
+  return {
+    weekStart: jstPeriodStartISO("week", nowMs),
+    monthStart: jstPeriodStartISO("month", nowMs),
+    quarterStart: jstPeriodStartISO("quarter", nowMs),
+    quarterLabel: jstQuarterLabel(nowMs),
+  };
 }
 
 /**

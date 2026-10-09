@@ -17,7 +17,7 @@ import {
 import {
   GREETING_LABEL,
   jstGreeting,
-  jstPeriodStartISO,
+  jstAppreciationPeriods,
   rankForCount,
   PAID_STAMPS_ENABLED,
   RANK_ENABLED,
@@ -149,10 +149,12 @@ async function countRows(
   return count ?? 0;
 }
 
-const APPRECIATION_ROWS: { label: string; key: keyof PeriodCounts }[] = [
+// 「今期」の行見出しは固定の文字ではなく、その四半期の月（例「10〜12月」）を出す（§29 決定2）。
+// ここでは null にしておき、描画時に jstQuarterLabel の値で埋める。
+const APPRECIATION_ROWS: { label: string | null; key: keyof PeriodCounts }[] = [
   { label: "今週", key: "week" },
   { label: "今月", key: "month" },
-  { label: "今期", key: "quarter" },
+  { label: null, key: "quarter" },
 ];
 
 /** マトリクスの値セル。0 は薄く（muted 相当）、単位「件」は数字より一段小さく薄く。¥は出さない。 */
@@ -174,9 +176,11 @@ function ValueCell({ n }: { n: number }) {
 function AppreciationTable({
   reviews,
   stamps,
+  quarterLabel,
 }: {
   reviews: PeriodCounts;
   stamps: PeriodCounts | null;
+  quarterLabel: string;
 }) {
   return (
     <div className={`appreciation-grid${stamps ? "" : " is-single"}`}>
@@ -187,7 +191,7 @@ function AppreciationTable({
       {/* 期間ごとの行 */}
       {APPRECIATION_ROWS.map((row) => (
         <Fragment key={row.key}>
-          <span className="appreciation-rowhead">{row.label}</span>
+          <span className="appreciation-rowhead">{row.label ?? quarterLabel}</span>
           <ValueCell n={reviews[row.key]} />
           {stamps && <ValueCell n={stamps[row.key]} />}
         </Fragment>
@@ -233,9 +237,9 @@ export default async function StaffHomePage({
     );
   }
 
-  const weekStart = jstPeriodStartISO("week");
-  const monthStart = jstPeriodStartISO("month");
-  const quarterStart = jstPeriodStartISO("quarter");
+  // 起点とラベルを同じ「いま」で決める（四半期の境目でラベルと件数がずれないように）。
+  const { weekStart, monthStart, quarterStart, quarterLabel } =
+    jstAppreciationPeriods();
 
   // 集計スコープ。お店全体の salon_id は必ず ctx 由来（クライアント非経由・§8）。
   const youScope = { staffId: ctx.staff_id } as const;
@@ -318,7 +322,7 @@ export default async function StaffHomePage({
     .eq("staff_id", ctx.staff_id)
     .not("review_id", "is", null);
 
-  // 感想（reviews）: あなたへ／お店への各グループ×今週/今月/今期 ＋ Team voices。
+  // 感想（reviews）: あなたへ／お店への各グループ×今週/今月/今期（四半期・表示は「10〜12月」等） ＋ Team voices。
   const [
     youRvW,
     youRvM,
@@ -509,17 +513,25 @@ export default async function StaffHomePage({
 
           <div className="stack-sm">
             <h2 className="headline-sm">あなたへ</h2>
-            <AppreciationTable reviews={youReviews} stamps={youStamps} />
+            <AppreciationTable
+              reviews={youReviews}
+              stamps={youStamps}
+              quarterLabel={quarterLabel}
+            />
           </div>
 
           <div className="stack-sm">
             <h2 className="headline-sm">お店全体</h2>
             <p className="muted">（あなたへの分を含む）</p>
-            <AppreciationTable reviews={shopReviews} stamps={shopStamps} />
+            <AppreciationTable
+              reviews={shopReviews}
+              stamps={shopStamps}
+              quarterLabel={quarterLabel}
+            />
           </div>
 
           <p className="note-fine">
-            件数は「届いた評価の流れ（echo flow）」です。金額・賞与とは連動しません（原則6）。
+            件数は、届いた感想と評価スタンプの数です。金額や賞与とは連動しません。
           </p>
         </section>
 
