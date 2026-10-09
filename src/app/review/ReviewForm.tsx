@@ -286,7 +286,7 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
             maxLength={REVIEW_BODY_MAX}
             disabled={submitting}
             rows={6}
-            placeholder="たとえば「マッサージが気持ちよくて寝そうでした」など"
+            placeholder="たとえば「丁寧に話を聞いてもらえて、安心できました」など"
           />
           <span
             className={`field-count${

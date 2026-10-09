@@ -15,15 +15,16 @@ const BIO_MAX = 25;
 const JOB_TITLE_MAX = 30;
 
 // 職種プリセット（datalist 候補）。自由入力も可。権限 role とは無関係。
+// 候補は選択肢の制限ではない（保存側 /api/manager/staff/update は候補と照合しない）。
+// 候補から外した肩書き（トップスタイリスト等）が入っているスタッフも、値はそのまま表示・保存される。
 const JOB_TITLE_PRESETS = [
-  "スタイリスト",
-  "トップスタイリスト",
-  "ジュニアスタイリスト",
-  "アシスタント",
   "店長",
-  "受付",
-  "ネイリスト",
+  "スタイリスト",
+  "アシスタント",
   "アイリスト",
+  "ネイリスト",
+  "スパニスト",
+  "レセプショニスト",
 ];
 
 export function StaffEditForm({
@@ -107,7 +108,7 @@ export function StaffEditForm({
           defaultValue={initialJobTitle}
           maxLength={JOB_TITLE_MAX}
           list="job-title-presets"
-          placeholder="例：スタイリスト"
+          placeholder="例：スタイリスト、ネイリスト"
           autoComplete="off"
         />
         <datalist id="job-title-presets">

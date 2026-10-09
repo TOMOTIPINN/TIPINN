@@ -67,6 +67,7 @@ export const REVIEW_TAGS = [
   "技術",
   "挨拶",
   "居心地",
+  "雰囲気",
   "仕上がり",
 ] as const;
 
