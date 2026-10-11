@@ -42,10 +42,11 @@ git log <範囲> --format="%h %ad %s" --date=short
 **読み方の決まり**（先に対象範囲で変更されたファイルを見て決める）:
 
 - 変更されたファイルの一覧は `git log <前回HEAD>..HEAD --name-only --format=` で取る。
-- **変更が `docs/` だけなら**、変更された docs の差分を `git log -p <前回HEAD>..HEAD -- docs/` で読み、
+- **変更されたファイルが `docs/`・`.claude/`・`AGENTS.md`・`CLAUDE.md` だけなら「差分のみ」**:
+  変更された docs の差分を `git log -p <前回HEAD>..HEAD -- docs/` で読み、
   ほかの項目は前回の生成内容を引き継いでよい。
-- **`docs/` 以外（`src/`・`supabase/` ほか）が1つでも変更されていたら**、全 docs を読み直し、
-  「docs と実装の食い違い」を突き合わせ直す。
+- **それ以外（`src/`・`supabase/`・`public/`・設定ファイル・`package.json` ほか）が1つでも変更されていたら**、
+  全 docs を読み直し、「docs と実装の食い違い」を突き合わせ直す。
 - **初回**（`docs/HANDOFF.md` が無い）は全 docs を読む。
 
 全 docs ＝ `docs/00_philosophy.md` `10_domain.md` `20_product.md` `30_design.md`
@@ -116,3 +117,4 @@ git log <範囲> --format="%h %ad %s" --date=short
 - **未確認 N 件 / 食い違い M 件** を報告する
 - 次の1行を必ず入れる:
   「対象範囲のコード変更: あり／なし ・ docs の読み方: 全部／差分のみ（読んだファイル名）」
+  「コード変更」は、手順3の「それ以外」（`docs/`・`.claude/`・`AGENTS.md`・`CLAUDE.md` 以外）に当たる変更があるかどうかで書く。
