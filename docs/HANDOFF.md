@@ -1,20 +1,20 @@
 # 引き継ぎメモ（自動生成）
 
 > `/handoff` が生成。**手で編集しない**（次回の生成で消える）。
-> 生成日時: 2026-10-11 12:07 JST
-> HEAD: `4433030`
-> 対象範囲: `6e50d15..HEAD`（2 commits）
+> 生成日時: 2026-10-11 12:14 JST
+> HEAD: `a27d5ec`
+> 対象範囲: `4433030..HEAD`（2 commits）
 
 ---
 
 ## この期間に完了したこと
 
-**認証に使える情報（LINE のトークン・セッション・Stripe・招待コード）の保存状況を調査し、`50_security.md` §5-10 に記録。ログ出力2件は 10/25 に直す・セッションを個別に失効できない点は既知の制限とした。コードは変更なし。**
+**HANDOFF の再生成と、`/handoff` の手順の改訂（docs の読み方の決まり・報告の1行・読む docs に 55 と 70 を追加）。アプリのコードと設計 docs は変更なし。**
 
 | commit | 内容 | 根拠(docs) |
 |---|---|---|
-| `cbe091c` | HANDOFF の再生成（`9f4dca8..6e50d15`） | — |
-| `4433030` | §5-10 新設（事実: LINE のトークンは DB・Cookie に保存しない／セッションは署名 JWT の Cookie のみ・30日／Stripe はアカウント ID と状態のフラグのみ／パスワード・ワンタイムコードの列なし／招待コード3種と `visit_token`・`device_token` は平文）。§5-7 の `/api/admin/invites` のログの件を §5-10（2）へ移した。`70_legal.md` §5 #4・§7.6 から相互参照。`55` §5 の次回作業に1行追加 | `50_security.md` §5-7・§5-10 ／ `70_legal.md` §5・§7.6 ／ `55_security-scan-log.md` §5 |
+| `a005776` | HANDOFF の再生成（`6e50d15..4433030`） | — |
+| `a27d5ec` | `.claude/commands/handoff.md` の改訂: コードの差分は読まない・docs/ だけの変更なら docs の差分だけ読み、docs/ 以外が変わったら全 docs を読み直して食い違いを突き合わせる／報告に「コード変更・docs の読み方」の1行／読む docs に `55`・`70` を追加 | — |
 
 ---
 
@@ -123,7 +123,7 @@
 | 5 | §19・§22 の挙動 | `/staff` のお客様向け注記とコメントが旧条件 | **食い違い**（画面の文言）。§22 未対応3 |
 | 6 | §8.1・§21 本文は `organization_id` | 0048 の実列名は `org_id` | **食い違い**。§21「列名の記録」に本番の `org_id` が正と注記 |
 | 7 | `50_security.md` §5-9（2026-10-02 の記録）「noindex の指定がない」 | `/terms/salon` は版が null の間 noindex を出す（`0131e6e`・§26） | **食い違い**（§5-9 は日付つきの事実の記録で、その後の変更が反映されていない） |
-| 8 | `20_product.md`（画面マップ）に `/terms/salon`・`/terms/salon/[version]` の行が無い | 2ページとも本番にある（`0131e6e`） | **食い違い**（画面マップの記載漏れ） |
+| 8 | `20_product.md`（画面マップ）に `/terms/salon`・`/terms/salon/[version]`・`/admin/salons`・`/admin/staff` の行が無い（§5.5 の表は `/admin/invites` のみ・`/admin/organizations`・`/admin/owner-invites` は `/owner` の行に名前だけ）。§7 API に `/api/admin/organizations`(+`/rename`)・`/api/admin/owner-invites`(+`/sent`)・`/api/admin/staff/role`・`/api/admin/staff/transfer`・`/api/owner/join` が無い。§8 env に `ADMIN_LINE_USER_IDS` が無い（§5.5 には記載・見出しは「22」だが列挙は18） | 上記のページ・route・env はすべて `src/` にある（2026-10-11 の `find`・`grep` で確認） | **食い違い**（画面マップ・API・env の記載漏れ。2026-10-11 に範囲を広げて記録） |
 | 9 | `10_domain.md:17`・`:105`「貯まるスタンプ 1個 / 顧客 / サロン / 日」 | 0046 は受け付けた感想1件ごとに +1（日単位の判定は無い） | **食い違い**。§28「あわせて直した docs」に未訂正として記録 |
 | 10 | 規約の叩き台・プライバシーポリシーの「サロン」＝事業者 | 画面とデータの「サロン」＝1店舗（`salons`）。事業者は画面では「組織」「会社」 | **食い違い**。§28「棚卸しの結果」。新しい画面は「店舗」で書く（§28 決定） |
 
