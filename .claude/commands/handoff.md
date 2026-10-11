@@ -35,12 +35,22 @@ git log <範囲> --format="%h %ad %s" --date=short
 ```
 
 本文まで要る場合のみ `git show --stat --format=%B <hash>` を使う。
-**差分そのものは読まない**（要約であって変更履歴の複製ではない）。
+**コードの差分そのものは読まない**（要約であって変更履歴の複製ではない）。docs の差分は手順3の決まりに従って読む。
 
 ### 3. docs を読む
 
-`docs/00_philosophy.md` `10_domain.md` `20_product.md` `30_design.md`
-`40_decisions.md` `50_security.md` `60_incidents.md` を読み、**決定事項とその状態**を拾う。
+**読み方の決まり**（先に対象範囲で変更されたファイルを見て決める）:
+
+- 変更されたファイルの一覧は `git log <前回HEAD>..HEAD --name-only --format=` で取る。
+- **変更が `docs/` だけなら**、変更された docs の差分を `git log -p <前回HEAD>..HEAD -- docs/` で読み、
+  ほかの項目は前回の生成内容を引き継いでよい。
+- **`docs/` 以外（`src/`・`supabase/` ほか）が1つでも変更されていたら**、全 docs を読み直し、
+  「docs と実装の食い違い」を突き合わせ直す。
+- **初回**（`docs/HANDOFF.md` が無い）は全 docs を読む。
+
+全 docs ＝ `docs/00_philosophy.md` `10_domain.md` `20_product.md` `30_design.md`
+`40_decisions.md` `50_security.md` `55_security-scan-log.md` `60_incidents.md` `70_legal.md`。
+読んで**決定事項とその状態**を拾う。
 
 特に見るもの:
 - `40_decisions.md` の各節の「決定」「未対応・確認事項」「未確認」
@@ -104,3 +114,5 @@ git log <範囲> --format="%h %ad %s" --date=short
 - 生成した本文をそのまま提示する
 - 行数を報告する（150行以内であること）
 - **未確認 N 件 / 食い違い M 件** を報告する
+- 次の1行を必ず入れる:
+  「対象範囲のコード変更: あり／なし ・ docs の読み方: 全部／差分のみ（読んだファイル名）」
