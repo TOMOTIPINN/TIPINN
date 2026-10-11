@@ -211,6 +211,7 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
      INSERT 失敗時に `console.error(..., error)`。unique 違反のときは PostgREST の `details` に
      `Key (code)=(...)` が入り、**衝突した既存の招待コード（秘密値）がログに残る**と思われる（推測・未確認）。
      衝突は事実上起きない。オーナー招待（`/api/admin/owner-invites`）は `error.code` だけを出している。
+     → **2026-10-11: 同じ形の箇所とまとめて 2026-10-25 に直すと決定。下の 10（2）に移した。**
    - **`/admin/invites` の画面が描画中に `Date.now()` を呼んでいる（2026-10-01 追記・未着手）**:
      lint（`react-hooks/purity`）で止まる。動作への影響は未確認。オーナー招待の画面（5d）は
      データを引く関数の中に移して回避した。
@@ -257,6 +258,50 @@ login_attempts(id, scope, ip, succeeded, detail, created_at)
 9. **`robots.txt` と noindex の指定がない（2026-10-02・事実の記録のみ）。**
    `public/robots.txt`・`src/app/robots.ts` が無く、`public/company/*.html` にも noindex は無い。
    検索エンジンに載せたくないページ（運営者画面は 404 を返すので対象外）の扱いを含め、**対応するかは未決**。
+10. **認証に使える情報の保存状況の調査（2026-10-11・コードと migration から。本番 DB の中身は未確認）**
+    **確認した事実**:
+    - LINE ログインの access_token・id_token・refresh_token は **DB にも Cookie にも保存していない**
+      （`src/app/api/auth/line/callback/route.ts`。id_token は LINE の verify に送るだけで、
+      DB に書くのは `line_user_id` と `display_name` だけ）。
+    - セッション `echo_session` は**署名した JWT の Cookie だけ**で、DB の行は持たない。有効期限30日（`src/lib/session.ts`）。
+    - Stripe の連結アカウントは、**アカウント ID と状態のフラグだけ**を保存（`salons.stripe_account_id`・
+      `stripe_details_submitted`・`stripe_charges_enabled`・`stripe_payouts_enabled`・`stripe_connected_at`）。
+      OAuth 方式は使っておらず（`src/lib/stripe.ts`）、**トークンを受け取る経路が無い**。
+    - パスワード列・ワンタイムコード列は無い。
+    - 招待コード3種（`owner_invites.code`・`salon_invites.code`・`staff.invite_token`）と
+      `salons.visit_token`・`salons.device_token` は**平文で保存**。
+
+    **（1）（2）直すと決めたもの（2026-10-11 決定・原の判断）→ 2026-10-25 の月次診断でまとめて直す（未着手）**:
+    - **（1）** `src/app/api/auth/line/callback/route.ts:130` の `fail(..., { step: "no_id_token", tokens })` が、
+      トークン交換の応答を丸ごとログに出す（id_token が無いときだけ通る経路。scope は `openid profile` なので通常は通らない。
+      通ると access_token・refresh_token がログに残る）。
+      **直し方**: 中身は出さず、返ってきた項目の名前（キー）だけを出す。
+    - **（2）** エラーオブジェクトを丸ごとログに出している箇所（unique 違反の `details` に衝突した値＝秘密値が入りうる）:
+      - `src/app/api/admin/invites/route.ts:86`（サロン招待コード。上の 7 に 2026-10-01 に記載した件をここにまとめる）
+      - `src/app/api/manager/kiosk/route.ts:37`（`device_token`）
+      - `src/app/api/manager/staff/route.ts:87` と `src/app/api/manager/staff/reissue/route.ts:49`（`invite_token`）
+
+      **直し方**: エラーの種類・コード・メッセージは出し、`details` は出さない。
+    - **影響**: 通常の経路と画面の表示は変わらない。失敗時の調査の手がかりを残すため、ログは消さずに「値を出さず形だけ出す」。
+    - **確認の限界**: 失敗の経路なので本番で通しての確認は難しい。型チェック・コードの読み合わせ・
+      ローカルで失敗を作って出力を見る、で確認する。
+
+    **（3）（4）既知の制限として記録するもの（今は直さない・2026-10-11 決定）**:
+    - **（3）セッションを個別に失効できない。** 盗まれた Cookie は最長30日有効で、
+      ログアウト（`/api/auth/line/logout`）はブラウザの Cookie を消すだけ。
+      - スタッフの権限は毎回 DB から引き直すので、退職させれば権限は止まる（§1.1）。
+      - 全員の一括失効は `SESSION_SECRET` の差し替えだけ。同じ鍵を OAuth の state とキオスクの Cookie
+        （`echo_device`）も使うため、一緒に無効になる。
+      - 「退会後もセッションが最長30日残る」（`70_legal.md` §5 #4・§7.6）と同じ根。
+      - **期限を縮めるか、個別に失効できる仕組みを足すかは、2026-12-01 の初回課金のあとに判断する。**
+    - **（4）招待コードと `visit_token` の平文保存は今のままとする。** 期限と使い切りがあるため
+      （`owner_invites`・`salon_invites` は14日・`used_at` で使用済み／`staff.invite_token` は24時間・紐付けで null に戻す）。
+      `visit_token` の再発行が未実装である点は、上の囲みA の記述のまま。
+
+    **未確認**:
+    - `stripe_events.payload` に何を残しているかの詳細
+    - Vercel のアクセスログに URL のクエリ（招待トークン・`visit_token`・`code`/`state`）が残るか
+    - LINE と PostgREST のエラー応答の本文に秘密値が入るか
 
 ---
 
