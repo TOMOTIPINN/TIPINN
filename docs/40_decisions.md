@@ -3383,12 +3383,24 @@ Success は両方のガードを通ったことを意味する（§1.12）。
 - 確認クエリは、0051 末尾の **Q1・Q4・Q5・Q7・Q9・Q11** に当たる内容を1本にまとめて流した。
 - **Q2・Q3・Q6・Q8・Q10 は個別には流していない**（ガード2 が通ったことで代えた）。
   - ガード2 が見ていないもの: 列の型・既定値（Q2・Q3）、`accept_owner_invite` の本文の記録（Q10）、
-    関数の `prosecdef` / `proconfig`（Q8）。**本文が 0051 のファイルと一致することは、本番では照合していない。**
+    関数の `prosecdef` / `proconfig`（Q8）。~~**本文が 0051 のファイルと一致することは、本番では照合していない。**~~
+    → **2026-10-16 照合済み・一致**（下の「本番の関数の照合（2026-10-16）」）。
   - service_role の TRUNCATE が無いことはガード2 が確かめている（上の表の確認では update・delete まで）。
 
 **対照群**（同日 19:28〜19:29・本番・原のアカウント）:
 - `/owner` を開くと、合同会社carta の5店舗が従来どおり表示された。
 - `/owner/join` にでたらめなコードを入れると `error=not_found`（「招待コードが正しくありません。」）が出た＝**古い `consume_owner_invite` の経路は生きている**（決定6）。
+
+**本番の関数の照合（2026-10-16）**: 原が SQL エディタで**読み取り専用**の照合を実施（F1〜F3）。
+
+| # | 見たもの | 結果 |
+|---|---|---|
+| F1 | 見出しと本文の指紋（`md5(prosrc)`・文字数） | `accept_owner_invite` = `364ece3e761ea5f0271231ea51bec104`・3169文字、`consume_owner_invite` = `860585a2add9f65171b45bda60dbd3ed`・2442文字。**どちらも migration ファイルの本文（0051 の 228〜342 行・0050 の 176〜273 行の `$$` の間）と一致。** security definer = true、search_path = public、引数と戻り値も一致 |
+| F2 | execute の付与先（`aclexplode`） | 2つとも **postgres と service_role だけ**（PUBLIC・anon・authenticated なし） |
+| F3 | 実効権限（`has_function_privilege`） | anon・authenticated は false、service_role は true |
+
+- これで「`accept_owner_invite` の本文が本番でファイルと一致することは未照合」は**解消**。**Q8・Q10 に当たる確認も済んだ。**
+- **関数を実際に呼んだ確認は、まだ無い**（C3 まで呼ばれない）。
 
 ### 2026-10-08 追加決定（原の判断）
 
