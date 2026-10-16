@@ -315,13 +315,17 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
               </button>
             ))}
           </div>
+          {/* 共有範囲で何が変わるか（§30 #3・山口先生の案文）。お客様の感想フォームにだけ出す。 */}
+          <span className="field-help">
+            店長とお店のオーナーは、どちらを選んでもご感想を読むことができます。『お店のスタッフにも』を選んでも、評価の内容によってはスタッフに表示されないことがあります。評価スタンプを送ると、選んだ範囲にかかわらず、お名前・スタンプの種類・選んだ評価が宛先のスタッフに表示されます。
+          </span>
         </fieldset>
 
         <Button type="submit" variant="outline" block disabled={!canSubmit}>
           {submitting ? "送信中…" : "感想を送る"}
         </Button>
         <p className="muted center-text">
-          感想を送るとスタンプ +1（購入は不要・1日1個）
+          感想を送るとスタンプ +1（購入は不要・1回の来店につき1個）
         </p>
       </form>
     </Card>

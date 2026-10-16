@@ -11,7 +11,7 @@ import { isPurchasableReview } from "@/lib/review-purchase";
  * 感想 送信完了画面（画面マップ06・白世界）。
  * フォームには戻さない専用画面。再送ループは作らない（導線はマイページ/ホームのみ）。
  * - stamp_awarded=true  → 「スタンプが1つ貯まりました（合計N個）」＋ 円スタンプ点灯
- * - stamp_awarded=false → 「感想ありがとうございました」＋ 1日1個の説明
+ * - stamp_awarded=false → 「感想ありがとうございました」＋ 1回の来店につき1個の説明（2026-10-16・§30 #7 で言い方を統一）
  * 合計数は query ではなく earned_stamps から再取得（authoritative）。
  * awarded は今回の送信で付与されたかの一回性フラグなので query で受ける。
  *
@@ -112,7 +112,7 @@ export default async function ReviewCompletePage({
         {stampAwarded ? (
           <p className="body">スタンプが1つ貯まりました（合計 {count}個）</p>
         ) : (
-          <p className="muted">スタンプはご来店時にひとつまでです。</p>
+          <p className="muted">スタンプは1回の来店につき1個です。</p>
         )}
 
         {perkJustFired ? (

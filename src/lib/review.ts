@@ -84,13 +84,20 @@ export function normalizeTags(tags: unknown): string[] | null {
   return out;
 }
 
-/* ---- 共有範囲（店長のみ/お店のスタッフに） ----
+/* ---- 共有範囲（店長・オーナーのみ/お店のスタッフにも） ----
    everyone は「お店のスタッフ全員が Team voices で読む」の意味（外部公開ではない）。
    ラベルに「お店の」を付けて外部公開でないことを示し、宛先フィールドの
-   「お店のみんなへ」（＝誰への感想か）と語を差別化する（可視性 vs 宛先の混同防止）。 */
+   「お店のみんなへ」（＝誰への感想か）と語を差別化する（可視性 vs 宛先の混同防止）。
+
+   ★表示名（2026-10-16・40_decisions.md §30 #3）★
+   以前は「店長のみ」「お店のスタッフに」。山口先生の勧めで「店長・オーナーのみ」「お店のスタッフにも」に
+   変えた（オーナーも読める・スタッフに出ない場合がある、を選択肢の時点で正しく伝えるため）。
+   この label は感想フォーム・/manager/inbox・/owner/[salonId]/inbox の共通の正
+   （お客様が見たのと同じ文字を店長にも見せる・§16）。説明文はお客様の感想フォーム（ReviewForm）にだけ出す。
+   DB に保存する値（value）と判定は変えない。 */
 export const SHARE_SCOPES = [
-  { value: "manager_only", label: "店長のみ" },
-  { value: "everyone", label: "お店のスタッフに" },
+  { value: "manager_only", label: "店長・オーナーのみ" },
+  { value: "everyone", label: "お店のスタッフにも" },
 ] as const;
 
 export type ShareScope = (typeof SHARE_SCOPES)[number]["value"];
