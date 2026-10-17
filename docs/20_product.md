@@ -16,11 +16,11 @@
 | `/onboard?salon=&t=` | **店頭オンボーディング**。初来店の受け口。店頭掲示QRから開く。友だち追加＋LINEログイン → 初回来店を1回だけ記録 → `/mypage` へ。`t` を `salons.visit_token` と照合 |
 | `/onboarding/name` | **表示名の確定**。名前1項目のみ・必須・1回だけ（後から `/mypage` で変更可）。`name_confirmed_at` があれば素通し |
 | `/visit?salon=&t=` | **来店記録**。顧客が店内QRから読み込む。salon 指定が無ければエラー表示 |
-| `/review?salon=` | 感想入力。絵文字評価4段階＋体験タグ（複数可）＋コメント15〜300字＋共有範囲。**今回の来店分を送信済み**（受付期間＝来店日を含む4暦日の最終来店日以降に感想がある）ならフォームを出さず既送信カード（サーバー側で守る・`hasReviewedForLatestVisit`・本当の砦は RPC 0046）。※2026-10-09 訂正: 以前は「当日既送信なら」と書いていたが、0046（2026-09-15・`40_decisions.md` §12.1）のあとも更新されていなかった |
+| `/review?salon=&src=` | 感想入力。`src` は流入元（`line` = LINE リマインド / `mypage` = /mypage の導線。無し・想定外は null）で `reviews.source` に保存するだけ・画面には出さない（0052）。ログイン往復でも `returnTo` で保持する。絵文字評価4段階＋体験タグ（複数可）＋コメント15〜300字＋共有範囲。**今回の来店分を送信済み**（受付期間＝来店日を含む4暦日の最終来店日以降に感想がある）ならフォームを出さず既送信カード（サーバー側で守る・`hasReviewedForLatestVisit`・本当の砦は RPC 0046）。※2026-10-09 訂正: 以前は「当日既送信なら」と書いていたが、0046（2026-09-15・`40_decisions.md` §12.1）のあとも更新されていなかった |
 | `/review/complete` | 感想送信完了。`stamp_awarded` で分岐 |
 | `/rating?salon=&staff=&review=` | **有償の評価スタンプ選択**。tier 選択 → `/api/checkout` → Stripe へ。**購入には「購入可能な感想」の `review` が必須**（本人・当該サロン/スタッフ宛て・未購入）。**`rating` も `share_scope` も条件に入らない**（§14 で `rating>=3` を撤廃・§19 で `share_scope='everyone'` を撤廃）。**低評価の感想にも `manager_only` の感想にも贈れる**（本文が本人に届かない分は、表示側で「名前・ティア・rating」を届けることで解いた・§19）。入口は `/review/complete` の「評価スタンプを送る」のみで、URL 直打ちや条件外は 400/409 で弾く（§13・§14）。ティア選択画面に「お名前、スタンプの種類、ご感想のときに選んだ評価が、宛先のスタッフとサロンに表示されます（ご感想の共有の範囲の選択にかかわらず表示されます）。」を表示。※2026-10-16 更新: 以前の告知は「お名前とスタンプの種類が、担当スタッフとサロンに表示されます。」（`40_decisions.md` §30 #1） |
 | `/rating/complete?session_id=` | 購入完了。**DB書き込みなし**（記録は webhook 側・二重記録防止） |
-| `/mypage` | サロンごとのスタンプカード（円形ロゴ＋スタンプリング＋次の特典までの進捗）。移行 delta を合算。特典の3状態表示。**感想・評価スタンプへの補助導線**（受付期間内のみ・LINE リマインドの置き換えではなく補助・§15） |
+| `/mypage` | サロンごとのスタンプカード（円形ロゴ＋スタンプリング＋次の特典までの進捗）。移行 delta を合算。特典の3状態表示。**感想・評価スタンプへの補助導線**（受付期間内のみ・LINE リマインドの置き換えではなく補助・§15）。「感想を送る」は `/review?salon=…&src=mypage` |
 | `/help` | **よくある質問・お客様向け（認証不要の公開ページ）**。LINE公式アカウントのリッチメニューから開く導線。データ取得なしの完全静的。「echo が開けない」状態で読む前提なのでセッションを一切参照しない。導線は `/mypage` 下部の1行リンク。末尾から `/help/staff` へ相互リンク |
 | `/company` | **echo Labs株式会社のコーポレートサイト（認証不要・公開）**。サービス紹介 / 画面 / 料金 / 導入の流れ / 会社概要 / お問い合わせ。会社概要（`/company#company`）に商号・英文商号・法人番号・本店所在地・設立日・資本金・代表取締役・事業内容・事業年度を掲載。**App Router のページではなく `public/company/index.html` の静的HTML**（同ディレクトリにサロン別の特定商取引法ページ `tokushoho-*.html` もある） |
 
@@ -126,7 +126,7 @@ POST /api/demo/login           ローカル専用
 
 ### 顧客
 ```
-POST /api/reviews              感想送信（RPC 連携・already_submitted は 200）
+POST /api/reviews              感想送信（RPC 連携・already_submitted は 200）。source は RPC 後に別途 update（失敗しても 200）
 POST /api/customer/name        表示名の確定
 POST /api/checkout             Stripe Checkout Session を連結アカウント上で作成
 ```
@@ -167,7 +167,7 @@ POST /api/staff/visit          来店記録 / 消込 / 取消 / 移行（action 
 POST /api/stripe/webhook           プラットフォーム側
 POST /api/stripe/webhook/connect   Connect 側（Direct Charge のため checkout.session.completed はこちら）
 POST /api/line/webhook             LINE
-GET  /api/cron/line-push           10分ごと。notification_outbox を push
+GET  /api/cron/line-push           10分ごと。notification_outbox を push（感想リンクは /review?salon=…&src=line）
 GET  /api/cron/purge               毎日 18:00 UTC（JST 3:00）。古い login_attempts を削除
 ```
 

@@ -6,6 +6,7 @@ import {
   isValidRating,
   isValidShareScope,
   normalizeTags,
+  normalizeReviewSource,
 } from "@/lib/review";
 
 export async function POST(req: Request) {
@@ -22,6 +23,7 @@ export async function POST(req: Request) {
     rating?: unknown;
     tags?: unknown;
     shareScope?: unknown;
+    source?: unknown;
   };
   try {
     payload = await req.json();
@@ -29,7 +31,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const { salonId, staffId, toSalon, body, rating, tags, shareScope } = payload;
+  const { salonId, staffId, toSalon, body, rating, tags, shareScope, source } =
+    payload;
   if (!salonId || typeof body !== "string") {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
@@ -107,6 +110,27 @@ export async function POST(req: Request) {
   // 判定は RPC 側（advisory lock 内・0020）で行い、ここは 200 でフラグを返すだけ。
   if (r.already_submitted) {
     return NextResponse.json({ alreadySubmitted: true });
+  }
+
+  // 流入元（reviews.source・0052）。RPC には渡さず、作成直後の行にだけ別に書く（案B）。
+  //   RPC の signature を変えると drop→create が要り、過去に並存（40_decisions §1.2）と
+  //   処理の脱落（§1.1）を起こしているため、関数には手を入れない。
+  //   集計専用の値なので、ここが失敗しても感想の送信は成功のまま返す（null で残るだけ）。
+  //   .is("source", null) … 既に値がある行を上書きしない。
+  const normalizedSource = normalizeReviewSource(source);
+  if (normalizedSource && r.review_id) {
+    const { error: sourceError } = await supabaseAdmin
+      .from("reviews")
+      .update({ source: normalizedSource })
+      .eq("id", r.review_id)
+      .is("source", null);
+    if (sourceError) {
+      console.error("[reviews] source の記録に失敗", {
+        reviewId: r.review_id,
+        source: normalizedSource,
+        code: sourceError.code,
+      });
+    }
   }
 
   return NextResponse.json({

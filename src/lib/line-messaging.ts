@@ -125,7 +125,7 @@ export async function checkFriendship(
 
 /**
  * 来店後の感想リマインド本文（§5: 温かく・急かさない）。
- * 末尾に /review?salon= への導線を付ける。
+ * 末尾に /review?salon=…&src=line への導線を付ける（src は reviews.source・0052）。
  *
  * ★本文に「本日」等の時点表現を入れないこと★
  *   notify_at が来店日と別日になる場合（深夜の日またぎ・送信遅延・滞留分の再送）があり、

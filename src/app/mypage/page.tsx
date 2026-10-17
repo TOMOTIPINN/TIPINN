@@ -387,7 +387,7 @@ export default async function MyPage() {
                         {actions.canReview && (
                           <>
                             <Link
-                              href={`/review?salon=${encodeURIComponent(id)}`}
+                              href={`/review?salon=${encodeURIComponent(id)}&src=mypage`}
                               className={`btn btn-block ${
                                 actions.reviewDue ? "btn-mint" : "btn-quiet"
                               }`}

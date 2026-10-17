@@ -106,6 +106,25 @@ export function isValidShareScope(s: unknown): s is ShareScope {
   return SHARE_SCOPES.some((x) => x.value === s);
 }
 
+/* ---- 流入元（reviews.source・migration 0052） ---- */
+
+/**
+ * 感想フォームを開いた導線。`/review?salon=…&src=<値>` で渡り、reviews.source に保存する。
+ *   line   … LINE の感想リマインド（cron/line-push）
+ *   mypage … /mypage の「感想を送る」（§15 の補助導線）
+ * src が無い・想定外の値は null（店頭QR・URL直打ち・本列追加前の感想と同じ扱い）。
+ *
+ * ★集計専用。画面にはどこにも出さない★（受信箱・スタッフ画面の select にも加えない）
+ * DB 側に CHECK は無い（0052）＝**値の検査はこの関数が唯一の砦**。入口を足すときはここに足す。
+ */
+export const REVIEW_SOURCES = ["line", "mypage"] as const;
+
+export type ReviewSource = (typeof REVIEW_SOURCES)[number];
+
+export function normalizeReviewSource(s: unknown): ReviewSource | null {
+  return REVIEW_SOURCES.find((x) => x === s) ?? null;
+}
+
 /* ---- 評価スタンプ購入画面（/rating）へのリンク ---- */
 
 /**

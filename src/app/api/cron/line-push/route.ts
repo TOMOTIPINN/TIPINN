@@ -200,7 +200,8 @@ export async function GET(req: Request): Promise<NextResponse> {
     }
 
     const salonName = row.salons?.name ?? "サロン";
-    const reviewUrl = `${baseUrl}/review?salon=${row.salon_id}`;
+    // src=line … 感想の流入元（reviews.source・0052）。集計専用で画面には出さない。
+    const reviewUrl = `${baseUrl}/review?salon=${row.salon_id}&src=line`;
     const result = await pushText(
       lineUserId,
       buildVisitReviewText(salonName, reviewUrl),

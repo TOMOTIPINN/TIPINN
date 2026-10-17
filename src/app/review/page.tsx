@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { hasReviewedForLatestVisit } from "@/lib/review-server";
+import { normalizeReviewSource } from "@/lib/review";
 import { Eyebrow } from "@/components/ui";
 import ReviewForm from "./ReviewForm";
 
@@ -10,20 +11,24 @@ import ReviewForm from "./ReviewForm";
  * 評価・タグ・共有範囲はこのコミットでは未実装。見た目の土台のみ。
  * サーバーコンポーネントで getSession() を検証し、未ログインならログインへ送る。
  * 対象サロンは ?salon=<uuid>。サロン名のみ service role で解決して渡す（原則7）。
+ * 流入元は ?src=line|mypage（reviews.source・0052）。想定外・無しは null。画面には出さない。
  */
 export default async function ReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ salon?: string }>;
+  searchParams: Promise<{ salon?: string; src?: string }>;
 }) {
   // returnTo に元のパス（?salon=…）を載せるため、salonId を先に解決する。
   // 未ログインでログインへ飛ばす際、ログイン後に同じ /review へ戻すため（QR/通知導線・§8）。
-  const { salon: salonId } = await searchParams;
+  const { salon: salonId, src } = await searchParams;
+  const source = normalizeReviewSource(src);
 
   const session = await getSession();
   if (!session) {
+    // src もログイン往復で落とさない（LINE 内ブラウザで未ログインのまま開く人がいる）。
+    // 戻す値は正規化後＝想定外の値はここで捨てる。
     const returnTo = salonId
-      ? `/review?salon=${encodeURIComponent(salonId)}`
+      ? `/review?salon=${encodeURIComponent(salonId)}${source ? `&src=${source}` : ""}`
       : "/review";
     redirect(`/api/auth/line/login?returnTo=${encodeURIComponent(returnTo)}`);
   }
@@ -87,7 +92,7 @@ export default async function ReviewPage({
           <p className="muted">{salon.name}</p>
         </header>
 
-        <ReviewForm salonId={salonId} />
+        <ReviewForm salonId={salonId} source={source} />
       </div>
     </main>
   );

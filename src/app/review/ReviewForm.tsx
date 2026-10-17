@@ -13,6 +13,7 @@ import {
   SHARE_SCOPES,
   type Rating,
   type ShareScope,
+  type ReviewSource,
 } from "@/lib/review";
 
 type Staff = {
@@ -32,7 +33,14 @@ type Staff = {
  * スタッフ一覧は GET /api/staff、送信は POST /api/reviews（service role 経由）。
  * 送信成功で /review/complete へ遷移（インラインで出し直さない・再送ループを作らない）。
  */
-export default function ReviewForm({ salonId }: { salonId: string }) {
+export default function ReviewForm({
+  salonId,
+  source,
+}: {
+  salonId: string;
+  /** 流入元（reviews.source・0052）。page.tsx で正規化済み。送るだけで画面には出さない。 */
+  source: ReviewSource | null;
+}) {
   const router = useRouter();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -105,6 +113,7 @@ export default function ReviewForm({ salonId }: { salonId: string }) {
           rating,
           tags,
           shareScope,
+          source,
         }),
       });
       const data = await res.json();

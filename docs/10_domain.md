@@ -53,7 +53,7 @@
 
 | テーブル | 列 | 備考 |
 |---|---|---|
-| `reviews` | id, customer_id, salon_id, staff_id, body, created_at, rating, tags, share_scope | rating 1..4（4=最高/3=よい/2=普通/1=改善）。share_scope: `manager_only` / `everyone`（`either` は廃止済み）。**rating 1〜2 の本文はスタッフ本人に出さない**（店長のみ・→ `00_philosophy.md` §4.8 / §14）。**`manager_only` の本文も同様にスタッフ本人に出さない（rating 不問・§19）**。どちらも購入があれば「名前・ティア・rating」は本人に届く。`visibility` 列（0006）が DB に存在するが**コードからは未使用**（§16 で読み書きを廃止・列は残す） |
+| `reviews` | id, customer_id, salon_id, staff_id, body, created_at, rating, tags, share_scope, source | rating 1..4（4=最高/3=よい/2=普通/1=改善）。share_scope: `manager_only` / `everyone`（`either` は廃止済み）。**rating 1〜2 の本文はスタッフ本人に出さない**（店長のみ・→ `00_philosophy.md` §4.8 / §14）。**`manager_only` の本文も同様にスタッフ本人に出さない（rating 不問・§19）**。どちらも購入があれば「名前・ティア・rating」は本人に届く。`visibility` 列（0006）が DB に存在するが**コードからは未使用**（§16 で読み書きを廃止・列は残す）。`source`（0052・text・null可）は感想フォームを開いた導線＝`line`（LINE リマインド）/ `mypage`（/mypage の補助導線）/ null（店頭QR・URL直打ち・想定外の値・0052 以前の感想）。**集計専用で画面には出さない**。値の検査は `@/lib/review` の `normalizeReviewSource` のみ（DB に CHECK なし）。RPC には渡さず `/api/reviews` が作成直後の行に別途 update する（関数の signature を変えないため） |
 | `rating_purchases` | id, customer_id, salon_id, staff_id, review_id, tier, amount, stripe_payment_id … | **お金の台帳。残高カラム無し**（原則4） |
 | `earned_stamps` | id, customer_id, salon_id, count, updated_at | `unique(customer_id, salon_id)` |
 
